@@ -1,0 +1,24 @@
+services:
+  backend:
+    build:
+      context: ./minseok
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./minseok:/app
+    environment:
+      - ENV=development
+
+  frontend:
+    build:
+      context: ./www
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./www:/app
+      - /app/.next
+      - /app/node_modules
+    environment:
+      - NODE_ENV=production

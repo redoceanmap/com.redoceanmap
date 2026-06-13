@@ -1,24 +1,40 @@
-# CLAUDE.md
+# CLAUDE.md — 프로젝트 루트
 
-Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
+하네스 → [[AGENTS]]
 
 ## 언어 설정
 
 - 항상 한국어로 응답한다.
 
+---
+
+## 하위 CLAUDE.md 링크
+
+| 영역                     | 경로                                                                           |
+| ---------------------- | ---------------------------------------------------------------------------- |
+| 백엔드 (Python / FastAPI) | `minseok/_claude/CLAUDE.md` |
+| 프론트엔드 (Next.js)        | `www/_claude/CLAUDE.md` |
+| Titanic 앱              | `minseok/apps/titanic/_docs/CLAUDE.md` |
+
+작업 디렉토리가 `minseok/` 또는 `www/` 하위라면 해당 CLAUDE.md를 우선 읽는다.
+
+---
+
+## 공통 행동 원칙
+
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
-## 1. Think Before Coding
+### 1. Think Before Coding
 
 **Don't assume. Don't hide confusion. Surface tradeoffs.**
 
 Before implementing:
 - State your assumptions explicitly. If uncertain, ask.
-- If multiple interpretations exist, present them - don't pick silently.
+- If multiple interpretations exist, present them — don't pick silently.
 - If a simpler approach exists, say so. Push back when warranted.
 - If something is unclear, stop. Name what's confusing. Ask.
 
-## 2. Simplicity First
+### 2. Simplicity First
 
 **Minimum code that solves the problem. Nothing speculative.**
 
@@ -30,7 +46,7 @@ Before implementing:
 
 Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
 
-## 3. Surgical Changes
+### 3. Surgical Changes
 
 **Touch only what you must. Clean up only your own mess.**
 
@@ -38,7 +54,7 @@ When editing existing code:
 - Don't "improve" adjacent code, comments, or formatting.
 - Don't refactor things that aren't broken.
 - Match existing style, even if you'd do it differently.
-- If you notice unrelated dead code, mention it - don't delete it.
+- If you notice unrelated dead code, mention it — don't delete it.
 
 When your changes create orphans:
 - Remove imports/variables/functions that YOUR changes made unused.
@@ -46,7 +62,7 @@ When your changes create orphans:
 
 The test: Every changed line should trace directly to the user's request.
 
-## 4. Goal-Driven Execution
+### 4. Goal-Driven Execution
 
 **Define success criteria. Loop until verified.**
 
