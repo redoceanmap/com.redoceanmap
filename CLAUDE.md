@@ -77,9 +77,9 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ### React / Next.js 작업 시
 
-- **참조 문서**: `docs/DevOps/Frontend/REACT_RULES.md` (프로젝트 루트 기준 상대 경로)
+- **참조 문서**: `vault/DevOps/Frontend/REACT_RULES.md` (프로젝트 루트 기준 상대 경로)
 - **핵심 규칙**: 하나의 컴포넌트에서 `useState`가 2개 이상이면 묻지 말고 FormData 패턴 또는 단일 객체 패턴으로 자동 압축한다.
-- **적용 시점**: `frontend/` 디렉토리의 `.tsx` / `.ts` / `.jsx` / `.js` 파일을 읽거나 작성·수정할 때.
+- **적용 시점**: `www/` 디렉토리의 `.tsx` / `.ts` / `.jsx` / `.js` 파일을 읽거나 작성·수정할 때.
 - **적용 절차**:
   1. 작업 시작 전 위 문서를 먼저 읽는다.
   2. 규칙에 해당하면 자동으로 적용한다 (사용자가 "useState 유지"를 명시적으로 요청한 경우 제외).

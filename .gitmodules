@@ -1,9 +1,9 @@
 [submodule "backend"]
-	path = backend
+	path = minseok
 	url = https://github.com/redoceanmap/com.redoceanmap.api.git
 [submodule "frontend"]
-	path = frontend
+	path = www
 	url = https://github.com/redoceanmap/com.redoceanmap.www.git
 [submodule "docs"]
-	path = docs
+	path = vault
 	url = https://github.com/redoceanmap/com.redoceanmap.docs.git

@@ -4,11 +4,11 @@
     "type": "split",
     "children": [
       {
-        "id": "56084cc42f0b5832",
+        "id": "956097df69b2ef6a",
         "type": "tabs",
         "children": [
           {
-            "id": "a2031a319aa7581a",
+            "id": "e1b855d33504e79b",
             "type": "leaf",
             "state": {
               "type": "graph",
@@ -176,8 +176,9 @@
       "bases:새 베이스 생성하기": false
     }
   },
-  "active": "a2031a319aa7581a",
+  "active": "e1b855d33504e79b",
   "lastOpenFiles": [
+    "www/node_modules/next/dist/docs/01-app/04-glossary.md",
     "docs/DevOps/Backend/MARKET.md",
     "docs/DevOps/Backend/MARKET_ERD.md"
   ]
