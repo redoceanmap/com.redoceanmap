@@ -9,6 +9,12 @@ services:
       - ./minseok:/app
     environment:
       - ENV=development
+      - DATABASE_URL=postgresql://redocean:redocean@pgvector:5432/redoceanmap
+      - OLLAMA_HOST=http://host.docker.internal:11434
+    depends_on:
+      pgvector:
+        condition: service_healthy
+    command: sh -c "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
 
   frontend:
     build:
@@ -20,5 +26,60 @@ services:
       - ./www:/app
       - /app/.next
       - /app/node_modules
+    command: npm run dev
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    environment:
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - WEBHOOK_URL=http://localhost:5678/
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+
+  pgvector:
+    image: pgvector/pgvector:pg16
+    ports:
+      # 호스트 5433 → 컨테이너 5432 (5432는 ragwatson pgvector가 점유 중이라 충돌 회피).
+      # ragwatson 스택을 내리면 "5432:5432"로 되돌려도 됨.
+      - "5433:5432"
+    volumes:
+      - pgvector_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-redocean}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-redocean}
+      - POSTGRES_DB=${POSTGRES_DB:-redoceanmap}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U redocean -d redoceanmap"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  neo4j:
+    image: neo4j:5
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j_data:/data
+    environment:
+      - NEO4J_AUTH=${NEO4J_AUTH:-neo4j/please_change}
+
+volumes:
+  n8n_data:
+    name: n8n_data
+  redis_data:
+  pgvector_data:
+  neo4j_data:
