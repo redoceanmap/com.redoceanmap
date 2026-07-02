@@ -13,6 +13,7 @@ services:
       - ENV=development
       - DATABASE_URL=postgresql://redocean:redocean@pgvector:5432/redoceanmap
       - OLLAMA_HOST=http://host.docker.internal:11434
+      - N8N_EMAIL_WEBHOOK_URL=http://n8n:5678/webhook/redocean-email
     depends_on:
       pgvector:
         condition: service_healthy
