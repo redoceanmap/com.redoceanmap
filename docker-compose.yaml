@@ -7,6 +7,8 @@ services:
       - "8000:8000"
     volumes:
       - ./minseok:/app
+    env_file:
+      - .env  # JWT_SECRET 등 비밀값 (environment가 같은 키보다 우선)
     environment:
       - ENV=development
       - DATABASE_URL=postgresql://redocean:redocean@pgvector:5432/redoceanmap
@@ -52,9 +54,8 @@ services:
   pgvector:
     image: pgvector/pgvector:pg16
     ports:
-      # 호스트 5433 → 컨테이너 5432 (5432는 ragwatson pgvector가 점유 중이라 충돌 회피).
-      # ragwatson 스택을 내리면 "5432:5432"로 되돌려도 됨.
-      - "5433:5432"
+      # redoceanmap이 메인 — 정식 포트 5432 사용 (ragwatson pgvector는 5433으로 이동).
+      - "5432:5432"
     volumes:
       - pgvector_data:/var/lib/postgresql/data
     environment:
