@@ -11,10 +11,10 @@
             "id": "28847b72fd45c6f7",
             "type": "leaf",
             "state": {
-              "type": "empty",
+              "type": "graph",
               "state": {},
-              "icon": "lucide-file",
-              "title": "새 탭"
+              "icon": "lucide-git-fork",
+              "title": "그래프 뷰"
             }
           }
         ]
@@ -178,10 +178,17 @@
   },
   "active": "28847b72fd45c6f7",
   "lastOpenFiles": [
+    "minseok/_docs/CLAUDE.md.tmp.5062.b5c22bc38444",
+    "CLAUDE.md",
+    "_docs/harness.md.tmp.5062.f7a67c18cb9d",
+    "_docs/harness.md.tmp.5062.de72d23030b7",
+    "minseok/apps/hub/_docs/CLAUDE.md.tmp.5062.eb546b5b3332",
+    "minseok/_docs/CLAUDE.md",
+    "minseok/apps/hub/_docs/CLAUDE.md.tmp.5062.0051a6e078d7",
+    "minseok/apps/market/_docs/CLAUDE.md.tmp.5062.fcc1fe9b8a4d",
     "_docs/harness.md",
     "www/_docs/REACT_RULES.md",
     "minseok/apps/hub/_docs/CLAUDE.md",
-    "CLAUDE.md",
     "www/_claude/CLAUDE.md",
     "README.md",
     "minseok/apps/market/test",
@@ -195,14 +202,9 @@
     "minseok/_claude",
     "www/_claude/REACT_RULES.md",
     "www/_claude",
-    "vault/raw",
-    "vault/output",
     "vault/Frontend/REACT_RULES.md",
-    "vault/Frontend",
     "vault/Backend/ENTITY_RULES.md",
     "vault/Backend/MARKET_ERD.md",
-    "vault/Backend",
-    ".git/modules/docs/logs/refs/remotes/origin/HEAD",
     "www/node_modules/next/dist/docs/01-app/04-glossary.md",
     "docs/DevOps/Backend/MARKET.md",
     "docs/DevOps/Backend/MARKET_ERD.md"

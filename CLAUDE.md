@@ -27,7 +27,7 @@
 
 ## 자동 적용 규칙 — 프론트엔드(www)
 
-`www/` 디렉토리의 React/Next.js 코드(`.tsx` / `.ts` / `.jsx` / `.js`)를 읽거나 작성·수정할 때는 [[www/_docs/REACT_RULES|REACT_RULES]]를 먼저 읽고 자동 적용한다.
+`www/` 디렉토리의 React/Next.js 코드(`.tsx` / `.ts` / `.jsx` / `.js`)를 읽거나 작성·수정할 때는 `www/_docs/REACT_RULES.md`를 먼저 읽고 자동 적용한다.
 
 - **핵심 규칙:** 하나의 컴포넌트에 `useState`가 2개 이상이면 묻지 말고 FormData 패턴(폼 제출) 또는 단일 객체 패턴(실시간 상태)으로 압축한다.
 - **예외:** 사용자가 명시적으로 "useState 유지"를 요청한 경우.

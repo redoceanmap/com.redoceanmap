@@ -24,7 +24,7 @@ cd minseok && PYTHONPATH=apps lint-imports
 ```
 
 `PYTHONPATH=apps`는 `main.py`의 `sys.path.insert`와 같은 맥락 — 앱을 최상위 패키지
-(`hub`, `market`, `chat` …)로 인식시키기 위함. 스타 토폴로지 상세 → [[minseok/_docs/CLAUDE|minseok CLAUDE]].
+(`hub`, `market`, `chat` …)로 인식시키기 위함. 스타 토폴로지 상세 → minseok CLAUDE.
 
 ## 2. 문서 온톨로지 — 심볼릭 + WikiLink
 
@@ -41,7 +41,7 @@ cd minseok && PYTHONPATH=apps lint-imports
 | 영역 | 문서 |
 |------|------|
 | 루트 하네스(정본) | [[CLAUDE|CLAUDE (루트)]] |
-| 백엔드 | [[minseok/_docs/CLAUDE|minseok CLAUDE]] |
-| 프론트엔드 | [[www/_docs/CLAUDE|www CLAUDE]] |
+| 백엔드 | `minseok/_docs/CLAUDE.md` |
+| 프론트엔드 | `www/_docs/CLAUDE.md` |
 
-앱별 문서는 [[minseok/_docs/CLAUDE|minseok CLAUDE]]의 앱 표에서 잇는다.
+앱별 문서는 minseok CLAUDE의 앱 표에서 잇는다.
