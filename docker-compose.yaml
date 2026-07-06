@@ -14,6 +14,8 @@ services:
       - DATABASE_URL=postgresql://redocean:redocean@pgvector:5432/redoceanmap
       - OLLAMA_HOST=http://host.docker.internal:11434
       - N8N_EMAIL_WEBHOOK_URL=http://n8n:5678/webhook/redocean-email
+      - AWS_REGION=ap-northeast-2
+      - VISION_S3_BUCKET=redoceanmap.com-752767405178-ap-northeast-2-an
     depends_on:
       pgvector:
         condition: service_healthy

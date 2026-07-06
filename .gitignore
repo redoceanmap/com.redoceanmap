@@ -95,3 +95,6 @@ data/processed/
 *.bak
 *.orig
 .vercel
+
+# 잘못된 위치의 YOLO 학습 부산물 (정위치는 minseok/runs)
+runs/
