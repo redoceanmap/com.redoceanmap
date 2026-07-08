@@ -11,7 +11,7 @@ services:
       - .env  # JWT_SECRET 등 비밀값 (environment가 같은 키보다 우선)
     environment:
       - ENV=development
-      - DATABASE_URL=postgresql://redocean:redocean@pgvector:5432/redoceanmap
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-redocean}:${POSTGRES_PASSWORD:-redocean}@pgvector:5432/${POSTGRES_DB:-redoceanmap}
       - OLLAMA_HOST=http://host.docker.internal:11434
       - N8N_EMAIL_WEBHOOK_URL=http://n8n:5678/webhook/redocean-email
       - AWS_REGION=ap-northeast-2
