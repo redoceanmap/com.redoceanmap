@@ -1,0 +1,30 @@
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+
+from hub.app.dtos.commercial_data_dto import AreaRawStat, AreaSummary, ServiceCode
+
+
+class CommercialDataPort(ABC):
+    """허브가 스포크에 위임하는 상권 데이터 조회 추상.
+
+    허브는 이 포트(추상)만 알고 어떤 스포크가 구현하는지 모른다(스타 토폴로지 허브 격리).
+    구현은 스포크(market)가 제공하고, 합성 루트(main.py)에서 주입한다.
+    """
+
+    @abstractmethod
+    async def get_service_codes(self) -> list[ServiceCode]:
+        """선택 가능한 업종 코드 목록을 반환한다."""
+        ...
+
+    @abstractmethod
+    async def get_area_summary(self) -> AreaSummary:
+        """전체 상권 기본정보 + 최신 분기 + 상권별 월매출 합계를 반환한다."""
+        ...
+
+    @abstractmethod
+    async def get_area_raw_stats(
+        self, trdar_codes: list[int], service_code: str, quarter: int
+    ) -> dict[int, AreaRawStat]:
+        """지정 상권들의 원시 통계(매출·점포·유동인구·상권변화)를 반환한다."""
+        ...

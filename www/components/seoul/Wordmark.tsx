@@ -1,0 +1,29 @@
+"use client";
+
+import Link from "next/link";
+import { useChatStore } from "@/lib/store";
+
+export default function Wordmark() {
+  const reset = useChatStore((s) => s.reset);
+
+  return (
+    <Link href="/" onClick={reset} className="flex items-center gap-2 text-foreground">
+      <svg
+        width="16"
+        height="20"
+        viewBox="0 0 16 20"
+        fill="none"
+        aria-hidden
+      >
+        <path
+          d="M8 0C3.6 0 0 3.6 0 8c0 6 8 12 8 12s8-6 8-12c0-4.4-3.6-8-8-8z"
+          fill="#991B1B"
+        />
+        <circle cx="8" cy="8" r="2.5" fill="#FFFFFF" />
+      </svg>
+      <span className="font-semibold tracking-tight text-[15px]">
+        redoceanmap
+      </span>
+    </Link>
+  );
+}

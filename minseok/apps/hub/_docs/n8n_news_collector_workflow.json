@@ -1,0 +1,52 @@
+{
+  "name": "redoceanmap 금융 뉴스 수집",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "minutes", "minutesInterval": 30 }] } },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "name": "30분마다"
+    },
+    {
+      "parameters": { "url": "https://www.hankyung.com/feed/finance", "options": {} },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.1,
+      "position": [220, 0],
+      "name": "한경 금융 RSS"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all().map(i => ({\n  title: i.json.title,\n  source: '한국경제',\n  url: i.json.link,\n  publishedAt: i.json.isoDate || i.json.pubDate || null,\n}));\nreturn [{ json: { items } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0],
+      "name": "적재 형식으로 변환"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/automation/news",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "X-Webhook-Token", "value": "={{ $env.REDOCEAN_WEBHOOK_TOKEN }}" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 0],
+      "name": "백엔드 적재 API"
+    }
+  ],
+  "connections": {
+    "30분마다": { "main": [[{ "node": "한경 금융 RSS", "type": "main", "index": 0 }]] },
+    "한경 금융 RSS": { "main": [[{ "node": "적재 형식으로 변환", "type": "main", "index": 0 }]] },
+    "적재 형식으로 변환": { "main": [[{ "node": "백엔드 적재 API", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

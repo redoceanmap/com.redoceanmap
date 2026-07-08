@@ -1,0 +1,123 @@
+# =============================================================================
+# import-linter — redoceanmap 백엔드 아키텍처 하네스 (코드 레벨)
+# =============================================================================
+# 두 개의 직교하는 구조 규칙을 정적 분석으로 강제한다.
+#   (1) 앱 '내부'  — 헥사고날/클린: adapter → app → domain (역방향 금지)
+#   (2) 앱 '사이'  — 스타 토폴로지: hub(허브) 중심, 스포크끼리 직접 참조 금지
+#
+# 실행:
+#   cd minseok && PYTHONPATH=apps lint-imports --config .importlinter
+#   (apps/ 를 경로에 올려야 market·chat 등이 최상위 패키지로 보인다.
+#    main.py 의 sys.path.insert(0, "apps") 와 동일한 맥락.)
+#
+# 설치:  pip install import-linter   (minseok/requirements.txt 에 포함)
+# =============================================================================
+
+[importlinter]
+root_packages =
+    hub
+    market
+    chat
+    auth
+    stock
+    mail
+    recommendation
+include_external_packages = True
+
+# -----------------------------------------------------------------------------
+# 계약 1) 클린 아키텍처 — 모든 앱 내부에서 adapter > app > domain
+# -----------------------------------------------------------------------------
+# 상위(adapter)는 하위(app·domain)를 import 할 수 있고, 하위는 상위를 import 할 수 없다.
+# (hub 는 활성 허브(자동화 창구) — adapter/app 이 있어 목록에 포함. domain 은 없어도 무방.)
+[importlinter:contract:clean-architecture]
+name = 클린 아키텍처 계층 (adapter > app > domain) — 허브·전 스포크 공통
+type = layers
+layers =
+    adapter
+    app
+    (domain)
+containers =
+    hub
+    market
+    chat
+    auth
+    stock
+    mail
+    recommendation
+
+# -----------------------------------------------------------------------------
+# 계약 2) 스타 토폴로지 — 스포크는 서로를 import 하지 않는다
+# -----------------------------------------------------------------------------
+# 교차 도메인 협력이 필요하면 허브(hub)를 경유해야 한다. (허브는 목록 제외 — 스포크→허브 허용.)
+[importlinter:contract:spoke-independence]
+name = 스포크 상호 독립 (스포크 ↔ 스포크 직접 참조 금지)
+type = independence
+modules =
+    market
+    chat
+    auth
+    stock
+    mail
+    recommendation
+
+# -----------------------------------------------------------------------------
+# 계약 2.5) 프레임워크 격리 — app·domain 계층은 웹/DB/LLM 프레임워크를 모른다
+# -----------------------------------------------------------------------------
+# HTTP(fastapi)·ORM(sqlalchemy)·LLM 클라이언트(ollama)는 adapter 계층(또는 core)의
+# 관심사다. app 계층 예외 → HTTP 변환은 인바운드 어댑터(라우터)가 맡는다.
+# (pydantic 은 app/dtos 에서 실용적으로 허용, domain 에서는 금지.)
+[importlinter:contract:framework-isolation]
+name = 프레임워크 격리 (app·domain → fastapi/sqlalchemy/ollama import 금지)
+type = forbidden
+source_modules =
+    hub.app
+    market.app
+    market.domain
+    chat.app
+    chat.domain
+    auth.app
+    auth.domain
+    stock.app
+    stock.domain
+    mail.app
+    mail.domain
+    recommendation.app
+    recommendation.domain
+forbidden_modules =
+    fastapi
+    sqlalchemy
+    ollama
+
+# -----------------------------------------------------------------------------
+# 계약 2.6) 도메인 순수성 — domain 계층은 pydantic 도 모른다 (순수 파이썬)
+# -----------------------------------------------------------------------------
+[importlinter:contract:domain-purity]
+name = 도메인 순수성 (domain → pydantic import 금지)
+type = forbidden
+source_modules =
+    hub.domain
+    market.domain
+    chat.domain
+    auth.domain
+    stock.domain
+    mail.domain
+    recommendation.domain
+forbidden_modules =
+    pydantic
+
+# -----------------------------------------------------------------------------
+# 계약 3) 허브 격리 — 허브(hub)는 스포크에 의존하지 않는다
+# -----------------------------------------------------------------------------
+# 허브는 스포크의 '추상(포트/DTO)'만 제공하고 구체 스포크 패키지를 import 하지 않는다.
+[importlinter:contract:hub-isolation]
+name = 허브 격리 (hub → 스포크 import 금지)
+type = forbidden
+source_modules =
+    hub
+forbidden_modules =
+    market
+    chat
+    auth
+    stock
+    mail
+    recommendation

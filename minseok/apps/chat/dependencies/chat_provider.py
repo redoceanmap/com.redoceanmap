@@ -1,0 +1,27 @@
+from fastapi import Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from chat.adapter.outbound.pg.conversation_pg_repository import ConversationPgRepository
+from chat.app.ports.input.chat_use_case import ChatUseCase
+from chat.app.use_cases.chat_interactor import ChatInteractor
+from core.database import get_db
+from hub.app.ports.output.commercial_data_port import CommercialDataPort
+from hub.app.ports.output.recommendation_record_port import RecommendationRecordPort
+from hub.app.ports.output.stock_analysis_port import StockAnalysisPort
+from hub.dependencies.commercial_data_provider import get_commercial_data_port
+from hub.dependencies.recommendation_record_provider import get_recommendation_record_port
+from hub.dependencies.stock_analysis_provider import get_stock_analysis_port
+
+
+def get_chat_use_case(
+    market: CommercialDataPort = Depends(get_commercial_data_port),
+    recorder: RecommendationRecordPort = Depends(get_recommendation_record_port),
+    stocks: StockAnalysisPort = Depends(get_stock_analysis_port),
+    db: AsyncSession = Depends(get_db),
+) -> ChatUseCase:
+    return ChatInteractor(
+        market=market,
+        recorder=recorder,
+        conversations=ConversationPgRepository(session=db),
+        stocks=stocks,
+    )

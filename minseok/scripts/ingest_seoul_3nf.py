@@ -1,0 +1,187 @@
+"""서울 상권 3NF 적재 — 차원 먼저(FK 순서) → 팩트(FK 무결성 필터).
+
+발자국 ERD의 ingest 스크립트 컨벤션. data/raw/seoul/ 의 CSV(cp949)를 읽어
+정규화 스키마(차원 5 + 팩트 8)에 적재한다. 기존 COLUMN_MAP을 재사용하되
+차원 속성 키(상권명·구분명·업종명 등)는 제거해 팩트에는 FK 코드만 남긴다.
+"""
+
+import math
+import os
+import sys
+from pathlib import Path
+
+import pandas as pd
+from dotenv import load_dotenv
+from sqlalchemy import BigInteger, Integer, create_engine, insert
+
+ROOT = Path(__file__).resolve().parents[1]  # minseok
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "apps"))
+load_dotenv(ROOT.parent / ".env")
+
+DATA = ROOT / "data" / "raw" / "seoul"
+ENC = "cp949"
+
+from core.database import Base  # noqa: E402
+import market.adapter.outbound.orm.region_orm  # noqa: E402,F401
+import market.adapter.outbound.orm.trade_area_division_orm  # noqa: E402,F401
+import market.adapter.outbound.orm.service_category_orm  # noqa: E402,F401
+import market.adapter.outbound.orm.change_indicator_orm  # noqa: E402,F401
+import market.adapter.outbound.orm.trade_area_orm  # noqa: E402,F401
+import market.adapter.outbound.orm.estimated_sales_orm  # noqa: E402,F401
+import market.adapter.outbound.orm.store_orm  # noqa: E402,F401
+import market.adapter.outbound.orm.floating_population_orm  # noqa: E402,F401
+import market.adapter.outbound.orm.resident_population_orm  # noqa: E402,F401
+import market.adapter.outbound.orm.working_population_orm  # noqa: E402,F401
+import market.adapter.outbound.orm.consumption_orm  # noqa: E402,F401
+import market.adapter.outbound.orm.apartment_orm  # noqa: E402,F401
+import market.adapter.outbound.orm.commercial_change_orm  # noqa: E402,F401
+
+from market.adapter.outbound.csv.column_maps import (  # noqa: E402
+    APARTMENT_COLUMN_MAP,
+    COMMERCIAL_CHANGE_COLUMN_MAP,
+    CONSUMPTION_COLUMN_MAP,
+    ESTIMATED_SALES_COLUMN_MAP,
+    FLOATING_POPULATION_COLUMN_MAP,
+    RESIDENT_POPULATION_COLUMN_MAP,
+    STORE_COLUMN_MAP,
+    WORKING_POPULATION_COLUMN_MAP,
+)
+
+engine = create_engine(
+    os.environ["DATABASE_URL"].replace("postgresql://", "postgresql+psycopg://")
+)
+T = Base.metadata.tables
+
+# 팩트에서 제거할 차원 속성(코드→명 이행종속) — 이제 차원 테이블 소유
+DIM_KEYS = {
+    "trdar_div_code", "trdar_div_name", "trdar_name",
+    "service_name", "change_indicator_name",
+}
+
+
+def csv(name: str) -> pd.DataFrame:
+    return pd.read_csv(DATA / f"서울시 상권분석서비스({name}).csv", encoding=ENC)
+
+
+def _code(v) -> str | None:
+    return str(int(v)) if pd.notna(v) else None
+
+
+def clean_records(df: pd.DataFrame, table) -> list[dict]:
+    cols = [c for c in df.columns if c in table.columns.keys() and c != "id"]
+    df = df[cols]
+    int_cols = {c for c in cols if isinstance(table.columns[c].type, (Integer, BigInteger))}
+    out = []
+    for rec in df.to_dict("records"):
+        row = {}
+        for k, v in rec.items():
+            if v is None or v is pd.NA or (isinstance(v, float) and math.isnan(v)):
+                row[k] = None
+            elif k in int_cols:
+                row[k] = int(v)
+            else:
+                row[k] = v
+        out.append(row)
+    return out
+
+
+def bulk(table, records: list[dict], chunk: int = 5000) -> int:
+    if not records:
+        return 0
+    with engine.begin() as con:
+        for i in range(0, len(records), chunk):
+            con.execute(insert(table), records[i:i + chunk])
+    return len(records)
+
+
+def main() -> None:
+    ar = csv("영역-상권")
+    gu = csv("영역-자치구")
+
+    # 1) 상권구분 차원
+    div = ar[["상권_구분_코드", "상권_구분_코드_명"]].drop_duplicates()
+    print("trade_area_division:", bulk(T["trade_area_division"],
+          [{"code": c, "name": n} for c, n in div.values]))
+
+    # 2) region — 자치구(level1)
+    gu_recs = [{
+        "code": _code(r["자치구_코드"]), "name": r["자치구_명"], "level": 1,
+        "parent_code": None,
+        "x_coord": int(r["엑스좌표_값"]) if pd.notna(r["엑스좌표_값"]) else None,
+        "y_coord": int(r["와이좌표_값"]) if pd.notna(r["와이좌표_값"]) else None,
+        "area_size": float(r["영역_면적"]) if pd.notna(r["영역_면적"]) else None,
+    } for _, r in gu.iterrows()]
+    gu_codes = {r["code"] for r in gu_recs}
+    print("region(자치구):", bulk(T["region"], gu_recs))
+
+    # 3) region — 행정동(level2, parent=자치구)
+    dong = (ar[["행정동_코드", "행정동_코드_명", "자치구_코드"]]
+            .dropna(subset=["행정동_코드"]).drop_duplicates(subset=["행정동_코드"]))
+    dong_recs = []
+    for _, r in dong.iterrows():
+        parent = _code(r["자치구_코드"])
+        dong_recs.append({
+            "code": _code(r["행정동_코드"]), "name": r["행정동_코드_명"], "level": 2,
+            "parent_code": parent if parent in gu_codes else None,
+            "x_coord": None, "y_coord": None, "area_size": None,
+        })
+    dong_codes = {r["code"] for r in dong_recs}
+    print("region(행정동):", bulk(T["region"], dong_recs))
+
+    # 4) service_category (추정매출 + 점포 합집합)
+    svc = pd.concat([
+        csv("추정매출-상권")[["서비스_업종_코드", "서비스_업종_코드_명"]],
+        csv("점포-상권")[["서비스_업종_코드", "서비스_업종_코드_명"]],
+    ]).drop_duplicates(subset=["서비스_업종_코드"])
+    svc_codes = set(svc["서비스_업종_코드"])
+    print("service_category:", bulk(T["service_category"],
+          [{"code": c, "name": n} for c, n in svc.values]))
+
+    # 5) change_indicator
+    chg = csv("상권변화지표-상권")[["상권_변화_지표", "상권_변화_지표_명"]].drop_duplicates(
+        subset=["상권_변화_지표"])
+    chg_codes = set(chg["상권_변화_지표"])
+    print("change_indicator:", bulk(T["change_indicator"],
+          [{"code": c, "name": n} for c, n in chg.values]))
+
+    # 6) trade_area (중심 차원)
+    ta = ar.drop_duplicates(subset=["상권_코드"])
+    ta_recs = []
+    for _, r in ta.iterrows():
+        rc = _code(r["행정동_코드"])
+        ta_recs.append({
+            "code": int(r["상권_코드"]), "name": r["상권_코드_명"],
+            "division_code": r["상권_구분_코드"],
+            "region_code": rc if rc in dong_codes else None,
+            "x_coord": int(r["엑스좌표_값"]), "y_coord": int(r["와이좌표_값"]),
+            "area_size": float(r["영역_면적"]) if pd.notna(r["영역_면적"]) else None,
+        })
+    ta_codes = {r["code"] for r in ta_recs}
+    print("trade_area:", bulk(T["trade_area"], ta_recs))
+
+    # --- 팩트 (FK 무결성 필터) ---
+    facts = [
+        ("추정매출-상권", "estimated_sales", ESTIMATED_SALES_COLUMN_MAP, "service"),
+        ("점포-상권", "store", STORE_COLUMN_MAP, "service"),
+        ("길단위인구-상권", "floating_population", FLOATING_POPULATION_COLUMN_MAP, None),
+        ("상주인구-상권", "resident_population", RESIDENT_POPULATION_COLUMN_MAP, None),
+        ("직장인구-상권", "working_population", WORKING_POPULATION_COLUMN_MAP, None),
+        ("소비-상권", "consumption", CONSUMPTION_COLUMN_MAP, None),
+        ("아파트-상권", "apartment", APARTMENT_COLUMN_MAP, None),
+        ("상권변화지표-상권", "commercial_change", COMMERCIAL_CHANGE_COLUMN_MAP, "change"),
+    ]
+    for fname, table, cmap, kind in facts:
+        m = {k: v for k, v in cmap.items() if v not in DIM_KEYS}
+        df = csv(fname).rename(columns=m)
+        df = df[df["trdar_code"].isin(ta_codes)]
+        if kind == "service":
+            df = df[df["service_code"].isin(svc_codes)]
+        elif kind == "change":
+            df = df[df["change_indicator"].isin(chg_codes)]
+        n = bulk(T[table], clean_records(df, T[table]))
+        print(f"{table}: {n}")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,86 @@
+# ---- 웹 프레임워크 / 서버 ----
+fastapi==0.128.8
+starlette==0.49.3
+uvicorn==0.39.0
+uvloop==0.22.1
+httptools==0.7.1
+watchfiles==1.1.1
+websockets==15.0.1
+
+# ---- DB / 마이그레이션 ----
+sqlalchemy[asyncio]==2.0.49
+psycopg[binary]==3.3.4
+alembic==1.18.4
+pgvector==0.4.2
+
+# ---- 검증 / 설정 ----
+pydantic==2.13.4
+pydantic_core==2.46.4
+email-validator==2.3.0
+python-dotenv==1.2.1
+python-multipart==0.0.29
+
+# ---- 인증 (auth 앱) ----
+bcrypt==5.0.0
+python-jose==3.5.0
+
+# ---- LLM (오케스트레이터 → Ollama) ----
+ollama==0.6.2
+
+# ---- 객체 스토리지 (vision — S3 이미지 저장) ----
+boto3==1.43.40
+
+# ---- 유해 텍스트 분류기 (mail watcher — KcELECTRA v1 추론) ----
+torch==2.12.1
+transformers==5.12.1
+
+# ---- 비전 / YOLO (vision — 객체 탐지: torch 백엔드 + OpenCV 입출력) ----
+torchvision==0.27.1
+opencv-python==5.0.0.93
+ultralytics==8.4.89
+
+# ---- 한국어 텍스트 처리 (형태소 분석 — 불용어 필터 등) ----
+kiwipiepy==0.23.2
+
+# ---- 주식 데이터 (stock 앱) ----
+yfinance==1.5.1
+finance-datareader==0.9.202
+
+# ---- n8n 웹훅 호출 (chat 이메일 게이트웨이) ----
+httpx==0.28.1
+
+# ---- 데이터 처리 (적재 스크립트·야후 의존) ----
+pandas==2.3.3
+numpy==2.0.2
+pyproj==3.7.2
+scikit-learn==1.6.1
+joblib==1.4.2
+
+# ---- 공통 유틸 (상위 패키지 의존) ----
+annotated-doc==0.0.4
+annotated-types==0.7.0
+anyio==4.12.1
+click==8.1.8
+exceptiongroup==1.3.1
+idna==3.13
+python-dateutil==2.9.0.post0
+pytz==2026.2
+PyYAML==6.0.3
+six==1.17.0
+typing-inspection==0.4.2
+typing_extensions==4.15.0
+tzdata==2026.2
+
+# ---- 개발 하네스 (테스트 + 구조 린트) ----
+pytest==9.1.1
+pytest-asyncio==1.4.0
+import-linter==2.12
+
+# ---- 로컬 전용: 학습·분석 스크립트 (Linux 컨테이너에서는 설치 제외) ----
+datasets==5.0.0; sys_platform == "darwin"
+matplotlib==3.11.0; sys_platform == "darwin"
+
+# ---- 로컬 전용: MLX (Apple Silicon LLM 파인튜닝 대비 — 자체 모델 비전) ----
+mlx==0.31.2; sys_platform == "darwin"
+mlx-lm==0.31.3; sys_platform == "darwin"
+

@@ -1,0 +1,21 @@
+# 원시 데이터 (용량 초과)
+data/raw/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# 환경변수
+.env
+.env.local
+
+# macOS
+.DS_Store
+models/
+
+# YOLO 학습 부산물 (가중치는 학습으로 재생성)
+runs/
+yolo11n.pt

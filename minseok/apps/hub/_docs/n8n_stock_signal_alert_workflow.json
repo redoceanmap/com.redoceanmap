@@ -1,0 +1,58 @@
+{
+  "name": "redoceanmap 주식 시그널 알림",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "hours", "hoursInterval": 1 }] } },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "name": "1시간마다"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/automation/stock-scan",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "X-Webhook-Token", "value": "={{ $env.REDOCEAN_WEBHOOK_TOKEN }}" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"symbols\": [\"005930\", \"000660\", \"AAPL\", \"NVDA\"]}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 0],
+      "name": "관심 종목 스캔"
+    },
+    {
+      "parameters": {
+        "jsCode": "const signals = $input.all().filter(i => i.json.direction !== 'NEUTRAL');\nreturn signals;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0],
+      "name": "중립 제외"
+    },
+    {
+      "parameters": {
+        "sendTo": "jang971121@gmail.com",
+        "subject": "=[redoceanmap] {{ $json.symbol }} {{ $json.direction }} 신호 (확신도 {{ Math.round($json.confidence * 100) }}%)",
+        "emailType": "text",
+        "message": "={{ $json.symbol }} 현재가 {{ $json.price }}\n방향 신호: {{ $json.direction }} (확신도 {{ $json.confidence }})\nRSI: {{ $json.rsi }}\n지지선 {{ $json.support }} / 저항선 {{ $json.resistance }}\n뉴스 감성: {{ $json.sentimentLabel }}\n\n참고 지표이며 투자 판단과 책임은 본인에게 있습니다.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [660, 0],
+      "name": "Gmail 알림"
+    }
+  ],
+  "connections": {
+    "1시간마다": { "main": [[{ "node": "관심 종목 스캔", "type": "main", "index": 0 }]] },
+    "관심 종목 스캔": { "main": [[{ "node": "중립 제외", "type": "main", "index": 0 }]] },
+    "중립 제외": { "main": [[{ "node": "Gmail 알림", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

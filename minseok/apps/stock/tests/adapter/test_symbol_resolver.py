@@ -1,0 +1,40 @@
+import pytest
+
+from stock.adapter.outbound import symbol_resolver
+from stock.app.exceptions import MarketDataUnavailableError
+
+
+async def test_6자리_코드는_그대로():
+    assert await symbol_resolver.resolve_symbol("005930") == "005930"
+
+
+async def test_영문_티커는_대문자로():
+    assert await symbol_resolver.resolve_symbol(" aapl ") == "AAPL"
+
+
+async def test_한국_종목명은_KRX_목록에서_코드로(monkeypatch):
+    monkeypatch.setattr(symbol_resolver, "_load_krx_names", lambda: {"삼성전자": "005930"})
+    assert await symbol_resolver.resolve_symbol("삼성전자") == "005930"
+    assert await symbol_resolver.resolve_symbol("삼성 전자") == "005930"  # 공백 제거 매칭
+
+
+async def test_부분_일치는_유일할_때만_채택(monkeypatch):
+    monkeypatch.setattr(
+        symbol_resolver, "_load_krx_names",
+        lambda: {"SK하이닉스": "000660", "삼성전자": "005930", "삼성물산": "028260"},
+    )
+    assert await symbol_resolver.resolve_symbol("하이닉스") == "000660"
+    with pytest.raises(MarketDataUnavailableError, match="여러 개"):
+        await symbol_resolver.resolve_symbol("삼성")
+
+
+async def test_미해석_질의는_MarketDataUnavailableError(monkeypatch):
+    monkeypatch.setattr(symbol_resolver, "_load_krx_names", lambda: {})
+    monkeypatch.setattr(symbol_resolver.yf, "Search", lambda *a, **k: (_ for _ in ()).throw(RuntimeError()))
+    with pytest.raises(MarketDataUnavailableError):
+        await symbol_resolver.resolve_symbol("없는종목이름123")
+
+
+@pytest.mark.network
+async def test_KRX_실목록_삼성전자():
+    assert await symbol_resolver.resolve_symbol("삼성전자") == "005930"

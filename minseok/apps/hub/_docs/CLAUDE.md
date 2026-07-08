@@ -1,0 +1,138 @@
+# CLAUDE.md — hub (허브)
+
+백엔드 → [[minseok/_docs/CLAUDE|minseok CLAUDE]]
+
+**스타 토폴로지의 허브** (ragwatson `star_craft` 패턴). 앱 간 협력의 단일 교차점.
+계약(포트+DTO)에 더해 **외부 자동화(n8n)의 단일 인바운드 창구와 교차 유스케이스**를 소유한다.
+ORM/DB는 갖지 않는다 — 저장·분석 등 구체 작업은 아웃바운드 포트로 스포크에 위임한다.
+
+---
+
+## 허브 격리 (import-linter `허브 격리` 계약)
+
+- 허브는 스포크를 **import하지 않는다**. 특정 스포크를 알면 허브가 비대해지고 스타가 메시로 무너진다.
+- 스포크는 허브가 공개한 **추상(포트/DTO)** 에만 의존한다(스포크 → 허브 허용).
+- 구체 구현은 스포크가 제공하고, `main.py`(합성 루트)가 `dependency_overrides`로 주입한다 — 의존 역전.
+
+## 소유 계약 — CommercialDataPort
+
+상권 데이터 조회 협력. chat(소비)과 market(구현)을 잇는다.
+
+```
+apps/hub/app/
+├── ports/output/commercial_data_port.py   # CommercialDataPort (ABC)
+│     get_service_codes / get_area_summary / get_area_raw_stats
+└── dtos/commercial_data_dto.py            # ServiceCode · AreaInfo · AreaSummary · AreaRawStat
+apps/hub/dependencies/commercial_data_provider.py  # get_commercial_data_port (NotImplementedError 스텁)
+```
+
+- **구현**: `market`의 `CommercialDataGateway`(정규화 3NF 스키마를 조인 조회) → market CLAUDE.
+- **소비**: `chat`의 `ChatInteractor` → chat CLAUDE.
+- **배선**: `main.py`에서 `app.dependency_overrides[get_commercial_data_port] = get_commercial_data_gateway`.
+
+## 소유 계약 — RecommendationRecordPort
+
+추천 기록 협력. chat(생성·소비)과 recommendation(구현·영속)을 잇는다.
+
+```
+apps/hub/app/
+├── ports/output/recommendation_record_port.py   # RecommendationRecordPort (ABC) — record()
+└── dtos/recommendation_record_dto.py             # RecommendedArea (저장 전 초안)
+apps/hub/dependencies/recommendation_record_provider.py  # get_recommendation_record_port (NotImplementedError 스텁)
+```
+
+- **구현**: `recommendation`의 `RecommendationRecordGateway`(허브 DTO → 도메인 초안 변환 후 유스케이스 위임) →
+  recommendation CLAUDE.
+- **소비**: `chat`의 `ChatInteractor`가 phase2 추천 생성 직후 `record()` 호출.
+- **배선**: `main.py`에서 `app.dependency_overrides[get_recommendation_record_port] = get_recommendation_record_gateway`.
+
+## 소유 계약 — StockAnalysisPort
+
+주식 분석 협력. chat(소비)과 stock(구현)을 잇는다.
+
+```
+apps/hub/app/
+├── ports/output/stock_analysis_port.py   # StockAnalysisPort (ABC) — analyze(query)
+│     실패는 StockAnalysisUnavailable(계약 예외)로 알린다
+└── dtos/stock_analysis_dto.py            # StockAnalysisResult (원시 수치 — 문장화는 소비자 몫)
+apps/hub/dependencies/stock_analysis_provider.py  # get_stock_analysis_port (NotImplementedError 스텁)
+```
+
+- **구현**: `stock`의 `StockAnalysisGateway`(질의 → 종목 코드 해석 → 유스케이스 위임) →
+  stock CLAUDE.
+- **소비**: `chat`의 `ChatInteractor`가 의도 분류(phase0)에서 주식 질문일 때 호출.
+- **배선**: `main.py`에서 `app.dependency_overrides[get_stock_analysis_port] = get_stock_analysis_gateway`.
+
+## 인바운드 라우터 규칙 — 외부 액터당 1개
+
+라우터는 파일(포트/DTO) 수가 아니라 **허브를 호출하는 외부 액터(driving actor) 수**를 따른다.
+포트/DTO는 스포크가 프로세스 안(DI)에서 쓰는 앱 간 계약이라 HTTP 표면이 없다 — 계약마다
+라우터를 만들면 아무도 안 쓰는 공개 API가 생기는 것이며 그것이 위반이다. 스켈레톤 라우터 금지
+(Simplicity First). 새 라우터는 새 외부 액터가 생길 때만 추가한다.
+
+| 외부 액터 | 라우터 |
+|-----------|--------|
+| 자동화(n8n) | `automation_router` (/automation/*) |
+| 사용자/프론트의 이메일 요청 | `email_request_router` (/email/request) |
+
+## 허브 소유 인프라 (adapter/outbound) — 예약
+
+`adapter/outbound/`는 **허브 자신이 소유하는 전역 인프라** 접속 전용이다(star_craft 파이프라인
+방향). 스포크 도메인 접속은 여기 두지 않는다 — 스포크 게이트웨이가 허브 포트를 구현한다.
+예정: `graph/`(Neo4j — 온톨로지 엔티티·관계, compose에 서비스 준비됨) ·
+`vector/`(pgvector 재사용 또는 Qdrant — 전역 임베딩 검색). 구현 전까지 빈 자리로 둔다.
+
+## 온톨로지 — 허브가 소유하는 전역 상위 개념
+
+앱들이 공유하는 규범·어휘는 `hub/domain/`에 둔다(ragwatson star_craft의 온톨로지 역할).
+현재: `domain/email/email_ontology.py` — 발신 이메일 작성 규범(EmailDirective)과
+지시 합성(render_instruction, 순수 함수).
+
+## 소유 계약 — EmailComposerPort
+
+이메일 작성·발송 협력. 외부 요청(사용자/프론트)과 chat(구현: LLM 작성 + n8n 발송)을 잇는다.
+
+```
+POST /email/request → EmailRequestInteractor(온톨로지 지시 합성)
+  → EmailComposerPort → chat EmailComposerN8nGateway(7.8B 작성 → n8n 웹훅 → Gmail)
+```
+
+- Gmail 자격증명은 n8n이 보유(백엔드 비밀 없음). 워크플로:
+  [[minseok/apps/hub/_docs/n8n_email_sender_workflow.json]] (webhook path `redocean-email`).
+- env: `N8N_EMAIL_WEBHOOK_URL` · `N8N_OUTBOUND_TOKEN`.
+
+## 자동화 창구 — /automation (n8n 단일 접점)
+
+외부 자동화(n8n)는 **허브만 안다**. 스포크는 n8n의 존재를 모른다(ragwatson star_craft 방식).
+`X-Webhook-Token` 헤더로 검증한다(`N8N_INBOUND_TOKEN` env, 비면 검증 생략 — 로컬 개발).
+
+```
+apps/hub/
+├── adapter/inbound/api/v1/automation_router.py   # POST /automation/news · /automation/stock-scan
+├── app/ports/input/{news_ingest,signal_scan}_use_case.py
+├── app/use_cases/{news_ingest,signal_scan}_interactor.py
+├── app/ports/output/news_storage_port.py          # 구현: stock NewsStorageGateway
+├── app/ports/output/mail_storage_port.py          # 구현: mail MailStorageGateway
+└── _docs/n8n_*_workflow.json                      # n8n에 임포트할 워크플로 2종
+```
+
+| 흐름 | 경로 |
+|------|------|
+| 뉴스 수집 | n8n(스케줄+RSS) → `POST /automation/news` → NewsIngestInteractor → `NewsStoragePort` → stock 저장 |
+| 시그널 알림 | n8n(스케줄) → `POST /automation/stock-scan` → SignalScanInteractor → 기존 `StockAnalysisPort` 재사용 → n8n이 중립 제외 후 Gmail 발송 |
+| 메일 수신 | n8n(Gmail Push/폴링) → `POST /automation/mail` → MailIngestInteractor → `MailStoragePort` → mail 저장(조회: `GET /mail/list`) |
+
+- n8n 워크플로: [[minseok/apps/hub/_docs/n8n_news_collector_workflow.json]] ·
+  [[minseok/apps/hub/_docs/n8n_stock_signal_alert_workflow.json]] — n8n UI에서 임포트,
+  `REDOCEAN_WEBHOOK_TOKEN` env와 백엔드 URL(컨테이너 기준 `host.docker.internal:8000`)을 환경에 맞춘다.
+- Gmail 수신 등 새 자동화도 같은 패턴: 허브 라우터에 엔드포인트 추가 → 허브 유스케이스 → 아웃바운드 포트.
+
+## 소유 계약 — NewsStoragePort
+
+뉴스 저장 협력. 허브 자동화(생성)와 stock(구현·영속: `news_articles` 테이블)을 잇는다.
+stock 분석은 저장된 뉴스를 벤더 뉴스보다 우선 병합한다(한국 종목 뉴스 공백 해소).
+
+## 규칙
+
+새 앱 간 협력이 생기면, 스포크끼리 직접 잇지 말고 여기에 포트/DTO를 추가한 뒤 허브를 경유한다.
+전체 토폴로지 → harness 문서(`_docs/harness.md`).

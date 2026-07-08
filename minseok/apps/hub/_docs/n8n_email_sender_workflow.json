@@ -1,0 +1,35 @@
+{
+  "name": "redoceanmap 이메일 발송",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "redocean-email",
+        "options": {},
+        "responseMode": "lastNode"
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "redocean-email"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.body.to }}",
+        "subject": "={{ $json.body.subject }}",
+        "emailType": "text",
+        "message": "={{ $json.body.body }}",
+        "options": {}
+      },
+      "name": "Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [220, 0]
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Gmail", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

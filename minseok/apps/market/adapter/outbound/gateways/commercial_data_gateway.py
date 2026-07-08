@@ -1,0 +1,152 @@
+from __future__ import annotations
+
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
+
+from hub.app.dtos.commercial_data_dto import AreaInfo, AreaRawStat, AreaSummary, ServiceCode
+from market.adapter.outbound.orm.change_indicator_orm import ChangeIndicatorOrm
+from market.adapter.outbound.orm.commercial_change_orm import CommercialChangeOrm
+from market.adapter.outbound.orm.estimated_sales_orm import EstimatedSalesOrm
+from market.adapter.outbound.orm.floating_population_orm import FloatingPopulationOrm
+from market.adapter.outbound.orm.region_orm import RegionOrm
+from market.adapter.outbound.orm.service_category_orm import ServiceCategoryOrm
+from market.adapter.outbound.orm.store_orm import StoreOrm
+from market.adapter.outbound.orm.trade_area_orm import TradeAreaOrm
+from hub.app.ports.output.commercial_data_port import CommercialDataPort
+
+
+class CommercialDataGateway(CommercialDataPort):
+    """허브의 CommercialDataPort를 market(스포크)이 구현한다.
+
+    스포크 → 허브 추상에만 의존(스타 토폴로지 허용). 정규화(3NF) 스키마를 조회해
+    허브 계약 DTO로 반환한다. 상권명·지역명·업종명·변화지표명은 차원 테이블 조인으로 채운다.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_service_codes(self) -> list[ServiceCode]:
+        result = await self._session.execute(
+            select(ServiceCategoryOrm.code, ServiceCategoryOrm.name).limit(300)
+        )
+        return [ServiceCode(code=r.code, name=r.name) for r in result.all()]
+
+    async def get_area_summary(self) -> AreaSummary:
+        dong = aliased(RegionOrm)  # 행정동(level2)
+        gu = aliased(RegionOrm)    # 자치구(level1)
+        rows = (await self._session.execute(
+            select(TradeAreaOrm, dong.name.label("dong_name"), gu.name.label("gu_name"))
+            .outerjoin(dong, TradeAreaOrm.region_code == dong.code)
+            .outerjoin(gu, dong.parent_code == gu.code)
+        )).all()
+
+        latest_quarter = (
+            await self._session.execute(select(func.max(EstimatedSalesOrm.year_quarter)))
+        ).scalar()
+
+        sales_by_code: dict[int, int] = {}
+        if latest_quarter:
+            result = await self._session.execute(
+                select(
+                    EstimatedSalesOrm.trdar_code,
+                    func.sum(EstimatedSalesOrm.monthly_sales_amount).label("total"),
+                )
+                .where(EstimatedSalesOrm.year_quarter == latest_quarter)
+                .group_by(EstimatedSalesOrm.trdar_code)
+            )
+            sales_by_code = {r.trdar_code: r.total for r in result.all()}
+
+        area_infos = [
+            AreaInfo(
+                trdar_code=t.code,
+                trdar_name=t.name,
+                district_name=r.gu_name or "",
+                adm_dong_name=r.dong_name or "",
+                lat=t.lat,
+                lng=t.lng,
+            )
+            for t, r in ((row[0], row) for row in rows)
+        ]
+        return AreaSummary(
+            areas=area_infos, latest_quarter=latest_quarter, sales_by_code=sales_by_code
+        )
+
+    async def get_area_raw_stats(
+        self, trdar_codes: list[int], service_code: str, quarter: int
+    ) -> dict[int, AreaRawStat]:
+        sales_rows = (await self._session.execute(
+            select(EstimatedSalesOrm).where(
+                EstimatedSalesOrm.trdar_code.in_(trdar_codes),
+                EstimatedSalesOrm.service_code == service_code,
+                EstimatedSalesOrm.year_quarter == quarter,
+            )
+        )).scalars().all()
+        sales_map = {r.trdar_code: r for r in sales_rows}
+
+        store_rows = (await self._session.execute(
+            select(StoreOrm).where(
+                StoreOrm.trdar_code.in_(trdar_codes),
+                StoreOrm.service_code == service_code,
+                StoreOrm.year_quarter == quarter,
+            )
+        )).scalars().all()
+        store_map = {r.trdar_code: r for r in store_rows}
+
+        fp_rows = (await self._session.execute(
+            select(FloatingPopulationOrm).where(
+                FloatingPopulationOrm.trdar_code.in_(trdar_codes),
+                FloatingPopulationOrm.year_quarter == quarter,
+            )
+        )).scalars().all()
+        fp_map = {r.trdar_code: r for r in fp_rows}
+
+        cc_rows = (await self._session.execute(
+            select(CommercialChangeOrm, ChangeIndicatorOrm.name.label("indicator_name"))
+            .outerjoin(
+                ChangeIndicatorOrm,
+                CommercialChangeOrm.change_indicator == ChangeIndicatorOrm.code,
+            )
+            .where(
+                CommercialChangeOrm.trdar_code.in_(trdar_codes),
+                CommercialChangeOrm.year_quarter == quarter,
+            )
+        )).all()
+        cc_map = {row[0].trdar_code: (row[0], row.indicator_name) for row in cc_rows}
+
+        result: dict[int, AreaRawStat] = {}
+        for code in trdar_codes:
+            s = sales_map.get(code)
+            st = store_map.get(code)
+            fp = fp_map.get(code)
+            cc_pair = cc_map.get(code)
+            cc = cc_pair[0] if cc_pair else None
+            result[code] = AreaRawStat(
+                has_sales=s is not None,
+                monthly_sales_amount=s.monthly_sales_amount if s else None,
+                weekday_sales_amount=s.weekday_sales_amount if s else None,
+                has_store=st is not None,
+                store_count=st.store_count if st else None,
+                closure_rate=st.closure_rate if st else None,
+                opening_rate=st.opening_rate if st else None,
+                franchise_store_count=st.franchise_store_count if st else None,
+                has_fp=fp is not None,
+                total_floating_pop=fp.total_floating_pop if fp else None,
+                age_10_floating_pop=fp.age_10_floating_pop if fp else None,
+                age_20_floating_pop=fp.age_20_floating_pop if fp else None,
+                age_30_floating_pop=fp.age_30_floating_pop if fp else None,
+                age_40_floating_pop=fp.age_40_floating_pop if fp else None,
+                age_50_floating_pop=fp.age_50_floating_pop if fp else None,
+                age_60_plus_floating_pop=fp.age_60_plus_floating_pop if fp else None,
+                time_00_06_floating_pop=fp.time_00_06_floating_pop if fp else None,
+                time_06_11_floating_pop=fp.time_06_11_floating_pop if fp else None,
+                time_11_14_floating_pop=fp.time_11_14_floating_pop if fp else None,
+                time_14_17_floating_pop=fp.time_14_17_floating_pop if fp else None,
+                time_17_21_floating_pop=fp.time_17_21_floating_pop if fp else None,
+                time_21_24_floating_pop=fp.time_21_24_floating_pop if fp else None,
+                has_cc=cc is not None,
+                change_indicator_name=cc_pair[1] if cc_pair else None,
+                operating_months_avg=cc.operating_months_avg if cc else None,
+                seoul_operating_months_avg=cc.seoul_operating_months_avg if cc else None,
+            )
+        return result

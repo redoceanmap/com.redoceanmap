@@ -1,0 +1,12 @@
+# YOLO 얼굴 탐지 파인튜닝 데이터셋 설정
+# path 키를 생략하면 ultralytics가 이 파일이 있는 디렉토리를 기준으로 train/val을 해석한다.
+train: images/train
+val: images/val
+
+# 클래스 = 사람 이름 (train|val/<person>/ 폴더를 prepare 스크립트가 이 순서로 라벨링)
+names:
+  0: Ben Affleck
+  1: Elton John
+  2: Jerry Seinfeld
+  3: Madonna
+  4: Mindy Kaling
