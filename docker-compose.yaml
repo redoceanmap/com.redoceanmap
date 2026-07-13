@@ -21,21 +21,6 @@ services:
         condition: service_healthy
     command: sh -c "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
 
-  frontend:
-    build:
-      context: ./www
-      dockerfile: Dockerfile
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./www:/app
-      - /app/.next
-      - /app/node_modules
-    command: npm run dev
-    environment:
-      - NODE_ENV=development
-      - NEXT_PUBLIC_API_URL=http://backend:8000
-
   n8n:
     image: docker.n8n.io/n8nio/n8n
     ports:
