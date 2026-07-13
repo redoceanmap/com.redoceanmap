@@ -63,7 +63,6 @@ Python / FastAPI 백엔드. 앱 **내부**는 헥사고날/클린 아키텍처(`
 | recommendation | 스포크 | [[minseok/apps/recommendation/_docs/CLAUDE\|recommendation CLAUDE]] |
 | stock | 스포크 | [[minseok/apps/stock/_docs/CLAUDE\|stock CLAUDE]] |
 | mail | 스포크 | [[minseok/apps/mail/_docs/CLAUDE\|mail CLAUDE]] |
-| vision | 스포크 | [[minseok/apps/vision/_docs/CLAUDE\|vision CLAUDE]] |
 
 새 앱은 `minseok/apps/<app>/_docs/CLAUDE.md` + 심볼릭 링크 `<app>/CLAUDE.md → _docs/CLAUDE.md`를
 추가하고 위 표에 한 줄 등록한다.

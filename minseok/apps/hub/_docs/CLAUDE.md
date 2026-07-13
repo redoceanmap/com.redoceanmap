@@ -5,6 +5,8 @@
 **스타 토폴로지의 허브** (ragwatson `star_craft` 패턴). 앱 간 협력의 단일 교차점.
 계약(포트+DTO)에 더해 **외부 자동화(n8n)의 단일 인바운드 창구와 교차 유스케이스**를 소유한다.
 ORM/DB는 갖지 않는다 — 저장·분석 등 구체 작업은 아웃바운드 포트로 스포크에 위임한다.
+예외로 **비전(YOLO 얼굴 탐지·파인튜닝)** 은 특정 스포크에 속하지 않는 허브 소유 기능으로
+직접 구현한다(구 vision 스포크 흡수) — 아래 "허브 소유 기능 — 비전" 참고.
 
 ---
 
@@ -74,13 +76,33 @@ apps/hub/dependencies/stock_analysis_provider.py  # get_stock_analysis_port (Not
 |-----------|--------|
 | 자동화(n8n) | `automation_router` (/automation/*) |
 | 사용자/프론트의 이메일 요청 | `email_request_router` (/email/request) |
+| 사용자/프론트의 비전 요청 | `vision_router` (/vision/*) |
 
 ## 허브 소유 인프라 (adapter/outbound) — 예약
 
 `adapter/outbound/`는 **허브 자신이 소유하는 전역 인프라** 접속 전용이다(star_craft 파이프라인
 방향). 스포크 도메인 접속은 여기 두지 않는다 — 스포크 게이트웨이가 허브 포트를 구현한다.
+현재: 비전 어댑터(`s3_vision_storage_adapter` · `log_vision_record_adapter` ·
+`resource_adapters/yolo/`).
 예정: `graph/`(Neo4j — 온톨로지 엔티티·관계, compose에 서비스 준비됨) ·
-`vector/`(pgvector 재사용 또는 Qdrant — 전역 임베딩 검색). 구현 전까지 빈 자리로 둔다.
+`vector/`(pgvector 재사용 또는 Qdrant — 전역 임베딩 검색).
+
+## 허브 소유 기능 — 비전 (YOLO)
+
+이미지 분석·얼굴 탐지 파인튜닝. 앱 간 협력 계약이 아니라 **허브가 직접 구현·소유하는 기능**이다
+(구 vision 스포크 흡수). YOLO 관련 코드(`FaceTrainingInteractor`, `resources/yolo_train` 데이터셋)를
+읽거나 수정할 때는 [[minseok/apps/hub/_docs/YOLO_RESEARCH|YOLO_RESEARCH]]를 먼저 읽는다.
+
+```
+apps/hub/
+├── adapter/inbound/api/v1/vision_router.py    # /vision/* (사용자/프론트 액터)
+├── app/ports/input/{vision,face_recognition,face_training}_use_case.py
+├── app/ports/output/{vision_storage,vision_record,yolo,face_dataset}_port.py
+├── app/use_cases/{vision,face_recognition,face_training,yolo}_interactor.py
+├── adapter/outbound/                           # s3_vision_storage · log_vision_record · resource_adapters/yolo
+├── dependencies/{vision,face_recognition,face_training}_provider.py
+└── resources/yolo_train/                       # 파인튜닝 데이터셋
+```
 
 ## 온톨로지 — 허브가 소유하는 전역 상위 개념
 

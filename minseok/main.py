@@ -30,7 +30,7 @@ from stock.adapter.inbound.api.v1.stock_router import stock_router
 from stock.dependencies.stock_provider import get_news_storage_gateway, get_stock_analysis_gateway
 from recommendation.adapter.inbound.api.v1.recommendation_router import recommendation_router
 from recommendation.dependencies.recommendation_provider import get_recommendation_record_gateway
-from vision.adapter.inbound.api.v1.vision_router import vision_router
+from hub.adapter.inbound.api.v1.vision_router import vision_router
 
 logger = logging.getLogger("uvicorn.error")
 
