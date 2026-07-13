@@ -23,7 +23,7 @@
 
 | # | 마일스톤 | 기간 | 핵심 |
 |---|---------|------|------|
-| M1 | **GitHub Actions CI** — lint-imports+pyright+pytest / eslint+next build. 무료(공개 리포 무제한, 사설이면 우분투 PC self-hosted runner) | 1-2일 | import-linter가 CI 게이트로 승격 |
+| M1 | ~~GitHub Actions CI~~ — **취소(사용자 결정, 2026-07-13)**. 구축·첫 실행 통과까지 확인 후 제거. 검증은 로컬 수동(pytest + lint-imports) 유지 | - | - |
 | M2 | **프로덕션 compose + deploy.sh** — --reload 제거, 비밀 .env 분리, healthcheck, DB 비노출. **n8n·neo4j prod 제외**(미사용). 배포=`git pull origin window && compose up -d --build` | 2-3일 | 우분투 PC 1커맨드 기동, 재부팅 자동 복구 |
 | M3 | **백업** — pg_dump 일간(7세대) + rclone→Google Drive 15GB 무료(주간 4세대) + models/ 포함 | 1일 | 복원 리허설 1회 성공 |
 | M4 | **RBAC + admin 스포크 실구현(최소)** — role 2종(free/admin)만, 실데이터 있는 화면만(회원/역할, 자동화 로그, 수집 현황). 목데이터 admin 페이지는 삭제. 데이터 접근은 허브 포트+DTO 경유 | 5-7일 | 역할별 접근 매트릭스 테스트 |
