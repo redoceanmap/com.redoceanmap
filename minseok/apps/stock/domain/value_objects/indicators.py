@@ -12,6 +12,10 @@ class Indicators:
     ma50: float          # 50일 이동평균
     support: float       # 최근 지지선(저점)
     resistance: float    # 최근 저항선(고점)
+    atr_pct: float = 0.0        # ATR(14)/종가 — 변동성 비율 (0.02 = 일 2%)
+    bb_percent_b: float = 0.5   # 볼린저 %B (0=하단 밴드, 1=상단 밴드, 범위 밖 가능)
+    volume_ratio: float = 1.0   # 최근 5일 평균 거래량 / 최근 20일 평균 (1.0 = 평소 수준)
+    obv_slope: float = 0.0      # OBV 20일 변화 / 20일 평균 거래량 — 수급 방향(-∞~∞, 대체로 ±수 단위)
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.rsi <= 100.0:

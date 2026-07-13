@@ -44,3 +44,41 @@ def test_데이터_부족이면_ValueError():
     closes, lows, highs = _series([100.0] * 30)
     with pytest.raises(ValueError):
         IndicatorCalculator().compute(closes, lows, highs)
+
+
+def test_변동성_없는_횡보면_atr_0에_수렴_bb는_중립():
+    closes = [100.0] * 60
+    ind = IndicatorCalculator().compute(closes, closes, closes)  # 고=저=종
+    assert ind.atr_pct == 0.0
+    assert ind.bb_percent_b == 0.5  # 표준편차 0 → 중립
+
+
+def test_상단_돌파면_bb_percent_b가_1_근처_이상():
+    closes, lows, highs = _series([100.0] * 55 + [100.0, 101.0, 103.0, 106.0, 112.0])
+    ind = IndicatorCalculator().compute(closes, lows, highs)
+    assert ind.bb_percent_b > 0.9
+
+
+def test_거래량_급증이면_volume_ratio_1_초과():
+    closes, lows, highs = _series([float(100 + i) for i in range(60)])
+    volumes = [1000.0] * 55 + [3000.0] * 5  # 최근 5일 3배
+    ind = IndicatorCalculator().compute(closes, lows, highs, volumes)
+    assert ind.volume_ratio > 1.5
+
+
+def test_연속_상승이면_obv_slope_양수_연속_하락이면_음수():
+    up_closes, up_lows, up_highs = _series([float(100 + i) for i in range(60)])
+    volumes = [1000.0] * 60
+    up = IndicatorCalculator().compute(up_closes, up_lows, up_highs, volumes)
+    assert up.obv_slope > 0.9  # 매일 +거래량 → 정규화 값 ≈ 1
+
+    dn_closes, dn_lows, dn_highs = _series([float(200 - i) for i in range(60)])
+    dn = IndicatorCalculator().compute(dn_closes, dn_lows, dn_highs, volumes)
+    assert dn.obv_slope < -0.9
+
+
+def test_volumes_없으면_거래량_지표는_중립값():
+    closes, lows, highs = _series([float(100 + i) for i in range(60)])
+    ind = IndicatorCalculator().compute(closes, lows, highs)
+    assert ind.volume_ratio == 1.0
+    assert ind.obv_slope == 0.0

@@ -9,8 +9,9 @@ from stock.domain.value_objects.sentiment_score import SentimentScore
 class OutlookPredictor:
     """지표 + 뉴스 감성 → 방향 전망. 외부 의존 없는 순수 도메인 서비스.
 
-    결정론적 스코어링만 한다(매매 추천 아님). 종합 점수는 감성·RSI·이동평균 배열을
-    가중 합산해 -1.0 ~ 1.0 로 정규화한 뒤 임계값으로 방향을 판정한다.
+    결정론적 스코어링만 한다(매매 추천 아님). 종합 점수는 config 가중치로 신호를
+    합산해 -1.0 ~ 1.0 로 정규화한 뒤 임계값으로 방향을 판정한다.
+    atr_veto가 설정되면 변동성(ATR 비율)이 그보다 클 때 관망(NEUTRAL)한다.
     """
 
     def predict(
@@ -19,10 +20,15 @@ class OutlookPredictor:
         sentiment: SentimentScore,
         config: AnalysisConfig,
     ) -> Outlook:
+        if config.atr_veto is not None and indicators.atr_pct > config.atr_veto:
+            return Outlook(direction=Direction.NEUTRAL, confidence=0.0)
+
         score = (
-            0.5 * sentiment.value
-            + 0.3 * self._rsi_signal(indicators.rsi)
-            + 0.2 * self._trend_signal(indicators)
+            config.w_sentiment * sentiment.value
+            + config.w_rsi * self._rsi_signal(indicators.rsi)
+            + config.w_trend * self._trend_signal(indicators)
+            + config.w_bb * self._bb_signal(indicators.bb_percent_b)
+            + config.w_obv * self._obv_signal(indicators.obv_slope)
         )
         score = max(-1.0, min(1.0, score))
         confidence = min(abs(score), 1.0)
@@ -47,3 +53,13 @@ class OutlookPredictor:
         if ind.ma50 <= 0:
             return 0.0
         return max(-1.0, min(1.0, (ind.ma20 - ind.ma50) / ind.ma50 * 10.0))
+
+    @staticmethod
+    def _bb_signal(percent_b: float) -> float:
+        # 평균회귀: 하단 밴드(%B=0) 근접 +, 상단 밴드(%B=1) 근접 -.
+        return max(-1.0, min(1.0, (0.5 - percent_b) * 2.0))
+
+    @staticmethod
+    def _obv_signal(obv_slope: float) -> float:
+        # 수급 방향 추종: OBV 순증 +, 순감 -. (계산기에서 대체로 -1~1로 정규화됨)
+        return max(-1.0, min(1.0, obv_slope))

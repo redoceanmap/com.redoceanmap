@@ -51,6 +51,7 @@ class YFinanceMarketDataAdapter(MarketDataPort):
                 closes=[float(v) for v in history["Close"]],
                 lows=[float(v) for v in history["Low"]],
                 highs=[float(v) for v in history["High"]],
+                volumes=[float(v) for v in history["Volume"]],
             )
         except ValueError as e:
             raise MarketDataUnavailableError(f"{symbol.code}: {e}")
