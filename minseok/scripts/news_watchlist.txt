@@ -1,0 +1,28 @@
+# 뉴스 수집 대상 — 한 줄에 하나: 한글명|티커|영문쿼리(선택, 기본 "{티커} stock")
+# 한글명은 한글 Google News 검색어, 티커는 영문 뉴스·기관 등급/목표가(yfinance) 조회에 쓴다.
+
+# 한국 (2)
+삼성전자|005930.KS|Samsung Electronics stock
+SK하이닉스|000660.KS|SK Hynix stock
+
+# 해외 빅테크 (20)
+애플|AAPL
+마이크로소프트|MSFT
+엔비디아|NVDA
+알파벳|GOOGL
+아마존|AMZN
+메타|META
+테슬라|TSLA
+브로드컴|AVGO
+TSMC|TSM
+ASML|ASML
+오라클|ORCL
+넷플릭스|NFLX
+AMD|AMD
+인텔|INTC
+퀄컴|QCOM
+마이크론|MU
+세일즈포스|CRM
+어도비|ADBE
+팔란티어|PLTR
+ARM홀딩스|ARM
