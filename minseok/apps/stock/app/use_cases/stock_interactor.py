@@ -68,6 +68,6 @@ class StockInteractor(StockUseCase):
         """수집 뉴스(DB, n8n 적재) 우선 + 시세 벤더 뉴스 보조(중복 제거, 최대 8건)."""
         collected: list[str] = []
         if self._news:
-            collected = await self._news.recent_titles(name or symbol.code)
+            collected = await self._news.recent_titles(name or symbol.code, ticker=symbol.code)
         vendor = await self._market_data.recent_headlines(symbol)
         return (collected + [h for h in vendor if h not in collected])[:8]

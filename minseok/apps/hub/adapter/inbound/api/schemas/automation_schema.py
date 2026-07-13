@@ -9,6 +9,7 @@ class NewsItemSchema(BaseModel):
     title: str
     source: str = ""
     url: str
+    ticker: str = ""
     publishedAt: datetime | None = None
 
 

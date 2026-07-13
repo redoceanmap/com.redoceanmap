@@ -15,7 +15,8 @@ class NewsStorageGateway(NewsStoragePort):
     async def save_many(self, items: list[NewsItem]) -> int:
         return await self._use_case.ingest([
             NewsArticle(
-                title=i.title, source=i.source, url=i.url, published_at=i.published_at,
+                title=i.title, source=i.source, url=i.url,
+                ticker=i.ticker, published_at=i.published_at,
             )
             for i in items
         ])

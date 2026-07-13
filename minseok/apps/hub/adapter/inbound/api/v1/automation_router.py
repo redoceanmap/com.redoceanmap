@@ -50,7 +50,10 @@ async def ingest_news(
     use_case: NewsIngestUseCase = Depends(get_news_ingest_use_case),
 ) -> NewsIngestResult:
     saved = await use_case.ingest([
-        NewsItem(title=i.title, source=i.source, url=i.url, published_at=i.publishedAt)
+        NewsItem(
+            title=i.title, source=i.source, url=i.url,
+            ticker=i.ticker, published_at=i.publishedAt,
+        )
         for i in payload.items
     ])
     return NewsIngestResult(received=len(payload.items), saved=saved)

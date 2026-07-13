@@ -14,4 +14,5 @@ class NewsItem:
     title: str
     source: str
     url: str
+    ticker: str = ""  # 관련 종목 티커(예: 005930.KS, NVDA) — 학습 라벨 조인 키
     published_at: datetime | None = None

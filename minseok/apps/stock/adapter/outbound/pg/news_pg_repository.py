@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,21 +24,29 @@ class NewsPgRepository(NewsRepositoryPort):
                     "title": a.title,
                     "source": a.source,
                     "url": a.url,
+                    "ticker": a.ticker,
                     "published_at": a.published_at,
                 }
                 for a in articles
             ])
-            .on_conflict_do_nothing(index_elements=["url"])
+            .on_conflict_do_nothing(index_elements=["url", "ticker"])
             .returning(NewsArticleOrm.id)
         )
         result = await self._session.execute(stmt)
         await self._session.commit()
         return len(result.scalars().all())
 
-    async def recent_titles(self, query: str, limit: int = 5) -> list[str]:
+    async def recent_titles(self, query: str, ticker: str = "", limit: int = 5) -> list[str]:
+        # ticker 정확 일치(거래소 접미 포함) 우선 + 제목 부분 일치 폴백(티커 미기록 구버전 행)
+        conditions = [NewsArticleOrm.title.ilike(f"%{query}%")]
+        if ticker:
+            conditions += [
+                NewsArticleOrm.ticker == ticker,
+                NewsArticleOrm.ticker.like(f"{ticker}.%"),
+            ]
         stmt = (
             select(NewsArticleOrm.title)
-            .where(NewsArticleOrm.title.ilike(f"%{query}%"))
+            .where(or_(*conditions))
             .order_by(NewsArticleOrm.published_at.desc().nulls_last(), NewsArticleOrm.id.desc())
             .limit(limit)
         )

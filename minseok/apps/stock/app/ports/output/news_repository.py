@@ -10,10 +10,10 @@ class NewsRepositoryPort(ABC):
 
     @abstractmethod
     async def save_many(self, articles: list[NewsArticle]) -> int:
-        """저장하고 신규 건수를 반환한다. url 중복은 무시한다."""
+        """저장하고 신규 건수를 반환한다. (url, ticker) 중복은 무시한다."""
         ...
 
     @abstractmethod
-    async def recent_titles(self, query: str, limit: int = 5) -> list[str]:
-        """제목에 query가 포함된 최신 뉴스 제목을 반환한다."""
+    async def recent_titles(self, query: str, ticker: str = "", limit: int = 5) -> list[str]:
+        """ticker 일치 또는 제목에 query가 포함된 최신 뉴스 제목을 반환한다."""
         ...

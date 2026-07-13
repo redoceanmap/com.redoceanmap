@@ -62,7 +62,7 @@ def load_watchlist() -> list[tuple[str, str, str]]:
     return entries
 
 
-def fetch_google_rss(rss_template: str, query: str, name: str) -> list[dict]:
+def fetch_google_rss(rss_template: str, query: str, ticker: str) -> list[dict]:
     url = rss_template.format(q=urllib.parse.quote(query))
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     with urllib.request.urlopen(req, timeout=15) as res:
@@ -84,9 +84,10 @@ def fetch_google_rss(rss_template: str, query: str, name: str) -> list[dict]:
                 pass
         if title and link:
             items.append({
-                "title": f"[{name}] {title}",  # 종목 매칭용 접두 — stock 분석이 제목으로 종목을 찾는다
+                "title": title,  # 원문 그대로 — 종목 귀속은 ticker 필드가 담당(학습 입력 오염 방지)
                 "source": source or "google-news",
                 "url": link,
+                "ticker": ticker,
                 "publishedAt": published,
             })
     return items
@@ -101,7 +102,7 @@ def fetch_analyst_actions(name: str, ticker: str) -> list[dict]:
     items = []
     for grade_date, row in ud[ud.index >= cutoff].iterrows():
         action = ACTION_KR.get(str(row.get("Action", "")), str(row.get("Action", "")))
-        title = f"[{name}] {row['Firm']} 투자의견 {row['ToGrade']} ({action})"
+        title = f"{name} — {row['Firm']} 투자의견 {row['ToGrade']} ({action})"
         cur, prior = row.get("currentPriceTarget", 0) or 0, row.get("priorPriceTarget", 0) or 0
         if cur > 0:
             title += f", 목표가 ${prior:g}→${cur:g}" if prior > 0 else f", 목표가 ${cur:g}"
@@ -111,6 +112,7 @@ def fetch_analyst_actions(name: str, ticker: str) -> list[dict]:
             "source": str(row["Firm"]),
             # 실제 기사 URL이 없는 이벤트 — 티커·시각·기관으로 합성해 유니크 중복 차단에 태운다
             "url": f"analyst://{ticker}/{grade_date:%Y%m%d%H%M%S}/{firm_slug}",
+            "ticker": ticker,
             "publishedAt": grade_date.isoformat(),
         })
     return items
@@ -129,12 +131,13 @@ def post_to_hub(items: list[dict]) -> dict:
 
 def main() -> None:
     dry_run = "--dry-run" in sys.argv
+    print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] 수집 시작", flush=True)  # cron 로그 일자별 추적용
     total_fetched = total_saved = 0
     for name, ticker, en_query in load_watchlist():
         items: list[dict] = []
-        sources = [("한글뉴스", lambda: fetch_google_rss(RSS_KR, name, name))]
+        sources = [("한글뉴스", lambda: fetch_google_rss(RSS_KR, name, ticker))]
         if en_query:
-            sources.append(("영문뉴스", lambda: fetch_google_rss(RSS_EN, en_query, name)))
+            sources.append(("영문뉴스", lambda: fetch_google_rss(RSS_EN, en_query, ticker)))
         if ticker:
             sources.append(("기관등급", lambda: fetch_analyst_actions(name, ticker)))
         counts = []
@@ -158,7 +161,11 @@ def main() -> None:
             print(f"{line} → 신규 저장 {result['saved']}")
         except Exception as e:
             print(f"{line} → 허브 POST 실패 — {e}")
-    print(f"합계: 수집 {total_fetched}" + ("" if dry_run else f" / 신규 저장 {total_saved}"))
+    print(
+        f"[{datetime.now():%Y-%m-%d %H:%M:%S}] 합계: 수집 {total_fetched}"
+        + ("" if dry_run else f" / 신규 저장 {total_saved}"),
+        flush=True,
+    )
 
 
 if __name__ == "__main__":
