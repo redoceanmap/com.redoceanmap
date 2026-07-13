@@ -1,6 +1,6 @@
 # CLAUDE.md — 백엔드 (minseok)
 
-공통 원칙 → [[CLAUDE|CLAUDE (루트)]] · 엔티티 규칙 → [[minseok/_docs/ENTITY_RULES|ENTITY_RULES]]
+공통 원칙 → [[CLAUDE|CLAUDE (루트)]] · 엔티티 규칙 → [[minseok/_docs/ENTITY_RULES|ENTITY_RULES]] · 로드맵 → [[minseok/_docs/ROADMAP|ROADMAP]]
 
 Python / FastAPI 백엔드. 앱 **내부**는 헥사고날/클린 아키텍처(`adapter → app → domain`),
 앱 **사이**는 스타 토폴로지(허브-스포크)를 따른다. 두 구조는 `minseok/.importlinter`로 강제된다.
