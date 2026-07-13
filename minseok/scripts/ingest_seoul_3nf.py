@@ -21,6 +21,7 @@ load_dotenv(ROOT.parent / ".env")
 
 DATA = ROOT / "data" / "raw" / "seoul"
 ENC = "cp949"
+SIDO_SEOUL = "11"  # 행정표준코드 — 서울특별시
 
 from core.database import Base  # noqa: E402
 import market.adapter.outbound.orm.region_orm  # noqa: E402,F401
@@ -36,6 +37,7 @@ import market.adapter.outbound.orm.working_population_orm  # noqa: E402,F401
 import market.adapter.outbound.orm.consumption_orm  # noqa: E402,F401
 import market.adapter.outbound.orm.apartment_orm  # noqa: E402,F401
 import market.adapter.outbound.orm.commercial_change_orm  # noqa: E402,F401
+import market.adapter.outbound.orm.commercial_change_benchmark_orm  # noqa: E402,F401
 
 from market.adapter.outbound.csv.column_maps import (  # noqa: E402
     APARTMENT_COLUMN_MAP,
@@ -104,10 +106,14 @@ def main() -> None:
     print("trade_area_division:", bulk(T["trade_area_division"],
           [{"code": c, "name": n} for c, n in div.values]))
 
-    # 2) region — 자치구(level1)
+    # 2) region — 시도(level0, 서울) → 자치구(level1)
+    print("region(시도):", bulk(T["region"], [{
+        "code": SIDO_SEOUL, "name": "서울특별시", "level": 0, "parent_code": None,
+        "x_coord": None, "y_coord": None, "area_size": None,
+    }]))
     gu_recs = [{
         "code": _code(r["자치구_코드"]), "name": r["자치구_명"], "level": 1,
-        "parent_code": None,
+        "parent_code": SIDO_SEOUL,
         "x_coord": int(r["엑스좌표_값"]) if pd.notna(r["엑스좌표_값"]) else None,
         "y_coord": int(r["와이좌표_값"]) if pd.notna(r["와이좌표_값"]) else None,
         "area_size": float(r["영역_면적"]) if pd.notna(r["영역_면적"]) else None,
@@ -181,6 +187,16 @@ def main() -> None:
             df = df[df["change_indicator"].isin(chg_codes)]
         n = bulk(T[table], clean_records(df, T[table]))
         print(f"{table}: {n}")
+
+    # 7) 시도 벤치마크 — 서울 평균(운영/폐업 개월)은 분기+지역에만 종속이라 별도 테이블
+    cc = csv("상권변화지표-상권").rename(columns=COMMERCIAL_CHANGE_COLUMN_MAP)
+    bench = cc.drop_duplicates(subset=["year_quarter"])
+    print("commercial_change_benchmark:", bulk(T["commercial_change_benchmark"], [{
+        "year_quarter": int(r["year_quarter"]),
+        "region_code": SIDO_SEOUL,
+        "operating_months_avg": int(r["seoul_operating_months_avg"]),
+        "closure_months_avg": int(r["seoul_closure_months_avg"]),
+    } for _, r in bench.iterrows()]))
 
 
 if __name__ == "__main__":

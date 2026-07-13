@@ -14,5 +14,3 @@ class CommercialChangeOrm(MarketStatMixin, Base):
     change_indicator: Mapped[str] = mapped_column(ForeignKey("change_indicator.code"))
     operating_months_avg: Mapped[int] = mapped_column(Integer)
     closure_months_avg: Mapped[int] = mapped_column(Integer)
-    seoul_operating_months_avg: Mapped[int] = mapped_column(Integer)
-    seoul_closure_months_avg: Mapped[int] = mapped_column(Integer)

@@ -228,9 +228,9 @@ class ChatInteractor(ChatUseCase):
             if raw.has_cc:
                 change_text = raw.change_indicator_name or "데이터 없음"
                 op_months = raw.operating_months_avg
-                seoul_op = raw.seoul_operating_months_avg
+                region_op = raw.region_operating_months_avg
                 op_text = (
-                    f"이 상권 평균 {op_months}개월 영업 (서울 평균 {seoul_op}개월)"
+                    f"이 상권 평균 {op_months}개월 영업 (지역 평균 {region_op}개월)"
                     if op_months else "데이터 없음"
                 )
             else:

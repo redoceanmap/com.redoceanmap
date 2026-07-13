@@ -61,8 +61,8 @@ class AreaRawStat:
     time_14_17_floating_pop: int | None
     time_17_21_floating_pop: int | None
     time_21_24_floating_pop: int | None
-    # 상권변화 (CommercialChange)
+    # 상권변화 (CommercialChange) — region_*는 상권이 속한 시도의 벤치마크 평균
     has_cc: bool
     change_indicator_name: str | None
     operating_months_avg: float | None
-    seoul_operating_months_avg: float | None
+    region_operating_months_avg: float | None

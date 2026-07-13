@@ -6,6 +6,9 @@ from sqlalchemy.orm import aliased
 
 from hub.app.dtos.commercial_data_dto import AreaInfo, AreaRawStat, AreaSummary, ServiceCode
 from market.adapter.outbound.orm.change_indicator_orm import ChangeIndicatorOrm
+from market.adapter.outbound.orm.commercial_change_benchmark_orm import (
+    CommercialChangeBenchmarkOrm,
+)
 from market.adapter.outbound.orm.commercial_change_orm import CommercialChangeOrm
 from market.adapter.outbound.orm.estimated_sales_orm import EstimatedSalesOrm
 from market.adapter.outbound.orm.floating_population_orm import FloatingPopulationOrm
@@ -114,6 +117,24 @@ class CommercialDataGateway(CommercialDataPort):
         )).all()
         cc_map = {row[0].trdar_code: (row[0], row.indicator_name) for row in cc_rows}
 
+        # 상권 → 시도 코드 해소 후 시도 벤치마크(분기별 지역 평균) 매핑
+        dong = aliased(RegionOrm)
+        gu = aliased(RegionOrm)
+        sido_rows = (await self._session.execute(
+            select(TradeAreaOrm.code, gu.parent_code)
+            .join(dong, TradeAreaOrm.region_code == dong.code)
+            .join(gu, dong.parent_code == gu.code)
+            .where(TradeAreaOrm.code.in_(trdar_codes))
+        )).all()
+        sido_map = {r[0]: r[1] for r in sido_rows}
+
+        bench_rows = (await self._session.execute(
+            select(CommercialChangeBenchmarkOrm).where(
+                CommercialChangeBenchmarkOrm.year_quarter == quarter
+            )
+        )).scalars().all()
+        bench_map = {b.region_code: b for b in bench_rows}
+
         result: dict[int, AreaRawStat] = {}
         for code in trdar_codes:
             s = sales_map.get(code)
@@ -121,6 +142,7 @@ class CommercialDataGateway(CommercialDataPort):
             fp = fp_map.get(code)
             cc_pair = cc_map.get(code)
             cc = cc_pair[0] if cc_pair else None
+            bench = bench_map.get(sido_map.get(code))
             result[code] = AreaRawStat(
                 has_sales=s is not None,
                 monthly_sales_amount=s.monthly_sales_amount if s else None,
@@ -147,6 +169,6 @@ class CommercialDataGateway(CommercialDataPort):
                 has_cc=cc is not None,
                 change_indicator_name=cc_pair[1] if cc_pair else None,
                 operating_months_avg=cc.operating_months_avg if cc else None,
-                seoul_operating_months_avg=cc.seoul_operating_months_avg if cc else None,
+                region_operating_months_avg=bench.operating_months_avg if bench else None,
             )
         return result

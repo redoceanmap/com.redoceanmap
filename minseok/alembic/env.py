@@ -39,6 +39,7 @@ import market.adapter.outbound.orm.consumption_orm  # noqa: F401
 import market.adapter.outbound.orm.working_population_orm  # noqa: F401
 import market.adapter.outbound.orm.apartment_orm  # noqa: F401
 import market.adapter.outbound.orm.commercial_change_orm  # noqa: F401
+import market.adapter.outbound.orm.commercial_change_benchmark_orm  # noqa: F401
 import chat.adapter.outbound.orm.conversation_orm  # noqa: F401
 import recommendation.adapter.outbound.orm.recommendation_orm  # noqa: F401
 import stock.adapter.outbound.orm.news_article_orm  # noqa: F401
