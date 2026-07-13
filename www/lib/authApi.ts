@@ -2,9 +2,21 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export type AuthResponse = {
   access_token: string;
+  refresh_token: string;
   name: string;
   email: string;
 };
+
+export async function apiRefresh(refreshToken: string): Promise<AuthResponse> {
+  const res = await fetch(`${API_BASE}/auth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail ?? "토큰 갱신에 실패했습니다.");
+  return data;
+}
 
 export async function apiLogin(email: string, password: string): Promise<AuthResponse> {
   const res = await fetch(`${API_BASE}/auth/login`, {

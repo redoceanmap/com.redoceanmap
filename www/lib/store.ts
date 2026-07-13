@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { Area } from "./mockApi";
+import { authHeader } from "./tokenStorage";
 
 
 export type StockAnalysis = {
@@ -49,7 +50,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeader() },
         body: JSON.stringify({ prompt, conversationId: get().conversationId }),
       });
 

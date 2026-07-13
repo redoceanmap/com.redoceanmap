@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { X, Send, CheckCircle2 } from "lucide-react";
+import { authHeader } from "@/lib/tokenStorage";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
@@ -42,7 +43,7 @@ export default function EmailModal({ open, onClose }: Props) {
     try {
       const res = await fetch(`${API_BASE}/email/request`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeader() },
         body: JSON.stringify({ to, content }),
       });
       if (!res.ok) throw new Error("발송 요청 실패");

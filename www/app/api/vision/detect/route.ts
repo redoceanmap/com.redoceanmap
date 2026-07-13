@@ -5,9 +5,11 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
+    const auth = request.headers.get("authorization");
 
     const res = await fetch(`${API_BASE}/vision/faces`, {
       method: "POST",
+      headers: auth ? { Authorization: auth } : undefined,
       body: formData,
     });
 

@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { CloudUpload, ScanEye, LoaderCircle, CircleAlert, CircleCheck } from "lucide-react";
+import { authHeader } from "@/lib/tokenStorage";
 
 type VisionResult = {
   filename: string;
@@ -48,7 +49,7 @@ export default function VisionPage() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const res = await fetch("/api/vision", { method: "POST", body: formData });
+      const res = await fetch("/api/vision", { method: "POST", headers: authHeader(), body: formData });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "업로드에 실패했어요.");
       setState((prev) => ({ ...prev, uploading: false, result: data }));

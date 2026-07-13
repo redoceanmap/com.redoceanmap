@@ -1,7 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from auth.adapter.inbound.api.schemas.auth_schema import LoginRequest, RegisterRequest, TokenResponse
+from auth.adapter.inbound.api.schemas.auth_schema import (
+    LoginRequest,
+    RefreshRequest,
+    RegisterRequest,
+    TokenResponse,
+)
 from auth.app.ports.input.auth_use_case import AuthUseCase
 from auth.dependencies.auth_provider import get_auth_use_case
 from auth.adapter.inbound.api.schemas.gatekeeper_schema import GatekeeperResponseSchema
@@ -31,6 +36,17 @@ async def login(
 ):
     try:
         return await use_case.login(body.email, body.password)
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+
+
+@auth_router.post("/refresh", response_model=TokenResponse)
+async def refresh(
+    body: RefreshRequest,
+    use_case: AuthUseCase = Depends(get_auth_use_case),
+):
+    try:
+        return await use_case.refresh(body.refresh_token)
     except ValueError as e:
         raise HTTPException(status_code=401, detail=str(e))
 

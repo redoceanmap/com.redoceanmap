@@ -5,10 +5,14 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 export async function POST(request: Request) {
   try {
     const { prompt, conversationId } = await request.json();
+    const auth = request.headers.get("authorization");
 
     const res = await fetch(`${API_BASE}/chat/ask`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(auth ? { Authorization: auth } : {}),
+      },
       body: JSON.stringify({ prompt, conversationId: conversationId ?? null }),
     });
 

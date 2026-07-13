@@ -6,12 +6,13 @@ from contextlib import asynccontextmanager
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "apps"))
 
-from fastapi import FastAPI, Response
+from fastapi import Depends, FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from auth.adapter.inbound.api.v1.auth_router import auth_router
 from chat.adapter.inbound.api.v1.chat_router import chat_router
 from core.database import dispose_engine, init_engine
+from core.security import get_current_user_id
 from chat.adapter.outbound.gateways.email_composer_gateway import EmailComposerN8nGateway
 from hub.adapter.inbound.api.v1.automation_router import automation_router
 from hub.adapter.inbound.api.v1.email_request_router import email_request_router
@@ -53,17 +54,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth_router)
-app.include_router(chat_router)
-app.include_router(area_router)
-app.include_router(stock_router)
-app.include_router(recommendation_router)
-app.include_router(automation_router)  # 허브 — 외부 자동화(n8n) 단일 창구
-app.include_router(email_request_router)  # 허브 — 이메일 발송 요청(사용자/프론트 액터)
-app.include_router(mail_router)
-app.include_router(watcher_router)
-app.include_router(judge_router)
-app.include_router(vision_router)
+# 인증 가드 — 공개 화이트리스트 방식: auth(자체 처리)·automation(웹훅 토큰)·/·/health만 공개,
+# 나머지 라우터는 전부 JWT 필수(core/security — 스포크는 auth를 모른다).
+_authenticated = [Depends(get_current_user_id)]
+
+app.include_router(auth_router)  # 공개 — register/login/refresh, me는 자체 검증
+app.include_router(automation_router)  # 공개 — 외부 자동화 창구, X-Webhook-Token 자체 검증
+app.include_router(chat_router, dependencies=_authenticated)
+app.include_router(area_router, dependencies=_authenticated)
+app.include_router(stock_router, dependencies=_authenticated)
+app.include_router(recommendation_router, dependencies=_authenticated)
+app.include_router(email_request_router, dependencies=_authenticated)  # 허브 — 이메일 발송 요청
+app.include_router(mail_router, dependencies=_authenticated)
+app.include_router(watcher_router, dependencies=_authenticated)
+app.include_router(judge_router, dependencies=_authenticated)
+app.include_router(vision_router, dependencies=_authenticated)
 
 # 합성 루트: 허브(hub)의 포트들을 스포크 구현으로 주입한다.
 # (허브는 스포크를 모르고, main.py만 둘을 안다 — 스타 토폴로지 허브 격리 유지)

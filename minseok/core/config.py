@@ -9,6 +9,9 @@ DATABASE_URL = os.environ["DATABASE_URL"].replace(
     "postgresql://", "postgresql+psycopg://"
 )
 
+# JWT 서명 비밀키 — 발급(auth 인터랙터)과 검증(core/security)이 공유한다.
+JWT_SECRET = os.environ["JWT_SECRET"]
+
 # n8n → 백엔드 인바운드 웹훅 검증 토큰. 비어 있으면 검증 생략(로컬 개발).
 N8N_INBOUND_TOKEN = os.getenv("N8N_INBOUND_TOKEN", "")
 

@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { CloudUpload, ScanSearch, LoaderCircle, CircleAlert, UserRound } from "lucide-react";
+import { authHeader } from "@/lib/tokenStorage";
 
 type FaceMatch = {
   name: string;
@@ -45,7 +46,7 @@ export default function VisionDetectPage() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const res = await fetch("/api/vision/detect", { method: "POST", body: formData });
+      const res = await fetch("/api/vision/detect", { method: "POST", headers: authHeader(), body: formData });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "얼굴 인식에 실패했어요.");
       setState((prev) => ({ ...prev, detecting: false, result: data }));

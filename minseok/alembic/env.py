@@ -26,6 +26,7 @@ if config.config_file_name is not None:
 
 from core.database import Base
 import auth.adapter.outbound.orm.user_orm  # noqa: F401
+import auth.adapter.outbound.orm.refresh_token_orm  # noqa: F401
 import market.adapter.outbound.orm.region_orm  # noqa: F401
 import market.adapter.outbound.orm.trade_area_division_orm  # noqa: F401
 import market.adapter.outbound.orm.service_category_orm  # noqa: F401

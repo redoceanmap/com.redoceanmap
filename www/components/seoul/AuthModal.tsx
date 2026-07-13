@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { X, ArrowLeft, Eye, EyeOff, Info } from "lucide-react";
 import { useUIStore, type AuthMode } from "@/lib/uiStore";
 import { apiLogin, apiRegister } from "@/lib/authApi";
-import { setStoredToken } from "@/lib/tokenStorage";
+import { setStoredRefreshToken, setStoredToken } from "@/lib/tokenStorage";
 
 function PinMark({ size = 32 }: { size?: number }) {
   return (
@@ -146,6 +146,7 @@ export default function AuthModal() {
     try {
       const res = await apiLogin(email, password);
       setStoredToken(res.access_token);
+      setStoredRefreshToken(res.refresh_token);
       setToken(res.access_token);
       setUser({ id: 0, name: res.name, email: res.email });
       close();
@@ -169,6 +170,7 @@ export default function AuthModal() {
     try {
       const res = await apiRegister(email, password, name);
       setStoredToken(res.access_token);
+      setStoredRefreshToken(res.refresh_token);
       setToken(res.access_token);
       setUser({ id: 0, name: res.name, email: res.email });
       close();
