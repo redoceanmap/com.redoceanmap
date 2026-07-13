@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: soccer-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: soccer
+      POSTGRES_USER: soccer
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      # 호스트 5432는 redoceanmap pgvector가 점유 중 → 5433 사용 (soccer-database.md §2)
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U soccer -d soccer"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:

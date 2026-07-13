@@ -1,4 +1,4 @@
-# Alembic으로 축구 DB 스키마 구축 (pgvector / Ubuntu 26)
+# Alembic으로 축구 DB 스키마 구축 (Docker + pgvector / Ubuntu 26)
 
 > **하네스 원칙(Harness Principle)에 따른 에이전트 작업 지시서**
 > - 컨텍스트는 한 번에 필요한 만큼만, 명세는 모호함 없이.
@@ -10,26 +10,79 @@
 
 ## 1. Role
 
-너는 PostgreSQL + Alembic 마이그레이션 전문가다. 아래 명세만을 근거로 스키마 마이그레이션을 작성하고, 각 단계를 직접 실행·검증한 뒤 결과를 보고한다. 명세에 없는 사항은 **임의로 추가하지 말고 질문**한다.
+너는 PostgreSQL + Docker + Alembic 마이그레이션 전문가다. 아래 명세만을 근거로 **DB를 도커 컨테이너 안에서 기동**하고, 스키마 마이그레이션을 작성·실행·검증한 뒤 결과를 보고한다. 명세에 없는 사항은 **임의로 추가하지 말고 질문**한다.
 
 ## 2. Environment (사실, 추측 금지)
 
 | 항목 | 값 |
 |---|---|
-| OS | Ubuntu 26 |
-| DB | PostgreSQL + `pgvector` 확장 설치됨 |
-| 마이그레이션 도구 | Alembic |
-| 접속 정보 | 환경변수 `DATABASE_URL` (예: `postgresql+psycopg://user:pw@localhost:5432/soccer`) |
+| 호스트 OS | Ubuntu 26 |
+| 실행 방식 | **Docker 컨테이너 내부에서 PostgreSQL + pgvector 구동** |
+| DB 이미지 | `pgvector/pgvector:pg17` |
+| 컨테이너명 | `soccer-pg` |
+| 포트 매핑 | 호스트 `5432` → 컨테이너 `5432` |
+| DB/유저/PW | `soccer` / `soccer` / `.env`의 `POSTGRES_PASSWORD` |
+| 마이그레이션 도구 | Alembic (호스트에서 실행, 컨테이너 DB에 접속) |
 | 대상 스키마 | `public` |
 
-- 접속 정보는 **하드코딩 금지**. `alembic.ini`의 `sqlalchemy.url`은 비워 두고 `env.py`에서 `os.environ["DATABASE_URL"]`로 주입한다.
-- `psycopg`(v3) 드라이버 기준. 미설치 시 `pip install alembic "psycopg[binary]" sqlalchemy pgvector` 로 설치한다.
+- 접속 정보는 **하드코딩 금지**. `.env`에 두고 `DATABASE_URL`로 주입한다.
+  `DATABASE_URL=postgresql+psycopg://soccer:${POSTGRES_PASSWORD}@localhost:5432/soccer`
+- `alembic.ini`의 `sqlalchemy.url`은 비워 두고 `env.py`에서 `os.environ["DATABASE_URL"]`을 읽는다.
+- 호스트에 미설치 시: `pip install alembic "psycopg[binary]" sqlalchemy pgvector`
+- 호스트 5432 포트가 이미 점유 중이면 **기존 서비스를 죽이지 말고** 호스트 포트를 `5433`으로 바꾼 뒤 `DATABASE_URL`도 함께 수정하고 그 사실을 보고한다.
 
-## 3. Target Schema (ERD 명세 — 이대로만 생성)
+## 3. Docker 구성 (Step 0)
+
+프로젝트 루트에 아래 두 파일을 생성한다.
+
+### 3.1 `docker-compose.yml`
+```yaml
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: soccer-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: soccer
+      POSTGRES_USER: soccer
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U soccer -d soccer"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
+```
+
+### 3.2 `.env`
+```
+POSTGRES_PASSWORD=<사용자에게 확인받은 값. 임의 생성 시 보고할 것>
+DATABASE_URL=postgresql+psycopg://soccer:<same>@localhost:5432/soccer
+```
+- `.env`는 `.gitignore`에 추가한다.
+- 비밀번호를 코드/마이그레이션/로그에 평문으로 남기지 않는다.
+
+### 3.3 기동 및 확인
+```bash
+docker compose up -d
+docker compose ps                       # healthy 확인
+docker exec soccer-pg pg_isready -U soccer -d soccer
+docker exec soccer-pg psql -U soccer -d soccer -c "SELECT version();"
+docker exec soccer-pg psql -U soccer -d soccer -c "SELECT * FROM pg_available_extensions WHERE name='vector';"
+```
+> `vector` 확장이 available 목록에 없으면 **이미지가 잘못된 것**이다. 임의로 소스 빌드하지 말고 즉시 보고할 것.
+
+## 4. Target Schema (ERD 명세 — 이대로만 생성)
 
 컬럼 순서·타입·길이를 **그대로** 지킨다. 오탈자처럼 보이는 이름(`statdium_name`)도 ERD 원문 그대로 유지한다.
 
-### 3.1 `stadium`
+### 4.1 `stadium`
 | 컬럼 | 타입 | 제약 |
 |---|---|---|
 | `stadium_id` | VARCHAR(10) | **PK** |
@@ -40,7 +93,7 @@
 | `ddd` | VARCHAR(10) | |
 | `tel` | VARCHAR(10) | |
 
-### 3.2 `team`
+### 4.2 `team`
 | 컬럼 | 타입 | 제약 |
 |---|---|---|
 | `team_id` | VARCHAR(10) | **PK** |
@@ -58,7 +111,7 @@
 | `owner` | VARCHAR(10) | |
 | `stadium_id` | VARCHAR(10) | **FK → stadium.stadium_id** (non-identifying, NULL 허용) |
 
-### 3.3 `player`
+### 4.3 `player`
 | 컬럼 | 타입 | 제약 |
 |---|---|---|
 | `player_id` | VARCHAR(10) | **PK** |
@@ -75,7 +128,7 @@
 | `weight` | INTEGER | |
 | `team_id` | VARCHAR(10) | **FK → team.team_id** (non-identifying, NULL 허용) |
 
-### 3.4 `schedule`
+### 4.4 `schedule`
 | 컬럼 | 타입 | 제약 |
 |---|---|---|
 | `sche_date` | VARCHAR(10) | **PK (복합키 1)** |
@@ -86,7 +139,7 @@
 | `home_score` | INTEGER | |
 | `away_score` | INTEGER | |
 
-### 3.5 관계 요약
+### 4.5 관계 요약
 ```
 stadium (1) ──< schedule   : schedule.stadium_id → stadium.stadium_id  (PK 구성, identifying)
 stadium (1) ──< team       : team.stadium_id     → stadium.stadium_id  (non-identifying)
@@ -96,29 +149,40 @@ team    (1) ──< player     : player.team_id      → team.team_id        (no
 - FK 컬럼(`team.stadium_id`, `player.team_id`, `schedule.stadium_id`)에는 인덱스를 생성한다.
 - 생성 순서: `stadium` → `team` → `player` → `schedule`. `downgrade()`는 역순.
 
-## 4. Task (순서대로, 한 단계씩)
+## 5. Task (순서대로, 한 단계씩)
 
-1. **초기화 점검** — `alembic` 디렉터리가 없으면 `alembic init migrations`. 이미 있으면 재초기화하지 말고 기존 구성을 읽는다.
+0. **Docker 기동** — 3장의 파일 생성 → `docker compose up -d` → healthcheck가 `healthy`가 될 때까지 대기 → 3.3의 확인 명령 실행. 여기서 실패하면 다음 단계로 넘어가지 말 것.
+1. **Alembic 초기화 점검** — `alembic` 디렉터리가 없으면 `alembic init migrations`. 이미 있으면 재초기화하지 말고 기존 구성을 읽는다.
 2. **env.py 구성** — `DATABASE_URL` 주입, `target_metadata` 연결, `compare_type=True`.
 3. **Revision 1: `enable_pgvector`** — `CREATE EXTENSION IF NOT EXISTS vector;` / downgrade는 `DROP EXTENSION IF EXISTS vector;`
    - ERD에는 벡터 컬럼이 없다. **임베딩 컬럼을 임의로 추가하지 말 것.** 확장 활성화만 한다.
-4. **Revision 2: `create_soccer_schema`** — 3장의 4개 테이블·PK·FK·인덱스를 `op.create_table` / `op.create_index`로 작성. `down_revision`을 Revision 1에 연결.
+4. **Revision 2: `create_soccer_schema`** — 4장의 4개 테이블·PK·FK·인덱스를 `op.create_table` / `op.create_index`로 작성. `down_revision`을 Revision 1에 연결.
 5. **적용** — `alembic upgrade head` 실행.
-6. **검증** — 아래 5장의 명령을 모두 실행하고 출력을 그대로 보고한다.
+6. **검증** — 6장의 명령을 모두 실행하고 출력을 그대로 보고한다.
 7. **롤백 리허설** — `alembic downgrade base` → `alembic upgrade head` 를 1회 왕복 실행해 두 방향 모두 오류 없이 동작함을 증명한다.
+8. **컨테이너 재기동 내구성 확인** — `docker compose restart` 후 `alembic current`와 `\dt`가 그대로 유지되는지(볼륨 영속성) 확인한다.
 
-## 5. Verification (통과해야 완료)
+## 6. Verification (통과해야 완료)
+
+> DB 확인은 **컨테이너 내부의 psql**로 수행한다 (호스트에 psql 클라이언트가 없어도 동작).
 
 ```bash
-alembic current          # head 리비전이 표시될 것
+# Docker 레이어
+docker compose ps
+docker exec soccer-pg pg_isready -U soccer -d soccer
+
+# Alembic 레이어 (호스트)
+alembic current
 alembic history --verbose
-psql "$DATABASE_URL" -c "\dt"
-psql "$DATABASE_URL" -c "\d stadium"
-psql "$DATABASE_URL" -c "\d team"
-psql "$DATABASE_URL" -c "\d player"
-psql "$DATABASE_URL" -c "\d schedule"
-psql "$DATABASE_URL" -c "SELECT extname FROM pg_extension WHERE extname='vector';"
-psql "$DATABASE_URL" -c "
+
+# 스키마 레이어 (컨테이너 내부)
+docker exec soccer-pg psql -U soccer -d soccer -c "\dt"
+docker exec soccer-pg psql -U soccer -d soccer -c "\d stadium"
+docker exec soccer-pg psql -U soccer -d soccer -c "\d team"
+docker exec soccer-pg psql -U soccer -d soccer -c "\d player"
+docker exec soccer-pg psql -U soccer -d soccer -c "\d schedule"
+docker exec soccer-pg psql -U soccer -d soccer -c "SELECT extname, extversion FROM pg_extension WHERE extname='vector';"
+docker exec soccer-pg psql -U soccer -d soccer -c "
 SELECT conrelid::regclass AS tbl, conname, pg_get_constraintdef(oid)
 FROM pg_constraint WHERE contype IN ('p','f')
   AND conrelid::regclass::text IN ('stadium','team','player','schedule')
@@ -126,28 +190,35 @@ ORDER BY 1;"
 ```
 
 **Definition of Done**
+- [ ] `soccer-pg` 컨테이너가 `healthy` 상태로 기동
+- [ ] `vector` 확장이 컨테이너 DB에서 활성 상태
 - [ ] 4개 테이블이 명세와 컬럼명·타입·길이가 100% 일치
 - [ ] `schedule` PK가 `(sche_date, stadium_id)` 복합키
 - [ ] FK 3개가 정확한 대상 테이블을 가리킴
-- [ ] `vector` 확장이 활성 상태
 - [ ] `downgrade base` → `upgrade head` 왕복 성공
+- [ ] `docker compose restart` 후에도 스키마·리비전 유지
 - [ ] 위 검증 명령 출력 전문을 보고에 포함
 
-## 6. Guardrails (하지 말 것)
+## 7. Guardrails (하지 말 것)
 
+- **`docker compose down -v` 금지** (볼륨 삭제 = 데이터 파괴). 재기동은 `restart` 또는 `down` + `up -d`만.
+- 호스트에 PostgreSQL을 직접 설치(`apt install postgresql`)하지 말 것. DB는 **오직 컨테이너 안에서만** 돈다.
+- 기존에 실행 중인 다른 컨테이너/서비스를 중지하거나 삭제하지 말 것. 포트 충돌 시 포트를 바꾸고 보고.
+- `.env`의 비밀번호를 커밋하거나 로그·보고서에 평문 노출하지 말 것.
 - ERD에 없는 테이블·컬럼·시퀀스·트리거·기본값을 **추가하지 말 것** (`created_at` 같은 것 포함).
 - 컬럼명 오탈자(`statdium_name`)를 임의로 "수정"하지 말 것.
-- `DROP DATABASE`, `TRUNCATE`, 기존 데이터를 파괴하는 명령 금지.
+- `DROP DATABASE`, `TRUNCATE` 등 파괴적 명령 금지.
 - `alembic revision --autogenerate`에만 의존하지 말 것 — 생성된 파일을 반드시 열어 명세와 대조 후 수정.
-- 마이그레이션 파일을 한 번에 여러 개 만들지 말고, 4→5→6 단계를 통과한 뒤 다음으로 넘어갈 것.
+- 마이그레이션 파일을 한 번에 여러 개 만들지 말고, 각 단계 검증을 통과한 뒤 다음으로 넘어갈 것.
 - 검증 실패 시 임의 우회 금지. 실패 로그를 그대로 보고하고 원인을 먼저 설명할 것.
 
-## 7. Report Format (작업 종료 시)
+## 8. Report Format (작업 종료 시)
 
 ```
-1) 생성/수정한 파일 목록
-2) 각 마이그레이션의 revision id와 down_revision 체인
-3) 5장 검증 명령의 실제 출력
-4) Definition of Done 체크 결과
-5) 남은 이슈 / 확인이 필요한 질문
+1) 생성/수정한 파일 목록 (docker-compose.yml, .env, alembic/*)
+2) 컨테이너 상태 (docker compose ps 출력)
+3) 각 마이그레이션의 revision id와 down_revision 체인
+4) 6장 검증 명령의 실제 출력
+5) Definition of Done 체크 결과
+6) 남은 이슈 / 확인이 필요한 질문
 ```
