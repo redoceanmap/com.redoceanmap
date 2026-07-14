@@ -9,7 +9,7 @@ from mail.adapter.outbound.log_watcher_record_adapter import LogWatcherRecordAda
 from mail.app.ports.input.inbound_mail_use_case import InboundMailUseCase
 from mail.app.ports.input.watcher_use_case import WatcherUseCase
 from mail.app.use_cases.watcher_interactor import WatcherInteractor
-from mail.dependencies.mail_provider import get_inbound_mail_use_case
+from mail.dependencies.inbound_mail_provider import get_inbound_mail_use_case
 
 
 def get_watcher_use_case(

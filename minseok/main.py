@@ -10,22 +10,31 @@ from fastapi import Depends, FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from auth.adapter.inbound.api.v1.auth_router import auth_router
+from auth.adapter.inbound.api.v1.gatekeeper_router import gatekeeper_router
 from chat.adapter.inbound.api.v1.chat_router import chat_router
+from chat.adapter.inbound.api.v1.concierge_router import concierge_router
 from core.database import dispose_engine, init_engine
 from core.security import get_current_user_id
 from chat.adapter.outbound.gateways.email_composer_gateway import EmailComposerN8nGateway
-from hub.adapter.inbound.api.v1.automation_router import automation_router
+from hub.adapter.inbound.api.v1.dispatcher_router import dispatcher_router
 from hub.adapter.inbound.api.v1.email_request_router import email_request_router
-from hub.dependencies.automation_provider import (
-    get_fundamental_storage_port,
-    get_mail_storage_port,
-    get_news_label_storage_port,
-    get_news_storage_port,
-    get_price_bar_storage_port,
-)
+from hub.adapter.inbound.api.v1.face_recognition_router import face_recognition_router
+from hub.adapter.inbound.api.v1.fundamental_ingest_router import fundamental_ingest_router
+from hub.adapter.inbound.api.v1.mail_ingest_router import mail_ingest_router
+from hub.adapter.inbound.api.v1.news_ingest_router import news_ingest_router
+from hub.adapter.inbound.api.v1.news_label_ingest_router import news_label_ingest_router
+from hub.adapter.inbound.api.v1.postmaster_router import postmaster_router
+from hub.adapter.inbound.api.v1.price_bar_ingest_router import price_bar_ingest_router
+from hub.adapter.inbound.api.v1.signal_scan_router import signal_scan_router
+from hub.dependencies.fundamental_ingest_provider import get_fundamental_storage_port
+from hub.dependencies.mail_ingest_provider import get_mail_storage_port
+from hub.dependencies.news_ingest_provider import get_news_storage_port
+from hub.dependencies.news_label_ingest_provider import get_news_label_storage_port
+from hub.dependencies.price_bar_ingest_provider import get_price_bar_storage_port
 from hub.dependencies.email_request_provider import get_email_composer
 from mail.adapter.inbound.api.v1.judge_router import judge_router
-from mail.adapter.inbound.api.v1.mail_router import mail_router
+from mail.adapter.inbound.api.v1.inbound_mail_router import inbound_mail_router
+from mail.adapter.inbound.api.v1.postman_router import postman_router
 from mail.adapter.inbound.api.v1.watcher_router import watcher_router
 from mail.dependencies.watcher_provider import get_mail_storage_gateway
 from hub.dependencies.commercial_data_provider import get_commercial_data_port
@@ -34,15 +43,17 @@ from hub.dependencies.recommendation_record_provider import get_recommendation_r
 from hub.dependencies.stock_analysis_provider import get_stock_analysis_port
 from market.dependencies.commercial_data_provider import get_commercial_data_gateway
 from market.adapter.inbound.api.v1.area_router import area_router
+from market.adapter.inbound.api.v1.area_stats_router import area_stats_router
+from market.adapter.inbound.api.v1.cartographer_router import cartographer_router
+from stock.adapter.inbound.api.v1.analyst_router import analyst_router
+from stock.adapter.inbound.api.v1.stock_history_router import stock_history_router
 from stock.adapter.inbound.api.v1.stock_router import stock_router
-from stock.dependencies.stock_provider import (
-    get_fundamental_storage_gateway,
-    get_news_label_storage_gateway,
-    get_news_search_gateway,
-    get_news_storage_gateway,
-    get_price_bar_storage_gateway,
-    get_stock_analysis_gateway,
-)
+from stock.dependencies.fundamental_provider import get_fundamental_storage_gateway
+from stock.dependencies.news_label_provider import get_news_label_storage_gateway
+from stock.dependencies.news_provider import get_news_search_gateway, get_news_storage_gateway
+from stock.dependencies.price_bar_provider import get_price_bar_storage_gateway
+from stock.dependencies.stock_provider import get_stock_analysis_gateway
+from recommendation.adapter.inbound.api.v1.curator_router import curator_router
 from recommendation.adapter.inbound.api.v1.recommendation_router import recommendation_router
 from recommendation.dependencies.recommendation_provider import get_recommendation_record_gateway
 from hub.adapter.inbound.api.v1.vision_router import vision_router
@@ -73,16 +84,33 @@ app.add_middleware(
 _authenticated = [Depends(get_current_user_id)]
 
 app.include_router(auth_router)  # 공개 — register/login/refresh, me는 자체 검증
-app.include_router(automation_router)  # 공개 — 외부 자동화 창구, X-Webhook-Token 자체 검증
+app.include_router(gatekeeper_router)  # 공개 — auth 자기소개 (기존 auth_router 소속과 동일 정책)
+# 공개 — 외부 자동화 창구(/automation/*), X-Webhook-Token 자체 검증 (dispatcher는 자기소개라 토큰 없음)
+app.include_router(news_ingest_router)
+app.include_router(price_bar_ingest_router)
+app.include_router(news_label_ingest_router)
+app.include_router(fundamental_ingest_router)
+app.include_router(mail_ingest_router)
+app.include_router(signal_scan_router)
+app.include_router(dispatcher_router)
 app.include_router(chat_router, dependencies=_authenticated)
+app.include_router(concierge_router, dependencies=_authenticated)
 app.include_router(area_router, dependencies=_authenticated)
+app.include_router(area_stats_router, dependencies=_authenticated)
+app.include_router(cartographer_router, dependencies=_authenticated)
 app.include_router(stock_router, dependencies=_authenticated)
+app.include_router(stock_history_router, dependencies=_authenticated)
+app.include_router(analyst_router, dependencies=_authenticated)
 app.include_router(recommendation_router, dependencies=_authenticated)
+app.include_router(curator_router, dependencies=_authenticated)
 app.include_router(email_request_router, dependencies=_authenticated)  # 허브 — 이메일 발송 요청
-app.include_router(mail_router, dependencies=_authenticated)
+app.include_router(postmaster_router, dependencies=_authenticated)
+app.include_router(inbound_mail_router, dependencies=_authenticated)
+app.include_router(postman_router, dependencies=_authenticated)
 app.include_router(watcher_router, dependencies=_authenticated)
 app.include_router(judge_router, dependencies=_authenticated)
 app.include_router(vision_router, dependencies=_authenticated)
+app.include_router(face_recognition_router, dependencies=_authenticated)
 
 # 합성 루트: 허브(hub)의 포트들을 스포크 구현으로 주입한다.
 # (허브는 스포크를 모르고, main.py만 둘을 안다 — 스타 토폴로지 허브 격리 유지)

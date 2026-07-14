@@ -18,10 +18,6 @@ from chat.app.exceptions import (
 )
 from chat.app.ports.input.chat_use_case import ChatUseCase
 from chat.dependencies.chat_provider import get_chat_use_case
-from chat.adapter.inbound.api.schemas.concierge_schema import ConciergeResponseSchema
-from chat.app.dtos.concierge_dto import ConciergeQuery
-from chat.app.ports.input.concierge_use_case import ConciergeUseCase
-from chat.dependencies.concierge_provider import get_concierge_use_case
 from core.security import get_current_user_id
 
 chat_router = APIRouter(prefix="/chat", tags=["chat"])
@@ -93,18 +89,3 @@ async def conversation_messages(
         )
         for m in messages
     ]
-
-
-@chat_router.get("/myself", response_model=ConciergeResponseSchema)
-async def introduce_myself(
-    concierge: ConciergeUseCase = Depends(get_concierge_use_case)
-) -> ConciergeResponseSchema:
-    result = await concierge.introduce_myself(
-        ConciergeQuery(
-            id=2,
-            name="대화형 분석 창구 (chat)"
-        )
-    )
-    return ConciergeResponseSchema(
-        id=result.id, name=result.name, introduction=result.introduction
-    )

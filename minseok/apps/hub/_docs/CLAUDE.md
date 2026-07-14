@@ -65,18 +65,17 @@ apps/hub/dependencies/stock_analysis_provider.py  # get_stock_analysis_port (Not
 - **소비**: `chat`의 `ChatInteractor`가 의도 분류(phase0)에서 주식 질문일 때 호출.
 - **배선**: `main.py`에서 `app.dependency_overrides[get_stock_analysis_port] = get_stock_analysis_gateway`.
 
-## 인바운드 라우터 규칙 — 외부 액터당 1개
+## 인바운드 라우터 규칙 — 유스케이스 슬라이스당 1개
 
-라우터는 파일(포트/DTO) 수가 아니라 **허브를 호출하는 외부 액터(driving actor) 수**를 따른다.
-포트/DTO는 스포크가 프로세스 안(DI)에서 쓰는 앱 간 계약이라 HTTP 표면이 없다 — 계약마다
-라우터를 만들면 아무도 안 쓰는 공개 API가 생기는 것이며 그것이 위반이다. 스켈레톤 라우터 금지
-(Simplicity First). 새 라우터는 새 외부 액터가 생길 때만 추가한다.
+라우터는 **HTTP 표면이 있는 유스케이스(수직 슬라이스)당 1개**다(스포크와 동일한 1:1 컨벤션).
+단, HTTP 표면이 없는 포트/DTO 계약(스포크가 프로세스 안 DI로 쓰는 앱 간 계약)에는 라우터를
+만들지 않는다 — 아무도 안 쓰는 공개 API·스켈레톤 라우터 금지(Simplicity First).
 
-| 외부 액터 | 라우터 |
-|-----------|--------|
-| 자동화(n8n) | `automation_router` (/automation/*) |
-| 사용자/프론트의 이메일 요청 | `email_request_router` (/email/request) |
-| 사용자/프론트의 비전 요청 | `vision_router` (/vision/*) |
+| prefix | 라우터 (슬라이스) |
+|--------|------------------|
+| /automation/* | `news_ingest` · `price_bar_ingest` · `news_label_ingest` · `fundamental_ingest` · `mail_ingest` · `signal_scan` · `dispatcher`(/myself) — 웹훅 토큰 공용 의존성은 `v1/webhook_token.py` |
+| /email/* | `email_request` · `postmaster`(/myself) |
+| /vision/* | `vision`(/myself·/images) · `face_recognition`(/faces) |
 
 ## 허브 소유 인프라 (adapter/outbound) — 예약
 
@@ -95,7 +94,7 @@ apps/hub/dependencies/stock_analysis_provider.py  # get_stock_analysis_port (Not
 
 ```
 apps/hub/
-├── adapter/inbound/api/v1/vision_router.py    # /vision/* (사용자/프론트 액터)
+├── adapter/inbound/api/v1/{vision,face_recognition}_router.py   # /vision/myself·/images · /vision/faces
 ├── app/ports/input/{vision,face_recognition,face_training}_use_case.py
 ├── app/ports/output/{vision_storage,vision_record,yolo,face_dataset}_port.py
 ├── app/use_cases/{vision,face_recognition,face_training,yolo}_interactor.py
@@ -130,7 +129,7 @@ POST /email/request → EmailRequestInteractor(온톨로지 지시 합성)
 
 ```
 apps/hub/
-├── adapter/inbound/api/v1/automation_router.py   # POST /automation/news · /automation/stock-scan
+├── adapter/inbound/api/v1/{news_ingest,price_bar_ingest,news_label_ingest,fundamental_ingest,mail_ingest,signal_scan,dispatcher}_router.py   # /automation/* (공용 토큰: v1/webhook_token.py)
 ├── app/ports/input/{news_ingest,signal_scan}_use_case.py
 ├── app/use_cases/{news_ingest,signal_scan}_interactor.py
 ├── app/ports/output/news_storage_port.py          # 구현: stock NewsStorageGateway

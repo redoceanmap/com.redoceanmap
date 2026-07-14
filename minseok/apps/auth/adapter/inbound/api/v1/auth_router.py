@@ -9,10 +9,6 @@ from auth.adapter.inbound.api.schemas.auth_schema import (
 )
 from auth.app.ports.input.auth_use_case import AuthUseCase
 from auth.dependencies.auth_provider import get_auth_use_case
-from auth.adapter.inbound.api.schemas.gatekeeper_schema import GatekeeperResponseSchema
-from auth.app.dtos.gatekeeper_dto import GatekeeperQuery
-from auth.app.ports.input.gatekeeper_use_case import GatekeeperUseCase
-from auth.dependencies.gatekeeper_provider import get_gatekeeper_use_case
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 bearer = HTTPBearer()
@@ -60,18 +56,3 @@ async def me(
     if not user:
         raise HTTPException(status_code=401, detail="인증이 필요합니다.")
     return {"id": user.id, "email": user.email, "name": user.name}
-
-
-@auth_router.get("/myself", response_model=GatekeeperResponseSchema)
-async def introduce_myself(
-    gatekeeper: GatekeeperUseCase = Depends(get_gatekeeper_use_case)
-) -> GatekeeperResponseSchema:
-    result = await gatekeeper.introduce_myself(
-        GatekeeperQuery(
-            id=1,
-            name="인증 서비스 (auth)"
-        )
-    )
-    return GatekeeperResponseSchema(
-        id=result.id, name=result.name, introduction=result.introduction
-    )
