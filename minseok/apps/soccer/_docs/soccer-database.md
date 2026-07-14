@@ -149,18 +149,34 @@ team    (1) ──< player     : player.team_id      → team.team_id        (no
 - FK 컬럼(`team.stadium_id`, `player.team_id`, `schedule.stadium_id`)에는 인덱스를 생성한다.
 - 생성 순서: `stadium` → `team` → `player` → `schedule`. `downgrade()`는 역순.
 
+### 4.6 RAG 임베딩 컬럼 (ERD 외 확장 — 별도 리비전)
+
+4개 테이블 **모두**에 아래 컬럼을 추가한다. ERD 원문에는 없는 컬럼이므로 **Revision 2에 섞지 말고 Revision 3에서만** 추가한다.
+
+| 컬럼 | 타입 | 제약 |
+|---|---|---|
+| `embedding` | VECTOR(1024) | NULL 허용 |
+
+- 차원 1024는 프로젝트 표준 임베딩 모델 **bge-m3**에 맞춘 값이다
+  (mail 앱 `inbound_mails.embedding`과 동일 규격 — `minseok/alembic/versions/f6a7b8c9d0e1_add_mail_embedding.py` 참조).
+- SQLAlchemy 타입은 `pgvector.sqlalchemy.Vector(1024)`를 사용한다.
+- 임베딩 값 적재는 이 작업 범위가 아니다. 컬럼만 만들고 NULL로 둔다.
+- 벡터 인덱스(HNSW/IVFFlat)는 **생성하지 않는다** — 소규모 데이터는 exact scan으로 충분하며, 필요해지면 별도 리비전으로 추가한다.
+
 ## 5. Task (순서대로, 한 단계씩)
 
 0. **Docker 기동** — 3장의 파일 생성 → `docker compose up -d` → healthcheck가 `healthy`가 될 때까지 대기 → 3.3의 확인 명령 실행. 여기서 실패하면 다음 단계로 넘어가지 말 것.
 1. **Alembic 초기화 점검** — `alembic` 디렉터리가 없으면 `alembic init migrations`. 이미 있으면 재초기화하지 말고 기존 구성을 읽는다.
 2. **env.py 구성** — `DATABASE_URL` 주입, `target_metadata` 연결, `compare_type=True`.
 3. **Revision 1: `enable_pgvector`** — `CREATE EXTENSION IF NOT EXISTS vector;` / downgrade는 `DROP EXTENSION IF EXISTS vector;`
-   - ERD에는 벡터 컬럼이 없다. **임베딩 컬럼을 임의로 추가하지 말 것.** 확장 활성화만 한다.
+   - 여기서는 확장 활성화만 한다. 임베딩 컬럼은 Revision 3에서 추가한다.
 4. **Revision 2: `create_soccer_schema`** — 4장의 4개 테이블·PK·FK·인덱스를 `op.create_table` / `op.create_index`로 작성. `down_revision`을 Revision 1에 연결.
-5. **적용** — `alembic upgrade head` 실행.
-6. **검증** — 6장의 명령을 모두 실행하고 출력을 그대로 보고한다.
-7. **롤백 리허설** — `alembic downgrade base` → `alembic upgrade head` 를 1회 왕복 실행해 두 방향 모두 오류 없이 동작함을 증명한다.
-8. **컨테이너 재기동 내구성 확인** — `docker compose restart` 후 `alembic current`와 `\dt`가 그대로 유지되는지(볼륨 영속성) 확인한다.
+   - ERD(4.1~4.5) 원문 그대로만 생성한다. `embedding` 컬럼을 여기에 섞지 말 것.
+5. **Revision 3: `add_embedding_columns`** — 4.6 명세대로 4개 테이블에 `op.add_column('<table>', sa.Column('embedding', Vector(1024), nullable=True))`를 추가. `down_revision`을 Revision 2에 연결. `downgrade()`는 `op.drop_column` 역순.
+6. **적용** — `alembic upgrade head` 실행.
+7. **검증** — 6장의 명령을 모두 실행하고 출력을 그대로 보고한다.
+8. **롤백 리허설** — `alembic downgrade base` → `alembic upgrade head` 를 1회 왕복 실행해 두 방향 모두 오류 없이 동작함을 증명한다.
+9. **컨테이너 재기동 내구성 확인** — `docker compose restart` 후 `alembic current`와 `\dt`가 그대로 유지되는지(볼륨 영속성) 확인한다.
 
 ## 6. Verification (통과해야 완료)
 
@@ -183,6 +199,11 @@ docker exec soccer-pg psql -U soccer -d soccer -c "\d player"
 docker exec soccer-pg psql -U soccer -d soccer -c "\d schedule"
 docker exec soccer-pg psql -U soccer -d soccer -c "SELECT extname, extversion FROM pg_extension WHERE extname='vector';"
 docker exec soccer-pg psql -U soccer -d soccer -c "
+SELECT table_name, column_name, udt_name
+FROM information_schema.columns
+WHERE column_name='embedding' AND table_schema='public'
+ORDER BY 1;"
+docker exec soccer-pg psql -U soccer -d soccer -c "
 SELECT conrelid::regclass AS tbl, conname, pg_get_constraintdef(oid)
 FROM pg_constraint WHERE contype IN ('p','f')
   AND conrelid::regclass::text IN ('stadium','team','player','schedule')
@@ -193,6 +214,7 @@ ORDER BY 1;"
 - [ ] `soccer-pg` 컨테이너가 `healthy` 상태로 기동
 - [ ] `vector` 확장이 컨테이너 DB에서 활성 상태
 - [ ] 4개 테이블이 명세와 컬럼명·타입·길이가 100% 일치
+- [ ] 4개 테이블 모두 `embedding vector(1024)` 컬럼 보유 (NULL 허용, Revision 3)
 - [ ] `schedule` PK가 `(sche_date, stadium_id)` 복합키
 - [ ] FK 3개가 정확한 대상 테이블을 가리킴
 - [ ] `downgrade base` → `upgrade head` 왕복 성공
@@ -205,7 +227,8 @@ ORDER BY 1;"
 - 호스트에 PostgreSQL을 직접 설치(`apt install postgresql`)하지 말 것. DB는 **오직 컨테이너 안에서만** 돈다.
 - 기존에 실행 중인 다른 컨테이너/서비스를 중지하거나 삭제하지 말 것. 포트 충돌 시 포트를 바꾸고 보고.
 - `.env`의 비밀번호를 커밋하거나 로그·보고서에 평문 노출하지 말 것.
-- ERD에 없는 테이블·컬럼·시퀀스·트리거·기본값을 **추가하지 말 것** (`created_at` 같은 것 포함).
+- ERD에 없는 테이블·컬럼·시퀀스·트리거·기본값을 **추가하지 말 것** (`created_at` 같은 것 포함). 유일한 예외는 4.6의 `embedding` 컬럼이며, 반드시 Revision 3에서만 추가한다.
+- 벡터 인덱스(HNSW/IVFFlat)를 임의로 생성하지 말 것 (4.6 참조).
 - 컬럼명 오탈자(`statdium_name`)를 임의로 "수정"하지 말 것.
 - `DROP DATABASE`, `TRUNCATE` 등 파괴적 명령 금지.
 - `alembic revision --autogenerate`에만 의존하지 말 것 — 생성된 파일을 반드시 열어 명세와 대조 후 수정.
