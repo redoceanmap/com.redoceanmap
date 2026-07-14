@@ -143,6 +143,7 @@ apps/hub/
 | 뉴스 수집 | n8n(스케줄+RSS) → `POST /automation/news` → NewsIngestInteractor → `NewsStoragePort` → stock 저장 |
 | 시그널 알림 | n8n(스케줄) → `POST /automation/stock-scan` → SignalScanInteractor → 기존 `StockAnalysisPort` 재사용 → n8n이 중립 제외 후 Gmail 발송 |
 | 메일 수신 | n8n(Gmail Push/폴링) → `POST /automation/mail` → MailIngestInteractor → `MailStoragePort` → mail 저장(조회: `GET /mail/list`) |
+| OHLCV 수집 | cron(`scripts/collect_prices.py`) → `POST /automation/prices` (+`GET /automation/prices/coverage`) → PriceBarIngestInteractor → `PriceBarStoragePort` → stock 저장 |
 
 - n8n 워크플로: [[minseok/apps/hub/_docs/n8n_news_collector_workflow.json]] ·
   [[minseok/apps/hub/_docs/n8n_stock_signal_alert_workflow.json]] — n8n UI에서 임포트,
@@ -153,6 +154,13 @@ apps/hub/
 
 뉴스 저장 협력. 허브 자동화(생성)와 stock(구현·영속: `news_articles` 테이블)을 잇는다.
 stock 분석은 저장된 뉴스를 벤더 뉴스보다 우선 병합한다(한국 종목 뉴스 공백 해소).
+
+## 소유 계약 — PriceBarStoragePort
+
+OHLCV 봉 저장 협력. 수집기(`scripts/collect_prices.py`, 뉴스와 워치리스트 공유)와
+stock(구현·영속: `price_bars` 테이블, (ticker, timeframe, ts) 유니크)을 잇는다.
+`coverage()`가 (ticker, timeframe)별 보유 구간을 알려줘 수집기가 백필 깊이를 정한다 —
+뉴스↔주가 반응 라벨링용(5m 단기 반응 · 1d 익일/주간).
 
 ## 규칙
 

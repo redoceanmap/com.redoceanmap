@@ -16,7 +16,11 @@ from core.security import get_current_user_id
 from chat.adapter.outbound.gateways.email_composer_gateway import EmailComposerN8nGateway
 from hub.adapter.inbound.api.v1.automation_router import automation_router
 from hub.adapter.inbound.api.v1.email_request_router import email_request_router
-from hub.dependencies.automation_provider import get_mail_storage_port, get_news_storage_port
+from hub.dependencies.automation_provider import (
+    get_mail_storage_port,
+    get_news_storage_port,
+    get_price_bar_storage_port,
+)
 from hub.dependencies.email_request_provider import get_email_composer
 from mail.adapter.inbound.api.v1.judge_router import judge_router
 from mail.adapter.inbound.api.v1.mail_router import mail_router
@@ -28,7 +32,11 @@ from hub.dependencies.stock_analysis_provider import get_stock_analysis_port
 from market.dependencies.commercial_data_provider import get_commercial_data_gateway
 from market.adapter.inbound.api.v1.area_router import area_router
 from stock.adapter.inbound.api.v1.stock_router import stock_router
-from stock.dependencies.stock_provider import get_news_storage_gateway, get_stock_analysis_gateway
+from stock.dependencies.stock_provider import (
+    get_news_storage_gateway,
+    get_price_bar_storage_gateway,
+    get_stock_analysis_gateway,
+)
 from recommendation.adapter.inbound.api.v1.recommendation_router import recommendation_router
 from recommendation.dependencies.recommendation_provider import get_recommendation_record_gateway
 from hub.adapter.inbound.api.v1.vision_router import vision_router
@@ -76,6 +84,7 @@ app.dependency_overrides[get_commercial_data_port] = get_commercial_data_gateway
 app.dependency_overrides[get_recommendation_record_port] = get_recommendation_record_gateway
 app.dependency_overrides[get_stock_analysis_port] = get_stock_analysis_gateway
 app.dependency_overrides[get_news_storage_port] = get_news_storage_gateway
+app.dependency_overrides[get_price_bar_storage_port] = get_price_bar_storage_gateway
 app.dependency_overrides[get_email_composer] = lambda: EmailComposerN8nGateway()
 app.dependency_overrides[get_mail_storage_port] = get_mail_storage_gateway
 

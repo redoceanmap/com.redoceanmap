@@ -13,13 +13,18 @@ from hub.adapter.inbound.api.schemas.automation_schema import (
     InboundMailSchema,
     NewsIngestRequest,
     NewsIngestResult,
+    PriceBarIngestRequest,
+    PriceBarIngestResult,
+    PriceCoverageSchema,
     StockScanRequest,
     StockSignalSchema,
 )
 from hub.app.dtos.inbound_mail_dto import InboundMailItem
 from hub.app.dtos.news_dto import NewsItem
+from hub.app.dtos.price_bar_dto import PriceBarItem
 from hub.app.ports.input.mail_ingest_use_case import MailIngestUseCase
 from hub.app.ports.input.news_ingest_use_case import NewsIngestUseCase
+from hub.app.ports.input.price_bar_ingest_use_case import PriceBarIngestUseCase
 from hub.app.ports.input.signal_scan_use_case import SignalScanUseCase
 from hub.adapter.inbound.api.schemas.dispatcher_schema import DispatcherResponseSchema
 from hub.app.dtos.dispatcher_dto import DispatcherQuery
@@ -28,6 +33,7 @@ from hub.dependencies.dispatcher_provider import get_dispatcher_use_case
 from hub.dependencies.automation_provider import (
     get_mail_ingest_use_case,
     get_news_ingest_use_case,
+    get_price_bar_ingest_use_case,
     get_signal_scan_use_case,
 )
 
@@ -57,6 +63,41 @@ async def ingest_news(
         for i in payload.items
     ])
     return NewsIngestResult(received=len(payload.items), saved=saved)
+
+
+@automation_router.post(
+    "/prices", response_model=PriceBarIngestResult, summary="수집기 OHLCV 봉 적재",
+    dependencies=[Depends(verify_webhook_token)],
+)
+async def ingest_prices(
+    payload: PriceBarIngestRequest,
+    use_case: PriceBarIngestUseCase = Depends(get_price_bar_ingest_use_case),
+) -> PriceBarIngestResult:
+    saved = await use_case.ingest([
+        PriceBarItem(
+            ticker=i.ticker, timeframe=i.timeframe, ts=i.ts,
+            open=i.open, high=i.high, low=i.low, close=i.close, volume=i.volume,
+        )
+        for i in payload.items
+    ])
+    return PriceBarIngestResult(received=len(payload.items), saved=saved)
+
+
+@automation_router.get(
+    "/prices/coverage", response_model=list[PriceCoverageSchema],
+    summary="(ticker, timeframe)별 보유 구간 — 수집기의 백필 깊이 판단용",
+    dependencies=[Depends(verify_webhook_token)],
+)
+async def price_coverage(
+    use_case: PriceBarIngestUseCase = Depends(get_price_bar_ingest_use_case),
+) -> list[PriceCoverageSchema]:
+    return [
+        PriceCoverageSchema(
+            ticker=c.ticker, timeframe=c.timeframe,
+            firstTs=c.first_ts, lastTs=c.last_ts, bars=c.bars,
+        )
+        for c in await use_case.coverage()
+    ]
 
 
 @automation_router.post(
