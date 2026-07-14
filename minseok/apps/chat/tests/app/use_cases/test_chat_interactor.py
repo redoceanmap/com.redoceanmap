@@ -7,6 +7,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import pytest
+
+from chat.app.exceptions import ConversationNotFoundError
 from chat.app.use_cases.chat_interactor import ChatInteractor
 from chat.domain.entities.conversation_entity import Conversation, Message
 from hub.app.dtos.commercial_data_dto import AreaInfo, AreaRawStat, AreaSummary, ServiceCode
@@ -35,22 +38,35 @@ class _StubLLM:
 
 
 class _StubConversations:
-    def __init__(self, history: list[Message] | None = None):
+    def __init__(self, history: list[Message] | None = None,
+                 conversation: Conversation | None = None):
         self._history = history or []
+        self._conversation = conversation
         self.saved: list[tuple[str, str]] = []
+        self.payloads: list[dict | None] = []
+        self.created_user_ids: list[int | None] = []
         self._next_id = 100
 
-    async def create_conversation(self) -> Conversation:
+    async def create_conversation(self, user_id: int | None = None) -> Conversation:
         self._next_id += 1
-        return Conversation(id=self._next_id, created_at=_NOW)
+        self.created_user_ids.append(user_id)
+        return Conversation(id=self._next_id, created_at=_NOW, user_id=user_id)
 
-    async def add_message(self, conversation_id: int, role: str, content: str) -> Message:
+    async def add_message(self, conversation_id: int, role: str, content: str,
+                          payload: dict | None = None) -> Message:
         self.saved.append((role, content))
+        self.payloads.append(payload)
         return Message(id=len(self.saved), conversation_id=conversation_id,
-                       role=role, content=content, created_at=_NOW)
+                       role=role, content=content, created_at=_NOW, payload=payload)
 
     async def get_messages(self, conversation_id: int, limit: int = 20) -> list[Message]:
         return self._history
+
+    async def get_conversation(self, conversation_id: int) -> Conversation | None:
+        return self._conversation
+
+    async def list_conversations(self, user_id: int, limit: int = 30):
+        return []
 
 
 class _StubStocks:
@@ -316,3 +332,62 @@ async def test_시나리오_주식_업황_상권_연속_질문(monkeypatch):
     assert r1.conversationId == r2.conversationId == 200
     roles = [role for role, _ in stubs["conversations"].saved]
     assert roles == ["user", "assistant", "user", "assistant"]
+
+
+# --- 대화 히스토리 (payload 저장 + 목록/복원) ---
+
+async def test_새_대화는_user_id를_소유자로_기록한다(monkeypatch):
+    interactor, _, stubs = _build(monkeypatch, [INTENT_STOCK, "서술"])
+    await interactor.ask("삼성전자 어때?", user_id=7)
+    assert stubs["conversations"].created_user_ids == [7]
+
+
+async def test_주식_답변은_stock_카드를_payload로_저장한다(monkeypatch):
+    interactor, _, stubs = _build(monkeypatch, [INTENT_STOCK, "서술"])
+    await interactor.ask("삼성전자 어때?")
+    assistant_payload = stubs["conversations"].payloads[-1]
+    assert assistant_payload is not None
+    assert assistant_payload["stock"]["symbol"] == "005930"
+
+
+async def test_상권_답변은_recommendations를_payload로_저장한다(monkeypatch):
+    interactor, _, stubs = _build(monkeypatch, [INTENT_MARKET, PHASE1_JSON, PHASE2_JSON])
+    await interactor.ask("성수동 카페 어때?")
+    assistant_payload = stubs["conversations"].payloads[-1]
+    assert assistant_payload is not None
+    assert assistant_payload["recommendations"][0]["name"] == "테스트상권"
+
+
+async def test_텍스트만인_답변은_payload가_없다(monkeypatch):
+    interactor, _, stubs = _build(monkeypatch, [INTENT_MARKET_NEWS, "업황 서술"])
+    await interactor.ask("업황 어때?")
+    assert stubs["conversations"].payloads[-1] is None
+
+
+async def test_남의_대화_메시지는_미존재와_같은_예외를_낸다(monkeypatch):
+    conversations = _StubConversations(
+        conversation=Conversation(id=200, created_at=_NOW, user_id=1),
+    )
+    interactor, _, _ = _build(monkeypatch, [], conversations=conversations)
+    with pytest.raises(ConversationNotFoundError):
+        await interactor.conversation_messages(200, user_id=2)
+
+
+async def test_소유자는_메시지를_payload_포함으로_받는다(monkeypatch):
+    history = [Message(id=1, conversation_id=200, role="assistant", content="답",
+                       created_at=_NOW, payload={"stock": {"symbol": "005930"}})]
+    conversations = _StubConversations(
+        history=history,
+        conversation=Conversation(id=200, created_at=_NOW, user_id=1),
+    )
+    interactor, _, _ = _build(monkeypatch, [], conversations=conversations)
+    messages = await interactor.conversation_messages(200, user_id=1)
+    assert messages[0].payload == {"stock": {"symbol": "005930"}}
+
+
+async def test_구버전_익명_대화는_인증_사용자에게_허용된다(monkeypatch):
+    conversations = _StubConversations(
+        conversation=Conversation(id=200, created_at=_NOW, user_id=None),
+    )
+    interactor, _, _ = _build(monkeypatch, [], conversations=conversations)
+    assert await interactor.conversation_messages(200, user_id=1) == []

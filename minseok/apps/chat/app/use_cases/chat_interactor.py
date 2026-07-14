@@ -5,13 +5,14 @@ import re
 from chat.app.dtos.chat_dto import AreaRecommendation, AreaStats, AskResponse, StockCard
 from chat.app.exceptions import (
     CommercialDataUnavailableError,
+    ConversationNotFoundError,
     InvalidLLMResponseError,
     NoValidAreaError,
 )
 from chat.app.dtos.area_stat_dto import AreaStatDto
 from chat.app.ports.input.chat_use_case import ChatUseCase
 from chat.app.ports.output.conversation_repository import ConversationRepository
-from chat.domain.entities.conversation_entity import Message
+from chat.domain.entities.conversation_entity import ConversationSummary, Message
 from core.llm.llm_orchestrator import EXAONE_2_4B, llm_orchestrator
 from hub.app.dtos.commercial_data_dto import AreaRawStat, AreaSummary
 from hub.app.dtos.news_dto import NewsHit
@@ -295,9 +296,11 @@ class ChatInteractor(ChatUseCase):
 
         return result
 
-    async def ask(self, prompt: str, conversation_id: int | None = None) -> AskResponse:
+    async def ask(
+        self, prompt: str, conversation_id: int | None = None, user_id: int | None = None,
+    ) -> AskResponse:
         if conversation_id is None:
-            conversation_id = (await self._conversations.create_conversation()).id
+            conversation_id = (await self._conversations.create_conversation(user_id=user_id)).id
         history = await self._conversations.get_messages(conversation_id)
         await self._conversations.add_message(conversation_id, "user", prompt)
 
@@ -417,7 +420,11 @@ class ChatInteractor(ChatUseCase):
             ))
 
         text = p2.get("text", "")
-        await self._conversations.add_message(conversation_id, "assistant", text)
+        # 구조화 카드를 payload로 동반 저장 — 히스토리 재진입 시 카드 복원용
+        await self._conversations.add_message(
+            conversation_id, "assistant", text,
+            payload={"recommendations": [r.model_dump() for r in recommendations]},
+        )
 
         # 기록 경로: chat → 허브 포트 → recommendation (스포크끼리 직접 잇지 않음)
         await self._recorder.record(
@@ -505,7 +512,6 @@ class ChatInteractor(ChatUseCase):
         context = self._format_stock_context(prompt, analysis, hits)
         # 최종 서술(최종 사용자 답변) → 오케스트레이터 기본 모델(7.8B)
         text = await llm_orchestrator.orchestrate(f"{STOCK_ANSWER_PROMPT}\n\n{context}")
-        await self._conversations.add_message(conversation_id, "assistant", text)
         card = StockCard(
             symbol=analysis.symbol,
             price=analysis.price,
@@ -524,6 +530,10 @@ class ChatInteractor(ChatUseCase):
             obvSlope=analysis.obv_slope,
             momentum12To1=analysis.momentum_12_1,
             referenceUpSignal=analysis.reference_up_signal,
+        )
+        # 구조화 카드를 payload로 동반 저장 — 히스토리 재진입 시 카드 복원용
+        await self._conversations.add_message(
+            conversation_id, "assistant", text, payload={"stock": card.model_dump()},
         )
         return AskResponse(
             text=text, recommendations=[], conversationId=conversation_id, stock=card,
@@ -615,9 +625,21 @@ class ChatInteractor(ChatUseCase):
                 lines += f"\n  - ({date_text} | {label_text}) {h.title}"
         return lines
 
-    async def stream_reply(self, prompt: str, conversation_id: int | None = None):
+    async def list_conversations(self, user_id: int, limit: int = 30) -> list[ConversationSummary]:
+        return await self._conversations.list_conversations(user_id, limit)
+
+    async def conversation_messages(self, conversation_id: int, user_id: int) -> list[Message]:
+        conversation = await self._conversations.get_conversation(conversation_id)
+        # 미존재와 남의 대화를 구분하지 않는다(존재 여부 비노출). user_id 없는 구버전 대화는 허용.
+        if conversation is None or conversation.user_id not in (None, user_id):
+            raise ConversationNotFoundError(f"대화를 찾지 못했습니다: {conversation_id}")
+        return await self._conversations.get_messages(conversation_id, limit=100)
+
+    async def stream_reply(
+        self, prompt: str, conversation_id: int | None = None, user_id: int | None = None,
+    ):
         if conversation_id is None:
-            conversation_id = (await self._conversations.create_conversation()).id
+            conversation_id = (await self._conversations.create_conversation(user_id=user_id)).id
         yield {"type": "meta", "conversationId": conversation_id}
 
         history = await self._conversations.get_messages(conversation_id)

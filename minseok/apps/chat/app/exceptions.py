@@ -19,3 +19,7 @@ class InvalidLLMResponseError(ChatError):
 
 class NoValidAreaError(ChatError):
     """LLM이 고른 상권 중 유효한 것이 없음."""
+
+
+class ConversationNotFoundError(ChatError):
+    """대화가 없거나 요청한 사용자의 소유가 아님 (존재 여부 비노출)."""

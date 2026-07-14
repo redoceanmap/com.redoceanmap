@@ -7,7 +7,7 @@ class ConversationMapper:
 
     @staticmethod
     def to_entity(orm: ConversationOrm) -> Conversation:
-        return Conversation(id=orm.id, created_at=orm.created_at)
+        return Conversation(id=orm.id, created_at=orm.created_at, user_id=orm.user_id)
 
 
 class MessageMapper:
@@ -21,4 +21,5 @@ class MessageMapper:
             role=orm.role,
             content=orm.content,
             created_at=orm.created_at,
+            payload=orm.payload,
         )
