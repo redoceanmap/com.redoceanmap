@@ -24,6 +24,11 @@
   `/automation/prices`로 적재(허브 `PriceBarStoragePort`를 `PriceBarStorageGateway`가 구현,
   `price_bars` 테이블·(ticker, timeframe, ts) 유니크). 5분봉(60일 소급)·일봉(전체) —
   뉴스 발행 후 주가 반응 라벨링용. 장외 발행 뉴스는 "다음 개장 첫 봉" 기준으로 라벨한다.
+- **수집 펀더멘털(DB)**: 주간 cron(`scripts/collect_fundamentals.py`, yfinance + DART 무료 API)이
+  허브 `/automation/fundamentals`로 적재(허브 `FundamentalStoragePort`를 `FundamentalStorageGateway`가
+  구현, `fundamental_snapshots` 테이블·(ticker, as_of, source) 유니크). PER/PBR/ROE/부채비율/FCF/EPS/BPS —
+  버핏식 가치·체력 축. 한국 종목은 DART 연간 재무제표로 EPS/BPS→PER/PBR 자체 계산(source=dart 별도 행).
+  판정(OutlookPredictor) 편입은 분기 지평 백테스트 설계 후 — 축적이 먼저(뉴스 감성과 동일 원칙).
 - **뉴스 LLM 라벨(DB)**: 야간 cron(`scripts/label_news.py`, EXAONE 2.4B AWQ 로컬 직로딩 —
   도메인 내부 추론 계층 준수)이 허브 `/automation/news-labels`로 적재(허브 `NewsLabelStoragePort`를
   `NewsLabelStorageGateway`가 구현, `news_labels` 테이블·(news_id, labeler) 유니크).

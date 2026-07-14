@@ -46,6 +46,7 @@ import recommendation.adapter.outbound.orm.recommendation_orm  # noqa: F401
 import stock.adapter.outbound.orm.news_article_orm  # noqa: F401
 import stock.adapter.outbound.orm.price_bar_orm  # noqa: F401
 import stock.adapter.outbound.orm.news_label_orm  # noqa: F401
+import stock.adapter.outbound.orm.fundamental_snapshot_orm  # noqa: F401
 import mail.adapter.outbound.orm.inbound_mail_orm  # noqa: F401
 
 target_metadata = Base.metadata

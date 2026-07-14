@@ -104,3 +104,6 @@ runs/
 # ============================================================
 EXAONE-3.5-7.8B-Instruct-AWQ/
 EXAONE-3.5-2.4B-Instruct-AWQ/
+
+# DART 종목코드→고유번호 매핑 캐시 (collect_fundamentals.py가 재다운로드)
+minseok/scripts/dart_corp_codes.json

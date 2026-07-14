@@ -9,6 +9,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 
 from core.config import N8N_INBOUND_TOKEN
 from hub.adapter.inbound.api.schemas.automation_schema import (
+    FundamentalIngestRequest,
+    FundamentalIngestResult,
     InboundMailResult,
     InboundMailSchema,
     NewsIngestRequest,
@@ -22,10 +24,12 @@ from hub.adapter.inbound.api.schemas.automation_schema import (
     StockSignalSchema,
     UnlabeledNewsSchema,
 )
+from hub.app.dtos.fundamental_dto import FundamentalSnapshotItem
 from hub.app.dtos.inbound_mail_dto import InboundMailItem
 from hub.app.dtos.news_dto import NewsItem
 from hub.app.dtos.news_label_dto import NewsLabelItem
 from hub.app.dtos.price_bar_dto import PriceBarItem
+from hub.app.ports.input.fundamental_ingest_use_case import FundamentalIngestUseCase
 from hub.app.ports.input.mail_ingest_use_case import MailIngestUseCase
 from hub.app.ports.input.news_ingest_use_case import NewsIngestUseCase
 from hub.app.ports.input.news_label_ingest_use_case import NewsLabelIngestUseCase
@@ -36,6 +40,7 @@ from hub.app.dtos.dispatcher_dto import DispatcherQuery
 from hub.app.ports.input.dispatcher_use_case import DispatcherUseCase
 from hub.dependencies.dispatcher_provider import get_dispatcher_use_case
 from hub.dependencies.automation_provider import (
+    get_fundamental_ingest_use_case,
     get_mail_ingest_use_case,
     get_news_ingest_use_case,
     get_news_label_ingest_use_case,
@@ -138,6 +143,25 @@ async def pending_news_labels(
         UnlabeledNewsSchema(newsId=u.news_id, ticker=u.ticker, title=u.title)
         for u in await use_case.unlabeled(labeler, limit)
     ]
+
+
+@automation_router.post(
+    "/fundamentals", response_model=FundamentalIngestResult, summary="수집기 펀더멘털 스냅샷 적재",
+    dependencies=[Depends(verify_webhook_token)],
+)
+async def ingest_fundamentals(
+    payload: FundamentalIngestRequest,
+    use_case: FundamentalIngestUseCase = Depends(get_fundamental_ingest_use_case),
+) -> FundamentalIngestResult:
+    saved = await use_case.ingest([
+        FundamentalSnapshotItem(
+            ticker=i.ticker, as_of=i.asOf, source=i.source,
+            per=i.per, pbr=i.pbr, roe=i.roe, debt_to_equity=i.debtToEquity,
+            fcf=i.fcf, market_cap=i.marketCap, eps=i.eps, bps=i.bps,
+        )
+        for i in payload.items
+    ])
+    return FundamentalIngestResult(received=len(payload.items), saved=saved)
 
 
 @automation_router.post(
