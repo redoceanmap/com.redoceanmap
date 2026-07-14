@@ -60,6 +60,12 @@
 - **분석 API 노출 지표**: RSI(14)·MA20/50·지지/저항(60일)·ATR%·볼린저 %B·거래량비(5/20일)·
   OBV 기울기·12-1 모멘텀 + `reference_up_signal`(검증 참고 신호, 확률 아님). 시세 이력은 2y
   (모멘텀에 253거래일 필요).
+- **수집 데이터 조회(프론트 자료 패널)**: `stock_history` 조회 전용 슬라이스 —
+  `GET /stock/{symbol}/prices?timeframe=1d|5m&limit=`(OHLCV, ts 오름차순, 미보유 심볼 404),
+  `GET /stock/{symbol}/news?limit=`(뉴스+라벨 조인, 발행일 내림차순),
+  `GET /stock/{symbol}/fundamentals`(소스별 최신 스냅샷). 분석(yfinance 라이브)과 달리
+  DB 축적분만 읽는다. 거래소 접미 매칭(005930 ↔ 005930.KS)은 PG 리포지토리가 맡고,
+  실제 저장 티커는 `resolvedTicker`로 노출한다.
 
 ## 레이어
 
