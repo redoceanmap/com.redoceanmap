@@ -144,6 +144,7 @@ apps/hub/
 | 시그널 알림 | n8n(스케줄) → `POST /automation/stock-scan` → SignalScanInteractor → 기존 `StockAnalysisPort` 재사용 → n8n이 중립 제외 후 Gmail 발송 |
 | 메일 수신 | n8n(Gmail Push/폴링) → `POST /automation/mail` → MailIngestInteractor → `MailStoragePort` → mail 저장(조회: `GET /mail/list`) |
 | OHLCV 수집 | cron(`scripts/collect_prices.py`) → `POST /automation/prices` (+`GET /automation/prices/coverage`) → PriceBarIngestInteractor → `PriceBarStoragePort` → stock 저장 |
+| 뉴스 라벨링 | cron(`scripts/label_news.py`, EXAONE 2.4B 로컬) → `GET /automation/news-labels/pending` → 라벨 → `POST /automation/news-labels` → NewsLabelIngestInteractor → `NewsLabelStoragePort` → stock 저장 |
 
 - n8n 워크플로: [[minseok/apps/hub/_docs/n8n_news_collector_workflow.json]] ·
   [[minseok/apps/hub/_docs/n8n_stock_signal_alert_workflow.json]] — n8n UI에서 임포트,
@@ -154,6 +155,13 @@ apps/hub/
 
 뉴스 저장 협력. 허브 자동화(생성)와 stock(구현·영속: `news_articles` 테이블)을 잇는다.
 stock 분석은 저장된 뉴스를 벤더 뉴스보다 우선 병합한다(한국 종목 뉴스 공백 해소).
+
+## 소유 계약 — NewsLabelStoragePort
+
+뉴스 LLM 라벨 저장 협력. 라벨링 배치(`scripts/label_news.py`, EXAONE 2.4B AWQ 로컬 —
+도메인 내부 추론 계층)와 stock(구현·영속: `news_labels` 테이블, (news_id, labeler) 유니크)을
+잇는다. `unlabeled()`가 라벨러별 미라벨 뉴스를 내줘 배치가 작업 큐로 쓴다. 라벨은 학습 피처 —
+정답은 실현 수익률(`price_bars` 조인). labeler 버전 컬럼으로 상위 모델 재라벨링이 공존한다.
 
 ## 소유 계약 — PriceBarStoragePort
 

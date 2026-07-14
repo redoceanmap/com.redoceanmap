@@ -13,17 +13,22 @@ from hub.adapter.inbound.api.schemas.automation_schema import (
     InboundMailSchema,
     NewsIngestRequest,
     NewsIngestResult,
+    NewsLabelIngestRequest,
+    NewsLabelIngestResult,
     PriceBarIngestRequest,
     PriceBarIngestResult,
     PriceCoverageSchema,
     StockScanRequest,
     StockSignalSchema,
+    UnlabeledNewsSchema,
 )
 from hub.app.dtos.inbound_mail_dto import InboundMailItem
 from hub.app.dtos.news_dto import NewsItem
+from hub.app.dtos.news_label_dto import NewsLabelItem
 from hub.app.dtos.price_bar_dto import PriceBarItem
 from hub.app.ports.input.mail_ingest_use_case import MailIngestUseCase
 from hub.app.ports.input.news_ingest_use_case import NewsIngestUseCase
+from hub.app.ports.input.news_label_ingest_use_case import NewsLabelIngestUseCase
 from hub.app.ports.input.price_bar_ingest_use_case import PriceBarIngestUseCase
 from hub.app.ports.input.signal_scan_use_case import SignalScanUseCase
 from hub.adapter.inbound.api.schemas.dispatcher_schema import DispatcherResponseSchema
@@ -33,6 +38,7 @@ from hub.dependencies.dispatcher_provider import get_dispatcher_use_case
 from hub.dependencies.automation_provider import (
     get_mail_ingest_use_case,
     get_news_ingest_use_case,
+    get_news_label_ingest_use_case,
     get_price_bar_ingest_use_case,
     get_signal_scan_use_case,
 )
@@ -97,6 +103,40 @@ async def price_coverage(
             firstTs=c.first_ts, lastTs=c.last_ts, bars=c.bars,
         )
         for c in await use_case.coverage()
+    ]
+
+
+@automation_router.post(
+    "/news-labels", response_model=NewsLabelIngestResult, summary="라벨링 배치 뉴스 라벨 적재",
+    dependencies=[Depends(verify_webhook_token)],
+)
+async def ingest_news_labels(
+    payload: NewsLabelIngestRequest,
+    use_case: NewsLabelIngestUseCase = Depends(get_news_label_ingest_use_case),
+) -> NewsLabelIngestResult:
+    saved = await use_case.ingest([
+        NewsLabelItem(
+            news_id=i.newsId, labeler=i.labeler, sentiment=i.sentiment,
+            event_type=i.eventType, confidence=i.confidence,
+        )
+        for i in payload.items
+    ])
+    return NewsLabelIngestResult(received=len(payload.items), saved=saved)
+
+
+@automation_router.get(
+    "/news-labels/pending", response_model=list[UnlabeledNewsSchema],
+    summary="라벨러별 미라벨 뉴스 — 라벨링 배치의 작업 큐",
+    dependencies=[Depends(verify_webhook_token)],
+)
+async def pending_news_labels(
+    labeler: str,
+    limit: int = 500,
+    use_case: NewsLabelIngestUseCase = Depends(get_news_label_ingest_use_case),
+) -> list[UnlabeledNewsSchema]:
+    return [
+        UnlabeledNewsSchema(newsId=u.news_id, ticker=u.ticker, title=u.title)
+        for u in await use_case.unlabeled(labeler, limit)
     ]
 
 

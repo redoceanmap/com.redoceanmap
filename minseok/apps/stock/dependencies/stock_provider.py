@@ -2,18 +2,22 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_db
+from hub.app.ports.output.news_label_storage_port import NewsLabelStoragePort
 from hub.app.ports.output.news_storage_port import NewsStoragePort
 from hub.app.ports.output.price_bar_storage_port import PriceBarStoragePort
 from hub.app.ports.output.stock_analysis_port import StockAnalysisPort
 from stock.adapter.outbound.exaone_sentiment_adapter import ExaoneSentimentAdapter
+from stock.adapter.outbound.gateways.news_label_storage_gateway import NewsLabelStorageGateway
 from stock.adapter.outbound.gateways.news_storage_gateway import NewsStorageGateway
 from stock.adapter.outbound.gateways.price_bar_storage_gateway import PriceBarStorageGateway
 from stock.adapter.outbound.gateways.stock_analysis_gateway import StockAnalysisGateway
+from stock.adapter.outbound.pg.news_label_pg_repository import NewsLabelPgRepository
 from stock.adapter.outbound.pg.news_pg_repository import NewsPgRepository
 from stock.adapter.outbound.pg.price_bar_pg_repository import PriceBarPgRepository
 from stock.adapter.outbound.yfinance_market_data_adapter import YFinanceMarketDataAdapter
 from stock.app.ports.input.stock_use_case import StockUseCase
 from stock.app.use_cases.news_interactor import NewsInteractor
+from stock.app.use_cases.news_label_interactor import NewsLabelInteractor
 from stock.app.use_cases.price_bar_interactor import PriceBarInteractor
 from stock.app.use_cases.stock_interactor import StockInteractor
 from stock.domain.entities.analysis_config import AnalysisConfig
@@ -40,6 +44,13 @@ def get_stock_analysis_gateway(
 def get_news_storage_gateway(db: AsyncSession = Depends(get_db)) -> NewsStoragePort:
     """허브 NewsStoragePort 구현 프로바이더 — main.py가 dependency_overrides로 주입."""
     return NewsStorageGateway(use_case=NewsInteractor(news=NewsPgRepository(session=db)))
+
+
+def get_news_label_storage_gateway(db: AsyncSession = Depends(get_db)) -> NewsLabelStoragePort:
+    """허브 NewsLabelStoragePort 구현 프로바이더 — main.py가 dependency_overrides로 주입."""
+    return NewsLabelStorageGateway(
+        use_case=NewsLabelInteractor(labels=NewsLabelPgRepository(session=db))
+    )
 
 
 def get_price_bar_storage_gateway(db: AsyncSession = Depends(get_db)) -> PriceBarStoragePort:

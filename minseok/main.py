@@ -18,6 +18,7 @@ from hub.adapter.inbound.api.v1.automation_router import automation_router
 from hub.adapter.inbound.api.v1.email_request_router import email_request_router
 from hub.dependencies.automation_provider import (
     get_mail_storage_port,
+    get_news_label_storage_port,
     get_news_storage_port,
     get_price_bar_storage_port,
 )
@@ -33,6 +34,7 @@ from market.dependencies.commercial_data_provider import get_commercial_data_gat
 from market.adapter.inbound.api.v1.area_router import area_router
 from stock.adapter.inbound.api.v1.stock_router import stock_router
 from stock.dependencies.stock_provider import (
+    get_news_label_storage_gateway,
     get_news_storage_gateway,
     get_price_bar_storage_gateway,
     get_stock_analysis_gateway,
@@ -85,6 +87,7 @@ app.dependency_overrides[get_recommendation_record_port] = get_recommendation_re
 app.dependency_overrides[get_stock_analysis_port] = get_stock_analysis_gateway
 app.dependency_overrides[get_news_storage_port] = get_news_storage_gateway
 app.dependency_overrides[get_price_bar_storage_port] = get_price_bar_storage_gateway
+app.dependency_overrides[get_news_label_storage_port] = get_news_label_storage_gateway
 app.dependency_overrides[get_email_composer] = lambda: EmailComposerN8nGateway()
 app.dependency_overrides[get_mail_storage_port] = get_mail_storage_gateway
 
