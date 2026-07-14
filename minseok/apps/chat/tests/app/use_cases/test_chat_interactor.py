@@ -248,6 +248,55 @@ async def test_종목_해석_실패면_안내문을_저장하고_반환한다(mo
     assert stubs["conversations"].saved[-1][0] == "assistant"
 
 
+# --- phase1 상권 컨텍스트: 질문 지역 우선 ---
+
+def _summary_two_areas() -> AreaSummary:
+    seongsu = AreaInfo(trdar_code=1, trdar_name="성수역", district_name="성동구",
+                       adm_dong_name="성수1가1동", lat=37.5, lng=127.0)
+    noryang = AreaInfo(trdar_code=2, trdar_name="노량진역(노량진)", district_name="동작구",
+                       adm_dong_name="노량진1동", lat=37.5, lng=126.9)
+    # 매출은 노량진이 압도적 — 언급 매칭 없으면 노량진이 첫 행이어야 한다
+    return AreaSummary(areas=[seongsu, noryang], latest_quarter=20254,
+                       sales_by_code={1: 10_000_000, 2: 999_000_000})
+
+
+async def test_행정동_언급_상권이_매출과_무관하게_컨텍스트_최상단_별표(monkeypatch):
+    interactor, _, _ = _build(monkeypatch, [])
+    context = interactor._build_area_context(_summary_two_areas(), "성수동에 카페 차릴만해?")
+    rows = context.splitlines()[1:]
+    assert rows[0].startswith("1|성수역") and rows[0].endswith("★")  # 성수1가1동 → 어간 '성수' 매칭
+    assert rows[1].startswith("2|") and rows[1].endswith("|")  # 노량진은 표시 없음
+
+
+async def test_지역_언급_없으면_매출순_유지(monkeypatch):
+    interactor, _, _ = _build(monkeypatch, [])
+    context = interactor._build_area_context(_summary_two_areas(), "카페 차릴만한 곳 추천해줘")
+    rows = context.splitlines()[1:]
+    assert rows[0].startswith("2|")  # 매출 상위 노량진 먼저
+    assert not any(r.endswith("★") for r in rows)
+
+
+async def test_자치구_언급도_계속_매칭된다(monkeypatch):  # 기존 동작 보존
+    interactor, _, _ = _build(monkeypatch, [])
+    context = interactor._build_area_context(_summary_two_areas(), "성동구 쪽 어때?")
+    assert context.splitlines()[1].startswith("1|성수역")
+
+
+async def test_지역_언급_시_LLM이_다른_상권을_골라도_언급_지역으로_보정된다(monkeypatch):
+    # phase1(2.4B 스텁)이 노량진(code 2)을 고르지만, 질문은 성수동 — 가드가 성수(code 1)로 교체
+    phase1_wrong = '{"service_code": "CS100010", "service_name": "커피-음료", "trdar_codes": [2]}'
+    phase2 = '{"text": "요약", "areas": [{"trdar_code": 1, "reason": "이유"}]}'
+    interactor, _, stubs = _build(monkeypatch, [INTENT_MARKET, phase1_wrong, phase2])
+    stubs["market"].summary = _summary_two_areas()
+
+    async def _fixed_summary():
+        return _summary_two_areas()
+    stubs["market"].get_area_summary = _fixed_summary
+
+    result = await interactor.ask("성수동에 카페 차릴만해?")
+    assert [a.id for a in result.recommendations] == ["1"]  # 성수역만
+
+
 # --- 멀티턴 시나리오 (E2E 시나리오 3종 — 인터랙터 레벨) ---
 
 async def test_시나리오_주식_업황_상권_연속_질문(monkeypatch):

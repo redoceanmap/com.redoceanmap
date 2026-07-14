@@ -95,6 +95,7 @@ PHASE1_PROMPT = """당신은 서울 상권 분석 전문가입니다.
 규칙:
 - service_code는 반드시 제공된 목록에서 선택
 - trdar_code는 반드시 상권 데이터에 있는 값 사용
+- 질문에 특정 지역(동·역·상권명)이 언급되면 '질문지역' 칸에 ★ 표시된 상권을 반드시 우선 선택
 - 상권 전체 월매출 규모와 위치(자치구, 행정동)를 기준으로 사용자 질문에 맞는 곳 선택"""
 
 PHASE2_PROMPT = """당신은 서울 창업 컨설턴트입니다.
@@ -164,24 +165,40 @@ class ChatInteractor(ChatUseCase):
         turns = "\n".join(f"{m.role}: {m.content[:200]}" for m in history[-6:])
         return f"이전 대화(맥락 참고용):\n{turns}\n\n"
 
+    @staticmethod
+    def _place_stem(name: str) -> str:
+        """지명 어간 — 선행 한글 구간에서 행정 접미(구·동·가·로 등)를 뗀다 (예: 성수1가1동 → 성수)."""
+        match = re.match(r"^[가-힣]+", name or "")
+        stem = match.group() if match else ""
+        while len(stem) > 2 and stem[-1] in "구동가로읍면리":
+            stem = stem[:-1]
+        return stem
+
+    def _mentioned_codes(self, summary: AreaSummary, prompt: str) -> set[int]:
+        """질문에 지역(자치구·행정동·상권명 어간)이 언급된 상권 코드 집합."""
+        codes: set[int] = set()
+        for a in summary.areas:
+            for name in (a.district_name, a.adm_dong_name, a.trdar_name):
+                stem = self._place_stem(name)
+                if len(stem) >= 2 and stem in prompt:
+                    codes.add(a.trdar_code)
+                    break
+        return codes
+
     def _build_area_context(
         self, summary: AreaSummary, prompt: str = "", limit: int = 80
     ) -> str:
         # 상권 1650개 전체를 넣으면 경량 모델(2.4B) 컨텍스트를 초과한다.
-        # 질문에 언급된 자치구를 우선 포함하고, 나머지는 월매출 상위로 상한까지 채운다.
+        # 질문에 언급된 지역(자치구·행정동·상권명 어간)을 우선 포함하고,
+        # 나머지는 월매출 상위로 상한까지 채운다. 언급 상권은 ★로 표시해 phase1 선택을 유도한다.
         def sales_of(a) -> int:
             return summary.sales_by_code.get(a.trdar_code) or 0
 
-        def mentioned(a) -> bool:
-            d = a.district_name
-            if not d:
-                return False
-            stripped = d[:-1] if d.endswith("구") else d
-            return d in prompt or (len(stripped) >= 2 and stripped in prompt)
-
+        all_mentioned = self._mentioned_codes(summary, prompt)
         ranked = sorted(summary.areas, key=sales_of, reverse=True)
-        picked = [a for a in ranked if mentioned(a)][:limit]
-        seen = {a.trdar_code for a in picked}
+        picked = [a for a in ranked if a.trdar_code in all_mentioned][:limit]
+        mentioned_codes = {a.trdar_code for a in picked}
+        seen = set(mentioned_codes)
         for a in ranked:
             if len(picked) >= limit:
                 break
@@ -189,13 +206,14 @@ class ChatInteractor(ChatUseCase):
                 picked.append(a)
                 seen.add(a.trdar_code)
 
-        lines = ["상권코드|상권명|자치구|행정동|상권전체월매출합계(만원)"]
+        lines = ["상권코드|상권명|자치구|행정동|상권전체월매출합계(만원)|질문지역"]
         for a in picked:
             sales = summary.sales_by_code.get(a.trdar_code)
             wan = round(sales / 10000) if sales else None
             lines.append(
                 f"{a.trdar_code}|{a.trdar_name}|{a.district_name}|{a.adm_dong_name}"
                 f"|{wan if wan is not None else '데이터없음'}"
+                f"|{'★' if a.trdar_code in mentioned_codes else ''}"
             )
         return "\n".join(lines)
 
@@ -322,6 +340,19 @@ class ChatInteractor(ChatUseCase):
         service_name: str = p1.get("service_name", "")
         trdar_codes: list[int] = [int(c) for c in p1.get("trdar_codes", []) if str(c).isdigit()]
         valid_codes = [c for c in trdar_codes if c in area_map]
+
+        # 결정론적 지역 가드 — 질문에 지역이 언급되면 그 지역 상권으로 보정.
+        # 경량 모델(2.4B)이 ★ 지시를 무시하고 유명 상권(홍대 등)으로 쏠리는 경우를 코드로 방지한다.
+        mentioned_codes = self._mentioned_codes(summary, prompt)
+        if mentioned_codes:
+            local = [c for c in valid_codes if c in mentioned_codes]
+            if local:
+                valid_codes = local
+            else:
+                valid_codes = sorted(
+                    mentioned_codes,
+                    key=lambda c: summary.sales_by_code.get(c) or 0, reverse=True,
+                )[:3]
         if not valid_codes:
             raise NoValidAreaError("유효한 상권을 찾지 못했습니다.")
 
