@@ -103,3 +103,4 @@ runs/
 # 로컬 LLM 모델 가중치 (hf download로 재취득 가능)
 # ============================================================
 EXAONE-3.5-7.8B-Instruct-AWQ/
+EXAONE-3.5-2.4B-Instruct-AWQ/
