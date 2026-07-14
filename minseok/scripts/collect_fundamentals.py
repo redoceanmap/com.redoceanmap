@@ -132,7 +132,8 @@ def dart_snapshot(ticker: str, corp_codes: dict[str, str], price: float | None,
     # IS: 최신 사업보고서(연간) — 분기 EPS/순이익으로 PER·ROE를 내면 왜곡
     annual = next((rows for y in (year - 1, year - 2)
                    if (rows := _fetch_statements(corp_code, y, "11011"))), [])
-    eps = _pick(annual, ("IS", "CIS"), ("기본주당이익",))
+    # 계정명이 회사별로 다름: 삼성전자 "기본주당이익", SK하이닉스 "기본주당순이익(손실)"
+    eps = _pick(annual, ("IS", "CIS"), ("기본주당이익", "기본주당순이익"))
     net_income = _pick(annual, ("IS", "CIS"), ("당기순이익",))
 
     # BS: 최신 보고서(분기 포함) — 재무상태표는 시점 값이라 최신이 정확
