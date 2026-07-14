@@ -16,7 +16,7 @@
 | M2 | ~~stock 피처 확장 + 백테스트 재채점~~ — **완료(2026-07-13~14)**. 2차(ATR·%B·거래량비·OBV) + 3차(12-1 모멘텀·거래량 확인 필터) 재채점. RSI+BB+MOM ±0.35 UP이 최우수 검증 신호(인샘플 하한 +3.5%p·홀드아웃 +0.9%p). 확률 제시는 계속 보류 → [[minseok/apps/stock/_docs/BACKTEST_RESCORE_2026-07\|RESCORE]] | stock 내부 | - | ✅ 성적표 문서화 |
 | M3 | **market 시계열·스코어링 v1** — 분기 추이(QoQ 매출/유동인구 변화율) + 시도 벤치마크 대비 상권 종합점수. 2025년 4개 분기 기적재 데이터 활용 → [[minseok/apps/market/_docs/MARKET_ERD\|MARKET_ERD]] | market 내부 (새 스포크 아님) | 4-6일 | 스코어링 순수 도메인 서비스 단위 테스트 + market 테스트 공백 해소 |
 | M4 | **뉴스 수집 상시화** — `scripts/collect_news.py`를 우분투 PC cron/systemd timer 등록, 실패 로그 | scripts/ + 운영 설정 | 2-3일 | 7일 연속 무중단 수집 |
-| M5 | ~~chat 실데이터 결합 (핵심 가치)~~ — **종목 측 완료(2026-07-14)**. 지표 9종 의미 해석 + 검증 참고 신호 + 뉴스 RAG(bge-m3·pgvector, 허브 NewsSearchPort) 주입, phase0 3분류(stock/market_news/market), chat_interactor 테스트 13종 신설, E2E 종목·업황 통과. **상권 근거 주입은 잔여** — M3 스코어링 + 상권 데이터 적재 선행 필요(아래 편입 마일스톤 참고) | chat 확장 | - | ✅ 테스트 13종 + E2E 2/3 (상권은 데이터 부재) |
+| M5 | ~~chat 실데이터 결합 (핵심 가치)~~ — **종목 측 완료(2026-07-14)**. 지표 9종 의미 해석 + 검증 참고 신호 + 뉴스 RAG(bge-m3·pgvector, 허브 NewsSearchPort) 주입, phase0 3분류(stock/market_news/market), chat_interactor 테스트 13종 신설, E2E 종목·업황 통과. **상권 근거 주입은 잔여** — M3 스코어링 선행 필요 | chat 확장 | - | ✅ 테스트 13종 + E2E 3/3 (상권 데이터 재적재 후 전 경로 통과) |
 | M6 | **프론트-백엔드 정합** — /vision/detect↔/vision/faces 통일, marketApi dead code 처리, M5 결과 UI 노출 | www + 라우터 | 2-3일 | 로그인→대화→지도→종목분석 전 구간 수동 통과 |
 
 ## Phase ② 취업 포트폴리오 품질 (~15-20일)
@@ -34,7 +34,7 @@
 
 | 마일스톤 | 기간 | 핵심 |
 |---------|------|------|
-| **market 전용 DB 런타임 전환** — 사용자가 구축한 앱별 DB(5434, `apps/market/alembic` 독립 체인)를 서비스에 연결: ① core 앱별 세션 지원 → ② market 게이트웨이/조회 라우팅 → ③ 데이터 이관 → ④ 루트 체인 market 부분 동결. 완료 전까지 적재·ORM 변경은 메인 DB(5432) 기준(이중 진실 금지). **⚠️ 2026-07-14 발견: 이 머신(윈도우 PC)은 메인·전용 DB 모두 상권 데이터 0건 + 원천 CSV(`data/raw/seoul`, gitignore) 부재 — 이관 전에 CSV 확보(타 머신 복사 또는 서울 열린데이터 재다운로드) + `ingest_seoul_3nf.py` 재적재가 선행 조건. 현재 chat 상권 경로 503** | 3-5일 | ①-M5 잔여(상권 근거 주입)의 선행 조건 |
+| **market 전용 DB 런타임 전환** — 사용자가 구축한 앱별 DB(5434, `apps/market/alembic` 독립 체인)를 서비스에 연결: ① core 앱별 세션 지원 → ② market 게이트웨이/조회 라우팅 → ③ 데이터 이관 → ④ 루트 체인 market 부분 동결. 완료 전까지 적재·ORM 변경은 메인 DB(5432) 기준(이중 진실 금지). **2026-07-14: 메인 DB 재적재 완료**(CSV 10종 확보 → `ingest_seoul_3nf.py`, 상권 1,650·팩트 60만+ 행) — chat 상권 경로 복구. 전용 DB(5434)는 여전히 빈 스키마 — ③ 데이터 이관은 이 마일스톤에서 수행 | 3-5일 | ①-M5 잔여(상권 근거 주입)의 선행 조건 |
 
 ## Phase ③ 실사용자 서비스 (~20-30일, 수요 검증 가변)
 
