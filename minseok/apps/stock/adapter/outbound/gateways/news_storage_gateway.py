@@ -20,3 +20,6 @@ class NewsStorageGateway(NewsStoragePort):
             )
             for i in items
         ])
+
+    async def embed_missing(self, limit: int) -> int:
+        return await self._use_case.embed_pending(limit)

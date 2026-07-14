@@ -85,6 +85,11 @@ class LLMOrchestrator:
         response = await self._client.embed(model=model, input=text)
         return list(response["embeddings"][0])
 
+    async def embed_many(self, texts: list[str], *, model: str = "bge-m3") -> list[list[float]]:
+        """배치 임베딩 — 여러 텍스트를 HTTP 1콜로 처리한다(수집 주기 지연 최소화)."""
+        response = await self._client.embed(model=model, input=texts)
+        return [list(e) for e in response["embeddings"]]
+
     async def orchestrate_stream(
         self,
         prompt: str,

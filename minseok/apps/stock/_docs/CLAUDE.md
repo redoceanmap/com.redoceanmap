@@ -20,6 +20,11 @@
 - **수집 뉴스(DB)**: n8n이 허브 `/automation/news`로 적재(허브 `NewsStoragePort`를
   `NewsStorageGateway`가 구현, `news_articles` 테이블·url 유니크). 분석 시 DB 뉴스를
   벤더(yfinance) 뉴스보다 우선 병합 — 한국 종목 뉴스 공백 해소. n8n은 허브만 안다.
+- **뉴스 의미 검색(RAG)**: 적재 시 제목을 bge-m3(1024차원, 오케스트레이터 `embed_many` 경유)로
+  임베딩(`news_articles.embedding`, 실패 시 NULL — 수집 우선·다음 주기 자연 재시도).
+  허브 `NewsSearchPort`를 `NewsSearchGateway`가 구현 — pgvector 코사인 + 티커 하이브리드 필터 +
+  news_labels 라벨 조인 + 제목 dedupe. 소비자는 chat(종목 질문 보강 + 시장 횡단 질문).
+  백필은 `POST /automation/news-embeddings/backfill`. 벡터 인덱스는 10만 건+에서 hnsw 재검토.
 - **수집 OHLCV(DB)**: cron(`scripts/collect_prices.py`, 뉴스와 워치리스트 공유)이 허브
   `/automation/prices`로 적재(허브 `PriceBarStoragePort`를 `PriceBarStorageGateway`가 구현,
   `price_bars` 테이블·(ticker, timeframe, ts) 유니크). 5분봉(60일 소급)·일봉(전체) —

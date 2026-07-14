@@ -73,6 +73,14 @@ class UnlabeledNewsSchema(BaseModel):
     title: str
 
 
+class NewsEmbeddingBackfillRequest(BaseModel):
+    limit: int = 200
+
+
+class NewsEmbeddingBackfillResult(BaseModel):
+    embedded: int
+
+
 class FundamentalSnapshotSchema(BaseModel):
     ticker: str
     asOf: date

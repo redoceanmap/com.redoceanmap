@@ -22,3 +22,8 @@ class NewsIngestInteractor(NewsIngestUseCase):
         saved = await self._storage.save_many(valid)
         logger.info("[hub-news] 수신 %d건 중 신규 %d건 저장", len(items), saved)
         return saved
+
+    async def backfill_embeddings(self, limit: int) -> int:
+        embedded = await self._storage.embed_missing(limit)
+        logger.info("[hub-news] 임베딩 백필 %d건", embedded)
+        return embedded

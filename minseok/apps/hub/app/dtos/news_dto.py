@@ -16,3 +16,15 @@ class NewsItem:
     url: str
     ticker: str = ""  # 관련 종목 티커(예: 005930.KS, NVDA) — 학습 라벨 조인 키
     published_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class NewsHit:
+    """의미 검색(NewsSearchPort) 히트 1건 — 뉴스 + LLM 라벨(있으면)."""
+
+    title: str
+    ticker: str                     # 종목 무관 기사면 ""
+    published_at: datetime | None
+    sentiment: float | None = None  # -1.0(악재) ~ +1.0(호재), 라벨 없으면 None
+    event_type: str | None = None
+    source: str = ""

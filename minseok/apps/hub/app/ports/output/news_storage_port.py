@@ -16,3 +16,8 @@ class NewsStoragePort(ABC):
     async def save_many(self, items: list[NewsItem]) -> int:
         """저장하고 신규 건수를 반환한다. 중복(url)은 무시한다."""
         ...
+
+    @abstractmethod
+    async def embed_missing(self, limit: int) -> int:
+        """임베딩이 없는 뉴스를 배치 임베딩하고 처리 건수를 반환한다(백필·재시도)."""
+        ...

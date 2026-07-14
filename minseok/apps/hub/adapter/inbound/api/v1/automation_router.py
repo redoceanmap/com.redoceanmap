@@ -13,6 +13,8 @@ from hub.adapter.inbound.api.schemas.automation_schema import (
     FundamentalIngestResult,
     InboundMailResult,
     InboundMailSchema,
+    NewsEmbeddingBackfillRequest,
+    NewsEmbeddingBackfillResult,
     NewsIngestRequest,
     NewsIngestResult,
     NewsLabelIngestRequest,
@@ -74,6 +76,19 @@ async def ingest_news(
         for i in payload.items
     ])
     return NewsIngestResult(received=len(payload.items), saved=saved)
+
+
+@automation_router.post(
+    "/news-embeddings/backfill", response_model=NewsEmbeddingBackfillResult,
+    summary="미임베딩 뉴스 배치 임베딩 — 소급 백필/재시도",
+    dependencies=[Depends(verify_webhook_token)],
+)
+async def backfill_news_embeddings(
+    payload: NewsEmbeddingBackfillRequest,
+    use_case: NewsIngestUseCase = Depends(get_news_ingest_use_case),
+) -> NewsEmbeddingBackfillResult:
+    embedded = await use_case.backfill_embeddings(payload.limit)
+    return NewsEmbeddingBackfillResult(embedded=embedded)
 
 
 @automation_router.post(

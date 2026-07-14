@@ -14,9 +14,11 @@ from chat.app.ports.output.conversation_repository import ConversationRepository
 from chat.domain.entities.conversation_entity import Message
 from core.llm.llm_orchestrator import EXAONE_2_4B, llm_orchestrator
 from hub.app.dtos.commercial_data_dto import AreaRawStat, AreaSummary
+from hub.app.dtos.news_dto import NewsHit
 from hub.app.dtos.recommendation_record_dto import RecommendedArea
 from hub.app.dtos.stock_analysis_dto import StockAnalysisResult
 from hub.app.ports.output.commercial_data_port import CommercialDataPort
+from hub.app.ports.output.news_search_port import NewsSearchPort
 from hub.app.ports.output.recommendation_record_port import RecommendationRecordPort
 from hub.app.ports.output.stock_analysis_port import StockAnalysisPort, StockAnalysisUnavailable
 
@@ -40,7 +42,8 @@ TIME_FIELDS = [
 ]
 
 INTENT_PROMPT = """사용자 질문의 의도를 분류하라.
-- "stock": 회사/종목(시세·전망·분석)을 묻는 질문. 회사 이름만 언급해도 stock이다.
+- "stock": 특정 회사/종목(시세·전망·분석)을 묻는 질문. 회사 이름만 언급해도 stock이다.
+- "market_news": 특정 종목이 아니라 업종·산업·증시 전반의 동향/뉴스를 묻는 질문.
 - "market": 동네/상권/창업/입지를 묻는 질문.
 
 stock이면 종목을 stock_query에 추출한다. 한국 회사는 **한국어 이름 그대로** 쓰고 절대
@@ -52,6 +55,9 @@ stock이면 종목을 stock_query에 추출한다. 한국 회사는 **한국어 
 - "하이닉스 어때?" → {"intent": "stock", "stock_query": "하이닉스"}
 - "엔비디아는 어때?" → {"intent": "stock", "stock_query": "NVDA"}
 - "카카오 지금 사도 돼?" → {"intent": "stock", "stock_query": "카카오"}
+- "반도체 업황 어때?" → {"intent": "market_news", "stock_query": ""}
+- "요즘 금리가 증시에 어떤 영향 주고 있어?" → {"intent": "market_news", "stock_query": ""}
+- "AI 관련주 분위기 어때?" → {"intent": "market_news", "stock_query": ""}
 - "성수동은 어때?" → {"intent": "market", "stock_query": ""}
 - "홍대에 카페 차릴만해?" → {"intent": "market", "stock_query": ""}
 
@@ -62,9 +68,21 @@ STOCK_ANSWER_PROMPT = """당신은 주식 분석 상담사입니다.
 제공된 지표·감성 수치만 근거로 종목의 현재 상황을 한국어 4~6문장으로 설명하세요.
 
 규칙:
-- 수치는 제공된 그대로 인용하고, RSI·이동평균·지지선/저항선의 의미를 해석해 서술
+- 수치는 제공된 그대로 인용하고, RSI·이동평균·지지선/저항선·볼린저 밴드·변동성·거래량·모멘텀 중
+  이 종목에서 두드러진 것을 골라 의미를 해석해 서술 (전부 나열하지 말 것)
+- '참고 신호'가 제공된 경우에만 검증된 참고 신호로 언급하되, 상승 확률이나 매수 권유로 표현 금지
+- '관련 뉴스'가 제공되면 감성 라벨(호재/악재 방향)과 함께 근거로 인용
 - 매수/매도 지시 금지, 상승/하락 확률 단정 금지 — 방향 전망은 참고 신호로만 표현
 - 마지막에 투자 판단은 본인 책임이라는 고지 한 문장을 포함"""
+
+MARKET_NEWS_ANSWER_PROMPT = """당신은 시장·업황 분석 상담사입니다.
+제공된 수집 뉴스 헤드라인과 감성 라벨만 근거로 질문한 업황/시장 동향을 한국어 4~6문장으로 설명하세요.
+
+규칙:
+- 헤드라인에 없는 사실을 지어내지 않고, 감성 라벨(호재/악재 방향)을 함께 해석
+- 헤드라인의 발행일을 감안해 시점을 명시 (오래된 뉴스는 그렇게 안내)
+- 개별 종목 매수/매도 지시 금지, 방향 단정 금지
+- 근거가 헤드라인(제목) 수준임을 감안해 단정을 피하고, 마지막에 투자 판단 책임 고지 한 문장"""
 
 PHASE1_PROMPT = """당신은 서울 상권 분석 전문가입니다.
 사용자 질문을 보고 다음을 결정하세요:
@@ -102,7 +120,8 @@ PHASE2_PROMPT = """당신은 서울 창업 컨설턴트입니다.
 STREAM_SYSTEM_PROMPT = """당신은 서울 상권 분석 상담사입니다.
 사용자와 자연스럽게 대화하며 상권 선택·창업 관련 조언을 제공합니다.
 이전 대화 맥락을 이어받아 답하고, 확실치 않은 수치는 단정하지 말고 솔직히 안내합니다.
-구체적인 상권 추천이 필요하면 사용자가 지역과 업종을 말하도록 유도합니다."""
+구체적인 상권 추천이 필요하면 사용자가 지역과 업종을 말하도록 유도합니다.
+구체적인 종목 분석이나 업황/시장 동향은 데이터 근거가 있는 일반 질문(ask) 경로를 이용하도록 안내합니다."""
 
 
 def _top_field(obj, fields: list[tuple[str, str]]) -> str:
@@ -131,11 +150,13 @@ class ChatInteractor(ChatUseCase):
         recorder: RecommendationRecordPort,
         conversations: ConversationRepository,
         stocks: StockAnalysisPort,
+        news: NewsSearchPort,
     ) -> None:
         self._market = market
         self._recorder = recorder
         self._conversations = conversations
         self._stocks = stocks
+        self._news = news
 
     def _history_block(self, history: list[Message]) -> str:
         if not history:
@@ -266,6 +287,8 @@ class ChatInteractor(ChatUseCase):
         intent, stock_query = await self._classify_intent(prompt, history)
         if intent == "stock":
             return await self._answer_stock(conversation_id, prompt, stock_query)
+        if intent == "market_news":
+            return await self._answer_market_news(conversation_id, prompt)
 
         summary = await self._market.get_area_summary()
         quarter = summary.latest_quarter
@@ -397,9 +420,44 @@ class ChatInteractor(ChatUseCase):
             logger.warning("[chat] 의도 분류 파싱 실패 → market 폴백: %s", raw[:100])
             return "market", ""
         stock_query = str(parsed.get("stock_query") or "").strip()
-        if parsed.get("intent") == "stock" and stock_query:
+        intent = parsed.get("intent")
+        if intent == "stock" and stock_query:
             return "stock", stock_query
-        return "market", ""
+        if intent == "stock":
+            # 종목 추출 실패 — 상권으로 보내던 기존 오답 대신 뉴스 RAG가 차선
+            return "market_news", ""
+        if intent == "market_news":
+            return "market_news", ""
+        return "market", ""  # 미지 라벨 포함 전부 market — 기존 동작 보존
+
+    async def _answer_market_news(self, conversation_id: int, prompt: str) -> AskResponse:
+        """종목 무관 시장/업황 질문 — 수집 뉴스 의미 검색(RAG)을 근거로 서술."""
+        hits = await self._news.search(prompt, ticker=None, limit=8)
+        context = self._format_news_context(prompt, hits)
+        # 최종 서술(최종 사용자 답변) → 오케스트레이터 기본 모델(7.8B)
+        text = await llm_orchestrator.orchestrate(f"{MARKET_NEWS_ANSWER_PROMPT}\n\n{context}")
+        await self._conversations.add_message(conversation_id, "assistant", text)
+        return AskResponse(text=text, recommendations=[], conversationId=conversation_id)
+
+    @staticmethod
+    def _format_news_context(prompt: str, hits: list[NewsHit]) -> str:
+        if not hits:
+            return (
+                f"사용자 질문: {prompt}\n\n"
+                "[관련 수집 뉴스]\n수집된 관련 뉴스가 없습니다 — 일반적 지식 수준으로만 답하되"
+                " 데이터 부재를 안내하세요."
+            )
+        lines = [f"사용자 질문: {prompt}\n", "[관련 수집 뉴스 — 의미 유사도 상위]"]
+        for h in hits:
+            date_text = f"{h.published_at:%Y-%m-%d}" if h.published_at else "날짜 미상"
+            ticker_text = h.ticker or "종목 무관"
+            if h.sentiment is None:
+                label_text = "감성 라벨 없음"
+            else:
+                direction = "호재" if h.sentiment > 0 else "악재" if h.sentiment < 0 else "중립"
+                label_text = f"감성 {h.sentiment:+.1f}({direction})·{h.event_type or '기타'}"
+            lines.append(f"- ({date_text} | {ticker_text} | {label_text}) {h.title}")
+        return "\n".join(lines)
 
     async def _answer_stock(
         self, conversation_id: int, prompt: str, stock_query: str
@@ -411,7 +469,9 @@ class ChatInteractor(ChatUseCase):
             await self._conversations.add_message(conversation_id, "assistant", text)
             return AskResponse(text=text, recommendations=[], conversationId=conversation_id)
 
-        context = self._format_stock_context(prompt, analysis)
+        # RAG 보강: 해당 종목 뉴스를 의미 검색(라벨 동반). 빈 결과면 섹션 생략 — 기존 출력 무손상
+        hits = await self._news.search(prompt, ticker=analysis.symbol, limit=5)
+        context = self._format_stock_context(prompt, analysis, hits)
         # 최종 서술(최종 사용자 답변) → 오케스트레이터 기본 모델(7.8B)
         text = await llm_orchestrator.orchestrate(f"{STOCK_ANSWER_PROMPT}\n\n{context}")
         await self._conversations.add_message(conversation_id, "assistant", text)
@@ -427,15 +487,71 @@ class ChatInteractor(ChatUseCase):
             resistance=analysis.resistance,
             sentimentLabel=analysis.sentiment_label,
             headlines=analysis.headlines,
+            atrPct=analysis.atr_pct,
+            bbPercentB=analysis.bb_percent_b,
+            volumeRatio=analysis.volume_ratio,
+            obvSlope=analysis.obv_slope,
+            momentum12To1=analysis.momentum_12_1,
+            referenceUpSignal=analysis.reference_up_signal,
         )
         return AskResponse(
             text=text, recommendations=[], conversationId=conversation_id, stock=card,
         )
 
     @staticmethod
-    def _format_stock_context(prompt: str, r: StockAnalysisResult) -> str:
+    def _volatility_text(atr_pct: float) -> str:
+        pct = atr_pct * 100
+        if pct >= 4.0:
+            return f"ATR(14) 종가 대비 {pct:.1f}% — 일 변동성이 큰 편(급등락 주의)"
+        if pct >= 2.0:
+            return f"ATR(14) 종가 대비 {pct:.1f}% — 보통 수준의 변동성"
+        return f"ATR(14) 종가 대비 {pct:.1f}% — 변동성이 낮고 안정적"
+
+    @staticmethod
+    def _bollinger_text(percent_b: float) -> str:
+        if percent_b < 0.0:
+            return f"%B {percent_b:.2f} — 밴드 하단 이탈(단기 과매도 극단)"
+        if percent_b <= 0.2:
+            return f"%B {percent_b:.2f} — 밴드 하단 부근(단기 과매도권)"
+        if percent_b >= 1.0:
+            return f"%B {percent_b:.2f} — 밴드 상단 이탈(단기 과열 극단)"
+        if percent_b >= 0.8:
+            return f"%B {percent_b:.2f} — 밴드 상단 부근(단기 과열권)"
+        return f"%B {percent_b:.2f} — 밴드 중간 영역(중립)"
+
+    @staticmethod
+    def _volume_text(ratio: float, obv_slope: float) -> str:
+        if ratio >= 1.5:
+            vol = f"최근 5일 거래량이 20일 평균의 {ratio:.1f}배 — 급증"
+        elif ratio <= 0.7:
+            vol = f"최근 5일 거래량이 20일 평균의 {ratio:.1f}배 — 한산"
+        else:
+            vol = f"최근 5일 거래량이 20일 평균의 {ratio:.1f}배 — 평소 수준"
+        if obv_slope > 0:
+            flow = "수급은 유입 우위(OBV 상승)"
+        elif obv_slope < 0:
+            flow = "수급은 유출 우위(OBV 하락)"
+        else:
+            flow = "수급 방향성 중립"
+        return f"{vol}, {flow}"
+
+    @staticmethod
+    def _momentum_text(momentum: float) -> str:
+        if momentum == 0.0:
+            return "12-1 모멘텀 중립 (또는 상장 이력 1년 미만으로 산출 불가)"
+        pct = momentum * 100
+        if momentum >= 0.15:
+            return f"12-1 모멘텀 {pct:+.1f}% — 중장기 상승 추세 뚜렷"
+        if momentum > 0.0:
+            return f"12-1 모멘텀 {pct:+.1f}% — 완만한 중장기 상승"
+        return f"12-1 모멘텀 {pct:+.1f}% — 중장기 하락 추세"
+
+    @classmethod
+    def _format_stock_context(
+        cls, prompt: str, r: StockAnalysisResult, hits: list[NewsHit] | None = None,
+    ) -> str:
         headlines = "\n".join(f"- {h}" for h in r.headlines) if r.headlines else "- (없음)"
-        return (
+        lines = (
             f"사용자 질문: {prompt}\n\n"
             f"[{r.symbol} 분석 데이터]\n"
             f"- 현재가: {r.price:,.2f}\n"
@@ -443,9 +559,30 @@ class ChatInteractor(ChatUseCase):
             f"- RSI(14): {r.rsi:.1f} (30↓ 과매도 / 70↑ 과매수)\n"
             f"- 20일 이동평균: {r.ma20:,.2f} / 50일 이동평균: {r.ma50:,.2f}\n"
             f"- 지지선: {r.support:,.2f} / 저항선: {r.resistance:,.2f} (최근 60거래일 저/고점)\n"
-            f"- 뉴스 감성: {r.sentiment:+.2f} ({r.sentiment_label})\n"
-            f"- 최근 헤드라인:\n{headlines}"
+            f"- 변동성: {cls._volatility_text(r.atr_pct)}\n"
+            f"- 볼린저 밴드: {cls._bollinger_text(r.bb_percent_b)}\n"
+            f"- 거래량·수급: {cls._volume_text(r.volume_ratio, r.obv_slope)}\n"
+            f"- 중장기 추세: {cls._momentum_text(r.momentum_12_1)}\n"
         )
+        if r.reference_up_signal:
+            # 신호 없음(False)은 라인 자체를 생략 — 소형 모델이 '신호 부재'를 부정 신호로 오독하는 것 차단
+            lines += (
+                "- 참고 신호: 백테스트 검증(인샘플·홀드아웃 통과)된 '과매도+볼린저 하단' 조건 충족"
+                " — 통계적 참고일 뿐 상승 확률이나 매수 근거가 아님\n"
+            )
+        lines += f"- 뉴스 감성: {r.sentiment:+.2f} ({r.sentiment_label})\n- 최근 헤드라인:\n{headlines}"
+        related = [h for h in (hits or []) if h.title not in r.headlines]  # 헤드라인과 제목 중복 제거
+        if related:
+            lines += "\n- 관련 뉴스(감성 라벨):"
+            for h in related:
+                date_text = f"{h.published_at:%Y-%m-%d}" if h.published_at else "날짜 미상"
+                if h.sentiment is None:
+                    label_text = "감성 라벨 없음"
+                else:
+                    direction = "호재" if h.sentiment > 0 else "악재" if h.sentiment < 0 else "중립"
+                    label_text = f"감성 {h.sentiment:+.1f}({direction})·{h.event_type or '기타'}"
+                lines += f"\n  - ({date_text} | {label_text}) {h.title}"
+        return lines
 
     async def stream_reply(self, prompt: str, conversation_id: int | None = None):
         if conversation_id is None:

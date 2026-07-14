@@ -12,3 +12,8 @@ class NewsIngestUseCase(ABC):
     async def ingest(self, items: list[NewsItem]) -> int:
         """저장된 신규 건수를 반환한다."""
         ...
+
+    @abstractmethod
+    async def backfill_embeddings(self, limit: int) -> int:
+        """임베딩이 없는 뉴스를 배치 임베딩하고 처리 건수를 반환한다."""
+        ...

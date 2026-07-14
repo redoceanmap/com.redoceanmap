@@ -42,6 +42,12 @@ class StockCard(BaseModel):
     resistance: float
     sentimentLabel: str
     headlines: list[str]
+    atrPct: float = 0.0             # ATR(14)/종가 — 일 변동성 비율
+    bbPercentB: float = 0.5         # 볼린저 %B (0=하단, 1=상단)
+    volumeRatio: float = 1.0        # 최근 5일 평균 거래량 / 20일 평균
+    obvSlope: float = 0.0           # OBV 20일 정규화 기울기 (수급 방향)
+    momentum12To1: float = 0.0      # 12-1 모멘텀 (이력 부족 시 0.0)
+    referenceUpSignal: bool = False # 백테스트 검증 통과 참고 신호 — 확률 아님
 
 
 class AskResponse(BaseModel):

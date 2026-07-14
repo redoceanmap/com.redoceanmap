@@ -156,6 +156,15 @@ apps/hub/
 
 뉴스 저장 협력. 허브 자동화(생성)와 stock(구현·영속: `news_articles` 테이블)을 잇는다.
 stock 분석은 저장된 뉴스를 벤더 뉴스보다 우선 병합한다(한국 종목 뉴스 공백 해소).
+`embed_missing(limit)`으로 미임베딩 뉴스 배치 임베딩(백필·재시도)도 위임한다 —
+`POST /automation/news-embeddings/backfill`이 노출 창구.
+
+## 소유 계약 — NewsSearchPort
+
+뉴스 의미 검색 협력. chat(소비)과 stock(구현: bge-m3 임베딩 + pgvector 코사인,
+`NewsSearchGateway`)을 잇는다. **계약은 자연어 질의 → NewsHit**(임베딩은 구현 스포크의
+세부 — 모델 교체가 계약에 누설되지 않음). 히트에는 news_labels의 감성·이벤트 라벨이 동반된다.
+검색 불가(임베딩 미가용)면 빈 리스트(열화 동작). ticker 인자로 종목 범위 제한, None이면 코퍼스 횡단.
 
 ## 소유 계약 — NewsLabelStoragePort
 

@@ -1,9 +1,12 @@
 from datetime import datetime
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import DateTime, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from core.database import Base
+
+EMBEDDING_DIM = 1024  # bge-m3
 
 
 class NewsArticleOrm(Base):
@@ -21,6 +24,8 @@ class NewsArticleOrm(Base):
     published_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, index=True
     )
+    # 제목 임베딩(의미 검색용). 실패 시 NULL — 수집 우선, 다음 주기 자연 재시도(mail 패턴)
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

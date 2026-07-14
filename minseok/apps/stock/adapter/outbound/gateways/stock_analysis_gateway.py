@@ -38,4 +38,10 @@ class StockAnalysisGateway(StockAnalysisPort):
             support=analysis.support,
             resistance=analysis.resistance,
             headlines=analysis.headlines,
+            atr_pct=analysis.atr_pct,
+            bb_percent_b=analysis.bb_percent_b,
+            volume_ratio=analysis.volume_ratio,
+            obv_slope=analysis.obv_slope,
+            momentum_12_1=analysis.momentum_12_1,
+            reference_up_signal=analysis.reference_up_signal,
         )
