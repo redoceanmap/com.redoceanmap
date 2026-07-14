@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { Area } from "@/lib/mockApi";
 
 declare global {
   interface Window {
@@ -11,8 +10,11 @@ declare global {
 
 const KAKAO_SDK_URL = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${process.env.NEXT_PUBLIC_KAKAO_MAP_KEY}&autoload=false`;
 
+// 지도에 찍는 데 필요한 최소 형태 — Area(추천 카드)와 상권 조회 응답 모두 수용
+export type MapPin = { id: string; lat: number; lng: number };
+
 type Props = {
-  areas: Area[];
+  areas: MapPin[];
   selectedId: string | null;
   onSelect: (id: string) => void;
 };
@@ -44,7 +46,7 @@ export default function MapView({ areas, selectedId, onSelect }: Props) {
   onSelectRef.current = onSelect;
   selectedIdRef.current = selectedId;
 
-  function placeMarkers(map: any, list: Area[], currentSelectedId: string | null) {
+  function placeMarkers(map: any, list: MapPin[], currentSelectedId: string | null) {
     overlaysRef.current.forEach(({ overlay }) => overlay.setMap(null));
     overlaysRef.current = [];
 
@@ -103,6 +105,15 @@ export default function MapView({ areas, selectedId, onSelect }: Props) {
     if (!mapRef.current || areas.length === 0) return;
     placeMarkers(mapRef.current, areas, selectedIdRef.current);
   }, [areas]);
+
+  // 컨테이너 크기 변화(모바일 탭 전환 등) 시 지도 재배치
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => mapRef.current?.relayout());
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!mapRef.current) return;

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Plus, MessageSquare, MapPin, Bookmark, Zap, ScanEye, type LucideIcon } from "lucide-react";
+import { Plus, MessageSquare, MapPin, CandlestickChart, Zap, ScanEye, type LucideIcon } from "lucide-react";
 import Wordmark from "./Wordmark";
 import EmailModal from "./EmailModal";
 import { useUIStore } from "@/lib/uiStore";
@@ -18,15 +18,22 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { icon: Plus, label: "새로 물어보기", href: "/" },
-  { icon: MessageSquare, label: "지난 대화", href: "/" },
-  { icon: MapPin, label: "지도", href: "/map" },
-  { icon: Bookmark, label: "찜한 곳", href: "/" },
+  { icon: MessageSquare, label: "지난 대화", href: "/history" },
+  { icon: MapPin, label: "상권 분석", href: "/market" },
+  { icon: CandlestickChart, label: "주식 분석", href: "/stock" },
   {
     icon: ScanEye,
     label: "비전처리",
     href: "/vision",
     children: [{ label: "객체탐지", href: "/vision/detect" }],
   },
+];
+
+// 모바일 컴팩트 내비 — BottomTabBar 폐기 후 핵심 이동 경로만 아이콘으로
+const mobileNavItems = [
+  { icon: MapPin, label: "상권 분석", href: "/market" },
+  { icon: CandlestickChart, label: "주식 분석", href: "/stock" },
+  { icon: MessageSquare, label: "지난 대화", href: "/history" },
 ];
 
 export default function TopNav() {
@@ -82,7 +89,20 @@ export default function TopNav() {
 
       <EmailModal open={emailOpen} onClose={() => setEmailOpen(false)} />
 
-      <div className="ml-auto flex items-center gap-2">
+      <nav className="sm:hidden ml-auto flex items-center gap-0.5" aria-label="주요 화면">
+        {mobileNavItems.map(({ icon: Icon, label, href }) => (
+          <Link
+            key={label}
+            href={href}
+            aria-label={label}
+            className="w-9 h-9 grid place-items-center rounded-lg text-brand hover:bg-black/5 transition-colors"
+          >
+            <Icon size={18} strokeWidth={1.75} />
+          </Link>
+        ))}
+      </nav>
+
+      <div className="sm:ml-auto flex items-center gap-2">
         {user ? (
           <>
             <span className="text-sm text-foreground/80">{user.name}님</span>
