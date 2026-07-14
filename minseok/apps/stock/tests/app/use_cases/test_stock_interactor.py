@@ -37,5 +37,33 @@ async def test_analyze_returns_structured_analysis_without_trade_rec():
     assert result.direction in {"UP", "DOWN", "NEUTRAL"}
     assert result.support == 205.0 and result.resistance == 235.0
     assert result.headlines == ["strong earnings", "price target raised"]
+    # 신규 지표 노출 — 스텁 Indicators는 기본값이라 중립값 그대로 내려온다.
+    assert result.atr_pct == 0.0 and result.bb_percent_b == 0.5
+    assert result.volume_ratio == 1.0 and result.obv_slope == 0.0
+    assert result.momentum_12_1 == 0.0
+    assert result.reference_up_signal is False  # rsi 58·%B 0.5 — 참고 신호 조건 미달
     # 매매 추천이 아니라 방향 전망만 — 주문/수량 필드가 없다.
     assert not hasattr(result, "ordered")
+
+
+class _OversoldMarketData(_StubMarketData):
+    async def indicators(self, symbol):
+        # 과매도 + 밴드 하단 — 참고 신호(RSI+BB ±0.35) 발화 조건
+        return Indicators(
+            rsi=15.0, ma20=222.0, ma50=210.0, support=205.0, resistance=235.0, bb_percent_b=0.0,
+        )
+
+
+async def test_과매도_밴드하단이면_참고_신호가_켜진다():
+    interactor = StockInteractor(
+        market_data=_OversoldMarketData(),
+        sentiment=_StubSentiment(),
+        predictor=OutlookPredictor(),
+        config=AnalysisConfig.default(),
+    )
+    result = await interactor.analyze(Symbol("AAPL"))
+
+    assert result.reference_up_signal is True
+    # 참고 신호는 본 판정(기본 config + 감성)을 오염시키지 않는다.
+    assert result.direction in {"UP", "DOWN", "NEUTRAL"}
+    assert result.sentiment == 0.7

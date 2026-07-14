@@ -82,3 +82,15 @@ def test_volumes_없으면_거래량_지표는_중립값():
     ind = IndicatorCalculator().compute(closes, lows, highs)
     assert ind.volume_ratio == 1.0
     assert ind.obv_slope == 0.0
+
+
+def test_모멘텀_12_1은_1개월전_대비_12개월전_수익률():
+    closes, lows, highs = _series([float(100 + i) for i in range(260)])
+    ind = IndicatorCalculator().compute(closes, lows, highs)
+    assert ind.momentum_12_1 == pytest.approx(closes[-22] / closes[-253] - 1.0)
+
+
+def test_이력_253봉_미만이면_모멘텀_중립_0():
+    closes, lows, highs = _series([float(100 + i) for i in range(252)])
+    ind = IndicatorCalculator().compute(closes, lows, highs)
+    assert ind.momentum_12_1 == 0.0

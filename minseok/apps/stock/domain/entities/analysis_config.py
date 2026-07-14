@@ -19,8 +19,22 @@ class AnalysisConfig:
     w_trend: float = 0.2
     w_bb: float = 0.0        # 볼린저 %B 평균회귀 신호 가중치
     w_obv: float = 0.0       # OBV 수급 방향 신호 가중치
+    w_momentum: float = 0.0  # 12-1 모멘텀(추세 지속) 신호 가중치
     atr_veto: float | None = None  # ATR 비율이 이 값 초과면 관망(NEUTRAL) — 변동성 필터
+    volume_confirm: float | None = None  # volume_ratio가 이 값 미만이면 방향 신호를 관망으로 강등 — 거래량 확인 필터
 
     @classmethod
     def default(cls) -> "AnalysisConfig":
         return cls(up_threshold=0.3, down_threshold=-0.3)
+
+    @classmethod
+    def rsi_bb_reference(cls) -> "AnalysisConfig":
+        """참고 신호 전용 — 2026-07 재채점에서 인샘플·홀드아웃 양쪽 게이트를 통과한 유일 조합.
+
+        과매도(RSI)+밴드 하단(%B) 평균회귀 UP 신호. 감성 미사용(백테스트 검증 조건과 동일).
+        근거: _docs/BACKTEST_RESCORE_2026-07.md — 기본 가중치 승격은 금지, 참고 표시 전용.
+        """
+        return cls(
+            up_threshold=0.35, down_threshold=-0.35,
+            w_sentiment=0.0, w_rsi=0.5, w_trend=0.0, w_bb=0.5,
+        )

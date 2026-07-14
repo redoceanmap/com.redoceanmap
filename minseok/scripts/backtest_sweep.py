@@ -6,6 +6,7 @@
 
 사용:
   venv/bin/python minseok/scripts/backtest_sweep.py --period 5y --horizon 5
+  venv/bin/python minseok/scripts/backtest_sweep.py --period 10y --drop-last 1260  # 홀드아웃(최근 5y 제외)
 """
 
 import argparse
@@ -45,6 +46,10 @@ _FEATURE_SETS: dict[str, dict] = {
     "추세+OBV": dict(w_rsi=0.0, w_trend=0.5, w_bb=0.0, w_obv=0.5),
     "전체결합": dict(w_rsi=0.3, w_trend=0.2, w_bb=0.3, w_obv=0.2),
     "전체+ATR거부(4%)": dict(w_rsi=0.3, w_trend=0.2, w_bb=0.3, w_obv=0.2, atr_veto=0.04),
+    # 3차 재채점(2026-07-14) 추가 — 12-1 모멘텀 + 거래량 확인 필터
+    "MOM단독": dict(w_rsi=0.0, w_trend=0.0, w_bb=0.0, w_obv=0.0, w_momentum=1.0),
+    "RSI+BB+MOM": dict(w_rsi=0.4, w_trend=0.0, w_bb=0.4, w_obv=0.0, w_momentum=0.2),
+    "RSI+BB+VOL확인": dict(w_rsi=0.5, w_trend=0.0, w_bb=0.5, w_obv=0.0, volume_confirm=1.0),
 }
 _THRESHOLDS = [0.15, 0.25, 0.35]
 
@@ -72,6 +77,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="피처 조합 스윕 백테스트")
     parser.add_argument("--period", default="5y")
     parser.add_argument("--horizon", type=int, default=5)
+    parser.add_argument("--drop-last", type=int, default=0,
+                        help="각 종목 시계열 끝에서 제외할 거래일 수 — 홀드아웃 재현용 (1260 ≈ 최근 5y)")
     args = parser.parse_args()
 
     combos = build_configs()
@@ -84,19 +91,28 @@ def main() -> None:
         if history is None:
             print(f"[skip] {code}: 시세 없음", file=sys.stderr)
             continue
+        if args.drop_last > 0:
+            history = history.iloc[:-args.drop_last]
+        try:
+            reports = backtester.sweep(
+                closes=[float(v) for v in history["Close"]],
+                lows=[float(v) for v in history["Low"]],
+                highs=[float(v) for v in history["High"]],
+                volumes=[float(v) for v in history["Volume"]],
+                horizon=args.horizon,
+                configs=[c for _, c in combos],
+            )
+        except ValueError as e:
+            # 홀드아웃(drop-last)에서 상장 이력이 짧은 종목은 봉이 모자랄 수 있다
+            print(f"[skip] {code}: {e}", file=sys.stderr)
+            continue
         fetched += 1
-        reports = backtester.sweep(
-            closes=[float(v) for v in history["Close"]],
-            lows=[float(v) for v in history["Low"]],
-            highs=[float(v) for v in history["High"]],
-            volumes=[float(v) for v in history["Volume"]],
-            horizon=args.horizon,
-            configs=[c for _, c in combos],
-        )
         merged = [r if m is None else m.merged(r) for m, r in zip(merged, reports)]
         print(f"[{code} → {ticker}] {reports[0].evaluated}일 평가 완료", file=sys.stderr)
 
-    print(f"\n종목 {fetched}개 · {args.period} · horizon {args.horizon}일 — 집계 성적표\n")
+    drop_note = f" · drop-last {args.drop_last}" if args.drop_last else ""
+    print(f"\n종목 {fetched}개 · {args.period}{drop_note} · horizon {args.horizon}일 — 집계 성적표"
+          f" (비교 {len(combos)}조합 × 2방향 = {len(combos) * 2}회)\n")
     header = (
         f"{'조합':<28} {'UP n':>6} {'UP적중':>7} {'UP하한':>7} {'기준선':>7} {'판정':>4}"
         f" | {'DN n':>6} {'DN적중':>7} {'DN하한':>7} {'역기준':>7} {'판정':>4}"

@@ -32,7 +32,7 @@ def test_flat_signals_predict_neutral():
 def test_기본_config는_신규_피처를_무시한다():  # 기존 동작 보존 (가중치 0)
     extreme = Indicators(
         rsi=50.0, ma20=100.0, ma50=100.0, support=90.0, resistance=110.0,
-        bb_percent_b=0.0, obv_slope=1.0,  # 신규 신호가 강해도
+        bb_percent_b=0.0, obv_slope=1.0, momentum_12_1=1.0, volume_ratio=0.1,  # 신규 신호가 강해도
     )
     out = OutlookPredictor().predict(extreme, SentimentScore(0.0), AnalysisConfig.default())
     assert out.direction is Direction.NEUTRAL
@@ -53,6 +53,44 @@ def test_obv_가중치를_주면_수급_순증에서_상승_신호():
         rsi=50.0, ma20=100.0, ma50=100.0, support=90.0, resistance=110.0, obv_slope=1.0,
     )
     out = OutlookPredictor().predict(ind, SentimentScore(0.0), config)
+    assert out.direction is Direction.UP
+
+
+def test_momentum_가중치를_주면_강한_상승_모멘텀에서_상승_신호():
+    config = AnalysisConfig(up_threshold=0.3, down_threshold=-0.3, w_momentum=0.5)
+    ind = Indicators(
+        rsi=50.0, ma20=100.0, ma50=100.0, support=90.0, resistance=110.0, momentum_12_1=1.0,
+    )
+    out = OutlookPredictor().predict(ind, SentimentScore(0.0), config)
+    assert out.direction is Direction.UP
+
+
+def test_volume_confirm_미달이면_방향_신호를_관망으로_강등():
+    config = AnalysisConfig(up_threshold=0.3, down_threshold=-0.3, w_bb=1.0, volume_confirm=1.0)
+    ind = Indicators(
+        rsi=50.0, ma20=100.0, ma50=100.0, support=90.0, resistance=110.0,
+        bb_percent_b=0.0, volume_ratio=0.5,  # 강한 UP 신호 + 거래량 평소의 절반
+    )
+    out = OutlookPredictor().predict(ind, SentimentScore(0.0), config)
+    assert out.direction is Direction.NEUTRAL
+    assert out.confidence == 0.0
+
+
+def test_volume_confirm_충족이면_방향_유지():
+    config = AnalysisConfig(up_threshold=0.3, down_threshold=-0.3, w_bb=1.0, volume_confirm=1.0)
+    ind = Indicators(
+        rsi=50.0, ma20=100.0, ma50=100.0, support=90.0, resistance=110.0,
+        bb_percent_b=0.0, volume_ratio=1.2,
+    )
+    out = OutlookPredictor().predict(ind, SentimentScore(0.0), config)
+    assert out.direction is Direction.UP
+
+
+def test_rsi_bb_reference_config는_과매도_밴드하단에서_up():
+    ind = Indicators(
+        rsi=20.0, ma20=100.0, ma50=100.0, support=90.0, resistance=110.0, bb_percent_b=0.0,
+    )
+    out = OutlookPredictor().predict(ind, SentimentScore(0.0), AnalysisConfig.rsi_bb_reference())
     assert out.direction is Direction.UP
 
 

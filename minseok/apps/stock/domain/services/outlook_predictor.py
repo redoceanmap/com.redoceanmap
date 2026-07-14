@@ -12,6 +12,7 @@ class OutlookPredictor:
     결정론적 스코어링만 한다(매매 추천 아님). 종합 점수는 config 가중치로 신호를
     합산해 -1.0 ~ 1.0 로 정규화한 뒤 임계값으로 방향을 판정한다.
     atr_veto가 설정되면 변동성(ATR 비율)이 그보다 클 때 관망(NEUTRAL)한다.
+    volume_confirm이 설정되면 거래량(volume_ratio)이 그보다 작을 때 방향 신호를 관망으로 강등한다.
     """
 
     def predict(
@@ -29,14 +30,27 @@ class OutlookPredictor:
             + config.w_trend * self._trend_signal(indicators)
             + config.w_bb * self._bb_signal(indicators.bb_percent_b)
             + config.w_obv * self._obv_signal(indicators.obv_slope)
+            + config.w_momentum * self._momentum_signal(indicators.momentum_12_1)
         )
         score = max(-1.0, min(1.0, score))
         confidence = min(abs(score), 1.0)
         if score >= config.up_threshold:
-            return Outlook(direction=Direction.UP, confidence=confidence)
+            return self._confirmed(Direction.UP, confidence, indicators, config)
         if score <= config.down_threshold:
-            return Outlook(direction=Direction.DOWN, confidence=confidence)
+            return self._confirmed(Direction.DOWN, confidence, indicators, config)
         return Outlook(direction=Direction.NEUTRAL, confidence=confidence)
+
+    @staticmethod
+    def _confirmed(
+        direction: Direction,
+        confidence: float,
+        indicators: Indicators,
+        config: AnalysisConfig,
+    ) -> Outlook:
+        # 거래량 확인 필터: 평소 대비 거래량이 임계 미만이면 방향 신호를 못 믿고 관망으로 강등
+        if config.volume_confirm is not None and indicators.volume_ratio < config.volume_confirm:
+            return Outlook(direction=Direction.NEUTRAL, confidence=0.0)
+        return Outlook(direction=direction, confidence=confidence)
 
     @staticmethod
     def _rsi_signal(rsi: float) -> float:
@@ -63,3 +77,8 @@ class OutlookPredictor:
     def _obv_signal(obv_slope: float) -> float:
         # 수급 방향 추종: OBV 순증 +, 순감 -. (계산기에서 대체로 -1~1로 정규화됨)
         return max(-1.0, min(1.0, obv_slope))
+
+    @staticmethod
+    def _momentum_signal(momentum_12_1: float) -> float:
+        # 추세 지속 기대: 12-1 수익률 +25%면 0.5, ±50%에서 포화. (이력 부족 폴백 0.0 = 중립과 일치)
+        return max(-1.0, min(1.0, momentum_12_1 * 2.0))

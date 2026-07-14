@@ -8,8 +8,10 @@ from stock.app.ports.output.market_data_port import MarketDataPort
 from stock.app.ports.output.news_repository import NewsRepositoryPort
 from stock.app.ports.output.sentiment_port import SentimentPort
 from stock.domain.entities.analysis_config import AnalysisConfig
+from stock.domain.entities.outlook import Direction
 from stock.domain.services.outlook_predictor import OutlookPredictor
 from stock.domain.value_objects.market_values import Symbol
+from stock.domain.value_objects.sentiment_score import SentimentScore
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +45,10 @@ class StockInteractor(StockUseCase):
 
         sentiment = await self._sentiment.analyze(headlines)                    # LLM(EXAONE)
         outlook = self._predictor.predict(indicators, sentiment, self._config)  # 순수
+        # 참고 신호: 백테스트 검증(인샘플+홀드아웃) 통과 조합 — 채점 조건(감성 중립) 그대로 재현
+        reference = self._predictor.predict(
+            indicators, SentimentScore(value=0.0), AnalysisConfig.rsi_bb_reference()
+        )
 
         logger.info(
             "[stock] %s price=%.2f rsi=%.1f sentiment=%.2f → %s(%.2f)",
@@ -61,6 +67,12 @@ class StockInteractor(StockUseCase):
             ma50=indicators.ma50,
             support=indicators.support,
             resistance=indicators.resistance,
+            atr_pct=indicators.atr_pct,
+            bb_percent_b=indicators.bb_percent_b,
+            volume_ratio=indicators.volume_ratio,
+            obv_slope=indicators.obv_slope,
+            momentum_12_1=indicators.momentum_12_1,
+            reference_up_signal=reference.direction is Direction.UP,
             headlines=headlines,
         )
 

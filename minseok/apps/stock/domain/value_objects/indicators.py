@@ -16,6 +16,7 @@ class Indicators:
     bb_percent_b: float = 0.5   # 볼린저 %B (0=하단 밴드, 1=상단 밴드, 범위 밖 가능)
     volume_ratio: float = 1.0   # 최근 5일 평균 거래량 / 최근 20일 평균 (1.0 = 평소 수준)
     obv_slope: float = 0.0      # OBV 20일 변화 / 20일 평균 거래량 — 수급 방향(-∞~∞, 대체로 ±수 단위)
+    momentum_12_1: float = 0.0  # 12-1 모멘텀: 12개월 전 → 1개월 전 수익률 (이력 253봉 미만이면 중립 0.0)
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.rsi <= 100.0:

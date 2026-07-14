@@ -12,6 +12,8 @@ BB_STDDEV = 2.0
 VOLUME_SHORT = 5
 VOLUME_LONG = 20
 OBV_WINDOW = 20
+MOMENTUM_LOOKBACK = 252  # 12개월(거래일)
+MOMENTUM_SKIP = 21       # 최근 1개월 제외 — 단기 반전 효과 회피(Jegadeesh-Titman 12-1 표준)
 
 
 class IndicatorCalculator:
@@ -35,6 +37,9 @@ class IndicatorCalculator:
         if volumes is not None and len(volumes) >= VOLUME_LONG + 1:
             volume_ratio = self._volume_ratio(volumes)
             obv_slope = self._obv_slope(closes, volumes)
+        momentum_12_1 = 0.0
+        if len(closes) >= MOMENTUM_LOOKBACK + 1:
+            momentum_12_1 = self._momentum_12_1(closes)
         return Indicators(
             rsi=self._rsi(closes, RSI_PERIOD),
             ma20=self._sma(closes, MA_SHORT),
@@ -45,6 +50,7 @@ class IndicatorCalculator:
             bb_percent_b=self._bb_percent_b(closes, BB_PERIOD, BB_STDDEV),
             volume_ratio=volume_ratio,
             obv_slope=obv_slope,
+            momentum_12_1=momentum_12_1,
         )
 
     @staticmethod
@@ -90,6 +96,12 @@ class IndicatorCalculator:
         lower = mid - stddev * sd
         upper = mid + stddev * sd
         return (closes[-1] - lower) / (upper - lower)
+
+    @staticmethod
+    def _momentum_12_1(closes: list[float]) -> float:
+        # 12개월 전 종가 대비 1개월 전 종가 수익률. closes[-1]이 오늘(t)이므로 인덱스는 +1 보정
+        base = closes[-(MOMENTUM_LOOKBACK + 1)]
+        return closes[-(MOMENTUM_SKIP + 1)] / base - 1.0 if base > 0 else 0.0
 
     @staticmethod
     def _volume_ratio(volumes: list[float]) -> float:

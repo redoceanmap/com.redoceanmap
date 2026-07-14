@@ -14,7 +14,7 @@ from stock.domain.value_objects.market_values import Price, Symbol
 
 logger = logging.getLogger(__name__)
 
-HISTORY_PERIOD = "6mo"
+HISTORY_PERIOD = "2y"  # 12-1 모멘텀에 최소 253거래일 필요 — 6mo면 모멘텀이 항상 중립
 MAX_HEADLINES = 5
 
 
