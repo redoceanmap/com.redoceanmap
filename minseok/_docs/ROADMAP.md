@@ -14,7 +14,7 @@
 |---|---------|------|------|------|
 | M1 | **인증 가드 전면 적용 + 리프레시 토큰** — 전 라우터 JWT Depends(공개 화이트리스트 방식), 검증 의존성은 core/허브 포트 경유(스포크→auth import 금지) | auth 확장 + main.py 주입 | 2-3일 | 미인증 401 전수, 갱신 플로우 테스트 |
 | M2 | ~~stock 피처 확장 + 백테스트 재채점~~ — **완료(2026-07-13~14)**. 2차(ATR·%B·거래량비·OBV) + 3차(12-1 모멘텀·거래량 확인 필터) 재채점. RSI+BB+MOM ±0.35 UP이 최우수 검증 신호(인샘플 하한 +3.5%p·홀드아웃 +0.9%p). 확률 제시는 계속 보류 → [[minseok/apps/stock/_docs/BACKTEST_RESCORE_2026-07\|RESCORE]] | stock 내부 | - | ✅ 성적표 문서화 |
-| M3 | **market 시계열·스코어링 v1** — 분기 추이(QoQ 매출/유동인구 변화율) + 시도 벤치마크 대비 상권 종합점수. 2025년 4개 분기 기적재 데이터 활용 → [[minseok/apps/market/_docs/MARKET_ERD\|MARKET_ERD]] | market 내부 (새 스포크 아님) | 4-6일 | 스코어링 순수 도메인 서비스 단위 테스트 + market 테스트 공백 해소 |
+| M3 | ~~market 시계열·스코어링 v1~~ — **완료(2026-07-15)**. `area_score` 수직 슬라이스: `GET /market/trdar/{code}/score` = 분기 추이(전 업종 합계 매출·유동인구 QoQ) + 시도 벤치마크 대비 종합점수(매출 성장·유동인구 성장·개폐업 건강도·영업 지속성 4컴포넌트, 순수 도메인 서비스 `area_scorer.py`) → [[minseok/apps/market/_docs/CLAUDE\|market CLAUDE]] | market 내부 (새 스포크 아님) | - | ✅ 스코어러 단위 테스트 18종 + 인터랙터 5종 (market 30 passed) + 실 DB 검증 |
 | M4 | **뉴스 수집 상시화** — `scripts/collect_news.py`를 우분투 PC cron/systemd timer 등록, 실패 로그 | scripts/ + 운영 설정 | 2-3일 | 7일 연속 무중단 수집 |
 | M5 | ~~chat 실데이터 결합 (핵심 가치)~~ — **종목 측 완료(2026-07-14)**. 지표 9종 의미 해석 + 검증 참고 신호 + 뉴스 RAG(bge-m3·pgvector, 허브 NewsSearchPort) 주입, phase0 3분류(stock/market_news/market), chat_interactor 테스트 13종 신설, E2E 종목·업황 통과. **상권 근거 주입은 잔여** — M3 스코어링 선행 필요 | chat 확장 | - | ✅ 테스트 13종 + E2E 3/3 (상권 데이터 재적재 후 전 경로 통과) |
 | M6 | **프론트-백엔드 정합** — /vision/detect↔/vision/faces 통일, marketApi dead code 처리, M5 결과 UI 노출 | www + 라우터 | 2-3일 | 로그인→대화→지도→종목분석 전 구간 수동 통과 |

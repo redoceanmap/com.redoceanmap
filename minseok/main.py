@@ -43,6 +43,7 @@ from hub.dependencies.recommendation_record_provider import get_recommendation_r
 from hub.dependencies.stock_analysis_provider import get_stock_analysis_port
 from market.dependencies.commercial_data_provider import get_commercial_data_gateway
 from market.adapter.inbound.api.v1.area_router import area_router
+from market.adapter.inbound.api.v1.area_score_router import area_score_router
 from market.adapter.inbound.api.v1.area_stats_router import area_stats_router
 from market.adapter.inbound.api.v1.cartographer_router import cartographer_router
 from stock.adapter.inbound.api.v1.analyst_router import analyst_router
@@ -96,6 +97,7 @@ app.include_router(dispatcher_router)
 app.include_router(chat_router, dependencies=_authenticated)
 app.include_router(concierge_router, dependencies=_authenticated)
 app.include_router(area_router, dependencies=_authenticated)
+app.include_router(area_score_router, dependencies=_authenticated)
 app.include_router(area_stats_router, dependencies=_authenticated)
 app.include_router(cartographer_router, dependencies=_authenticated)
 app.include_router(stock_router, dependencies=_authenticated)
