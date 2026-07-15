@@ -2,7 +2,13 @@ import json
 import logging
 import re
 
-from chat.app.dtos.chat_dto import AreaRecommendation, AreaStats, AskResponse, StockCard
+from chat.app.dtos.chat_dto import (
+    AreaRecommendation,
+    AreaStats,
+    AskResponse,
+    NewsCardItem,
+    StockCard,
+)
 from chat.app.exceptions import (
     CommercialDataUnavailableError,
     ConversationNotFoundError,
@@ -474,8 +480,22 @@ class ChatInteractor(ChatUseCase):
         context = self._format_news_context(prompt, hits)
         # 최종 서술(최종 사용자 답변) → 오케스트레이터 기본 모델(7.8B)
         text = await llm_orchestrator.orchestrate(f"{MARKET_NEWS_ANSWER_PROMPT}\n\n{context}")
-        await self._conversations.add_message(conversation_id, "assistant", text)
-        return AskResponse(text=text, recommendations=[], conversationId=conversation_id)
+        news = [
+            NewsCardItem(
+                title=h.title,
+                publishedAt=f"{h.published_at:%Y-%m-%d}" if h.published_at else None,
+                ticker=h.ticker,
+                sentiment=h.sentiment,
+                eventType=h.event_type,
+            )
+            for h in hits
+        ]
+        # 근거 뉴스 카드를 payload로 동반 저장 — 히스토리 재진입 시 카드 복원용(stock 카드와 동일 규칙)
+        payload = {"news": [n.model_dump() for n in news]} if news else None
+        await self._conversations.add_message(conversation_id, "assistant", text, payload=payload)
+        return AskResponse(
+            text=text, recommendations=[], conversationId=conversation_id, news=news,
+        )
 
     @staticmethod
     def _format_news_context(prompt: str, hits: list[NewsHit]) -> str:

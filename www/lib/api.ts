@@ -1,5 +1,6 @@
 import { authHeader } from "./tokenStorage";
 import type {
+  AreaScoreDetail,
   AreaStatsDetail,
   ConversationMessage,
   ConversationSummary,
@@ -56,8 +57,8 @@ export const fetchFundamentals = (symbol: string): Promise<Fundamentals> =>
 export const fetchAreaStats = (trdarCode: string | number): Promise<AreaStatsDetail> =>
   getJson(`/market/trdar/${trdarCode}/stats`);
 
-export const fetchMarketAreas = (district?: string): Promise<MarketArea[]> =>
-  getJson(`/market/areas${district ? `?district=${encodeURIComponent(district)}` : ""}`);
+export const fetchAreaScore = (trdarCode: string | number): Promise<AreaScoreDetail> =>
+  getJson(`/market/trdar/${trdarCode}/score`);
 
 export const fetchAreaInfo = (trdarCode: string | number): Promise<MarketArea> =>
   getJson(`/market/trdar/${trdarCode}/area`);

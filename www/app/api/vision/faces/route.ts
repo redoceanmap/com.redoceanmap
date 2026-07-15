@@ -23,7 +23,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(await res.json());
   } catch (error) {
-    console.error("Vision Detect API Error:", error);
+    console.error("Vision Faces API Error:", error);
     return NextResponse.json({ error: "서버 오류가 발생했습니다." }, { status: 500 });
   }
 }

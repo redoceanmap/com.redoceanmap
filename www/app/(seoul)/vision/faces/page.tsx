@@ -22,7 +22,7 @@ type DetectState = {
   error: string | null;
 };
 
-export default function VisionDetectPage() {
+export default function VisionFacesPage() {
   // REACT_RULES 패턴 B: dragOver·detecting·previewUrl·result·error 객체로 압축
   const [state, setState] = useState<DetectState>({
     dragOver: false,
@@ -46,7 +46,7 @@ export default function VisionDetectPage() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const res = await fetch("/api/vision/detect", { method: "POST", headers: authHeader(), body: formData });
+      const res = await fetch("/api/vision/faces", { method: "POST", headers: authHeader(), body: formData });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "얼굴 인식에 실패했어요.");
       setState((prev) => ({ ...prev, detecting: false, result: data }));
@@ -73,7 +73,7 @@ export default function VisionDetectPage() {
         <div>
           <div className="flex items-center gap-2 text-brand mb-2">
             <ScanSearch size={18} strokeWidth={1.75} />
-            <span className="text-sm font-medium">비전처리 · 객체탐지</span>
+            <span className="text-sm font-medium">비전처리 · 얼굴 인식</span>
           </div>
           <h1 className="text-2xl font-semibold">얼굴 사진을 올려주세요</h1>
           <p className="text-sm text-foreground-muted mt-1">

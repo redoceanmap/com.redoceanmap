@@ -364,6 +364,32 @@ async def test_텍스트만인_답변은_payload가_없다(monkeypatch):
     assert stubs["conversations"].payloads[-1] is None
 
 
+async def test_market_news_답변은_뉴스_카드를_응답과_payload에_동반한다(monkeypatch):
+    news = _StubNewsSearch(hits=[_hit()])
+    interactor, _, stubs = _build(
+        monkeypatch, [INTENT_MARKET_NEWS, "업황 서술"], news=news,
+    )
+    result = await interactor.ask("반도체 업황 어때?")
+
+    assert len(result.news) == 1
+    card = result.news[0]
+    assert card.title == "반도체 업황 회복 조짐"
+    assert card.ticker == "005930.KS"
+    assert card.publishedAt == f"{_NOW:%Y-%m-%d}"
+    assert card.sentiment == 0.7 and card.eventType == "실적"
+
+    assistant_payload = stubs["conversations"].payloads[-1]
+    assert assistant_payload is not None
+    assert assistant_payload["news"][0]["title"] == "반도체 업황 회복 조짐"
+
+
+async def test_market_news_히트가_없으면_뉴스_카드도_비어있다(monkeypatch):
+    interactor, _, stubs = _build(monkeypatch, [INTENT_MARKET_NEWS, "부재 안내"])
+    result = await interactor.ask("업황 어때?")
+    assert result.news == []
+    assert stubs["conversations"].payloads[-1] is None
+
+
 async def test_남의_대화_메시지는_미존재와_같은_예외를_낸다(monkeypatch):
     conversations = _StubConversations(
         conversation=Conversation(id=200, created_at=_NOW, user_id=1),

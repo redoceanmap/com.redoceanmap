@@ -16,7 +16,7 @@ face_recognition_router = APIRouter(prefix="/vision", tags=["vision"])
 
 
 @face_recognition_router.post(
-    "/faces", response_model=FaceRecognitionResponseSchema, summary="얼굴 인식 — 객체탐지",
+    "/faces", response_model=FaceRecognitionResponseSchema, summary="얼굴 인식",
 )
 async def recognize_face(
     file: UploadFile = File(...),

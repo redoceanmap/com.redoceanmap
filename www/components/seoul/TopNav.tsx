@@ -25,7 +25,7 @@ const navItems: NavItem[] = [
     icon: ScanEye,
     label: "비전처리",
     href: "/vision",
-    children: [{ label: "객체탐지", href: "/vision/detect" }],
+    children: [{ label: "얼굴 인식", href: "/vision/faces" }],
   },
 ];
 

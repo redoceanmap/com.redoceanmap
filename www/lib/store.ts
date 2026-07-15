@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Area, ConversationMessage, StockAnalysis } from "./types";
+import type { Area, ConversationMessage, NewsCardItem, StockAnalysis } from "./types";
 import { fetchConversationMessages } from "./api";
 import { authHeader } from "./tokenStorage";
 
@@ -11,6 +11,7 @@ export type Message = {
   content: string;
   recommendations?: Area[];
   stock?: StockAnalysis;
+  news?: NewsCardItem[];
 };
 
 type ChatState = {
@@ -50,6 +51,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         recommendations: Area[];
         conversationId: number;
         stock?: StockAnalysis | null;
+        news?: NewsCardItem[];
       } = await res.json();
 
       const aiMsg: Message = {
@@ -58,6 +60,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         content: data.text,
         recommendations: data.recommendations,
         stock: data.stock ?? undefined,
+        news: data.news?.length ? data.news : undefined,
       };
       set((s) => ({
         messages: [...s.messages, aiMsg],
@@ -86,6 +89,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         content: m.content,
         recommendations: m.payload?.recommendations,
         stock: m.payload?.stock,
+        news: m.payload?.news,
       }));
       const lastRecommendations =
         [...raw].reverse().find((m) => m.payload?.recommendations?.length)?.payload

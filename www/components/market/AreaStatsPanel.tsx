@@ -1,9 +1,10 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, Store, TrendingUp, Users } from "lucide-react";
+import { BarChart3, Gauge, Store, TrendingUp, Users } from "lucide-react";
 import { fetchAreaStats } from "@/lib/api";
 import type { QuarterStat } from "@/lib/types";
+import AreaScoreCard from "./AreaScoreCard";
 import SalesTrendChart from "./SalesTrendChart";
 import PopulationCharts from "./PopulationCharts";
 import StorePanel from "./StorePanel";
@@ -69,6 +70,10 @@ export default function AreaStatsPanel({ trdarCode }: { trdarCode: string }) {
           </p>
         )}
       </div>
+
+      <Section icon={Gauge} title="상권 종합점수">
+        <AreaScoreCard trdarCode={trdarCode} />
+      </Section>
 
       <Section icon={TrendingUp} title="분기 매출 추이">
         <SalesTrendChart series={data.series} />

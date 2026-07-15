@@ -17,7 +17,7 @@
 | M3 | ~~market 시계열·스코어링 v1~~ — **완료(2026-07-15)**. `area_score` 수직 슬라이스: `GET /market/trdar/{code}/score` = 분기 추이(전 업종 합계 매출·유동인구 QoQ) + 시도 벤치마크 대비 종합점수(매출 성장·유동인구 성장·개폐업 건강도·영업 지속성 4컴포넌트, 순수 도메인 서비스 `area_scorer.py`) → [[minseok/apps/market/_docs/CLAUDE\|market CLAUDE]] | market 내부 (새 스포크 아님) | - | ✅ 스코어러 단위 테스트 18종 + 인터랙터 5종 (market 30 passed) + 실 DB 검증 |
 | M4 | **뉴스 수집 상시화** — `scripts/collect_news.py`를 우분투 PC cron/systemd timer 등록, 실패 로그 | scripts/ + 운영 설정 | 2-3일 | 7일 연속 무중단 수집 |
 | M5 | ~~chat 실데이터 결합 (핵심 가치)~~ — **종목 측 완료(2026-07-14)**. 지표 9종 의미 해석 + 검증 참고 신호 + 뉴스 RAG(bge-m3·pgvector, 허브 NewsSearchPort) 주입, phase0 3분류(stock/market_news/market), chat_interactor 테스트 13종 신설, E2E 종목·업황 통과. **상권 근거 주입은 잔여** — M3 스코어링 선행 필요 | chat 확장 | - | ✅ 테스트 13종 + E2E 3/3 (상권 데이터 재적재 후 전 경로 통과) |
-| M6 | **프론트-백엔드 정합** — /vision/detect↔/vision/faces 통일, marketApi dead code 처리, M5 결과 UI 노출 | www + 라우터 | 2-3일 | 로그인→대화→지도→종목분석 전 구간 수동 통과 |
+| M6 | ~~프론트-백엔드 정합~~ — **구현 완료(2026-07-15)**. ① vision `faces`로 통일(프론트 페이지·BFF·내비를 백엔드 도메인어에 맞춤, 실체가 얼굴 인식이므로), ② `fetchMarketAreas` dead code 삭제 + M3 스코어 API 프론트 연결(`AreaScoreCard`, 자료 패널), ③ 채팅 종목 카드에 신규 6필드 지표 그리드·검증 신호 배지·감성 노출, ④ market_news 뉴스 근거 카드 신설(백엔드 `AskResponse.news`+payload 저장 → 프론트 렌더·히스토리 복원) | www + 라우터 | - | ✅ 백엔드 159 테스트(신규 2)·계약 5 KEPT·tsc 0 에러·페이지 컴파일 전수 200. **배포 후 로그인→대화→지도→종목분석 수동 전 구간 통과 남음** |
 
 ## Phase ② 취업 포트폴리오 품질 (~15-20일)
 

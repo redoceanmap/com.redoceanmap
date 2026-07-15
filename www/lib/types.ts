@@ -165,6 +165,44 @@ export type AreaStatsDetail = {
   };
 };
 
+// ── GET /market/trdar/{code}/score ──
+
+export type ScoreComponent = {
+  key: "sales_growth" | "floating_growth" | "store_health" | "persistence";
+  name: string;
+  score: number; // 0~100 — 50이 시도 벤치마크 동률
+  value: number;
+  benchmark: number;
+};
+
+export type AreaScoreDetail = {
+  trdarCode: number;
+  trdarName: string;
+  districtName: string;
+  score: {
+    total: number;
+    grade: string; // 우수 / 양호 / 보통 / 주의 / 위험
+    components: ScoreComponent[];
+  } | null;
+  trend: {
+    yearQuarter: number;
+    monthlySales: number | null;
+    salesQoq: number | null; // 직전 분기 대비 %
+    totalFloatingPop: number | null;
+    floatingQoq: number | null;
+  }[];
+};
+
+// ── 채팅 응답: market_news 뉴스 근거 카드 ──
+
+export type NewsCardItem = {
+  title: string;
+  publishedAt: string | null; // YYYY-MM-DD
+  ticker: string | null;
+  sentiment: number | null; // -1 ~ +1
+  eventType: string | null;
+};
+
 // ── GET /chat/conversations ──
 
 export type ConversationSummary = {
@@ -176,7 +214,7 @@ export type ConversationSummary = {
 export type ConversationMessage = {
   role: "user" | "assistant";
   content: string;
-  payload: { recommendations?: Area[]; stock?: StockAnalysis } | null;
+  payload: { recommendations?: Area[]; stock?: StockAnalysis; news?: NewsCardItem[] } | null;
   createdAt: string;
 };
 

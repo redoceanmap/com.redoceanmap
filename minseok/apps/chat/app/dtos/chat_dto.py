@@ -50,8 +50,19 @@ class StockCard(BaseModel):
     referenceUpSignal: bool = False # 백테스트 검증 통과 참고 신호 — 확률 아님
 
 
+class NewsCardItem(BaseModel):
+    """market_news 답변에 곁들이는 뉴스 근거 카드 1건(프론트 렌더링용)."""
+
+    title: str
+    publishedAt: str | None  # YYYY-MM-DD (발행일 미상이면 None)
+    ticker: str | None       # 종목 무관 뉴스면 None
+    sentiment: float | None  # -1 ~ +1 (라벨 없으면 None)
+    eventType: str | None
+
+
 class AskResponse(BaseModel):
     text: str
     recommendations: list[AreaRecommendation]
     conversationId: int
     stock: StockCard | None = None
+    news: list[NewsCardItem] = []

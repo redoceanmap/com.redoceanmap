@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { ArrowUpRight, TrendingDown, TrendingUp, Minus } from "lucide-react";
 import { useChatStore } from "@/lib/store";
-import type { Area, StockAnalysis } from "@/lib/types";
+import type { Area, NewsCardItem, StockAnalysis } from "@/lib/types";
 import ChatInput from "@/components/seoul/ChatInput";
 
 const DIRECTION_META = {
@@ -112,6 +112,8 @@ export default function ChatPanel({
                   )
                 )}
 
+                {m.news && m.news.length > 0 && <NewsEvidenceList items={m.news} />}
+
                 {m.recommendations && m.recommendations.length > 0 && (
                   workspace === "market" ? (
                     <div className="mt-3 flex flex-col gap-2">
@@ -172,9 +174,24 @@ export default function ChatPanel({
   );
 }
 
+const fmtNum = (v: number, digits = 2) =>
+  v.toLocaleString("ko-KR", { maximumFractionDigits: digits });
+
 function StockSummaryCard({ stock, onClick }: { stock: StockAnalysis; onClick: () => void }) {
   const meta = DIRECTION_META[stock.direction] ?? DIRECTION_META.NEUTRAL;
   const DirectionIcon = meta.icon;
+  // 신규 6필드는 optional(구버전 히스토리 payload 호환) — 있을 때만 지표 그리드 렌더
+  const indicators: [string, string][] | null =
+    stock.atrPct !== undefined
+      ? [
+          ["RSI", fmtNum(stock.rsi, 1)],
+          ["볼린저 %B", fmtNum(stock.bbPercentB ?? 0.5)],
+          ["거래량비", `${fmtNum(stock.volumeRatio ?? 1)}x`],
+          ["12-1 모멘텀", `${fmtNum((stock.momentum12To1 ?? 0) * 100, 1)}%`],
+          ["ATR (변동성)", `${fmtNum(stock.atrPct * 100, 1)}%`],
+          ["OBV 기울기", fmtNum(stock.obvSlope ?? 0, 3)],
+        ]
+      : null;
   return (
     <button
       type="button"
@@ -193,7 +210,50 @@ function StockSummaryCard({ stock, onClick }: { stock: StockAnalysis; onClick: (
           {meta.label} {Math.round(stock.confidence * 100)}%
         </span>
       </div>
+      {indicators && (
+        <div className="mt-2.5 grid grid-cols-3 gap-1.5">
+          {indicators.map(([label, value]) => (
+            <div key={label} className="rounded-lg bg-background/60 border border-border px-2 py-1.5">
+              <div className="text-[10px] text-foreground-muted">{label}</div>
+              <div className="text-xs font-semibold mt-0.5">{value}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+        {stock.referenceUpSignal && (
+          <span className="inline-flex px-2 py-0.5 rounded-full bg-red-50 border border-red-200 text-red-600 text-[10px] font-medium">
+            백테스트 검증 참고 신호
+          </span>
+        )}
+        {stock.sentimentLabel && (
+          <span className="text-[11px] text-foreground-muted">뉴스 감성 {stock.sentimentLabel}</span>
+        )}
+      </div>
       <p className="mt-2 text-[11px] text-foreground-muted">차트에 반영하려면 클릭</p>
     </button>
   );
+}
+
+function NewsEvidenceList({ items }: { items: NewsCardItem[] }) {
+  return (
+    <div className="mt-3 flex flex-col gap-1.5">
+      <p className="text-[11px] font-medium text-foreground-muted">근거 뉴스 {items.length}건</p>
+      {items.map((n, i) => (
+        <div key={i} className="bg-surface border border-border rounded-xl px-3 py-2">
+          <p className="text-xs font-medium leading-snug">{n.title}</p>
+          <p className="text-[11px] text-foreground-muted mt-0.5">
+            {n.publishedAt ?? "날짜 미상"} · {n.ticker ?? "종목 무관"} · {sentimentText(n)}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function sentimentText(n: NewsCardItem): string {
+  if (n.sentiment === null) return n.eventType ?? "라벨 없음";
+  const direction = n.sentiment > 0 ? "호재" : n.sentiment < 0 ? "악재" : "중립";
+  const label = `${direction} ${n.sentiment > 0 ? "+" : ""}${n.sentiment.toFixed(1)}`;
+  return n.eventType ? `${label} · ${n.eventType}` : label;
 }
