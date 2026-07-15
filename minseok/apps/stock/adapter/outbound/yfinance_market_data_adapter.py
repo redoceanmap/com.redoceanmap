@@ -75,6 +75,9 @@ class YFinanceMarketDataAdapter(MarketDataPort):
     def _fetch_history(self, code: str) -> tuple[str, Any]:
         for ticker in yahoo_candidates(code):
             history = yf.Ticker(ticker).history(period=HISTORY_PERIOD, auto_adjust=True)
+            # 야후가 간헐적으로 미완성 행(NaN)을 끼워 보낸다 — 한 행만 섞여도
+            # RSI 등 지표 전체가 NaN이 되어 검증에 걸리므로 여기서 걸러낸다.
+            history = history.dropna(subset=["Close", "Low", "High", "Volume"])
             if not history.empty:
                 logger.info("[yfinance] %s → %s (%d행)", code, ticker, len(history))
                 return ticker, history
