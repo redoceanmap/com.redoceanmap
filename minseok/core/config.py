@@ -24,3 +24,7 @@ N8N_OUTBOUND_TOKEN = os.getenv("N8N_OUTBOUND_TOKEN", "")
 # vision 업로드 이미지를 저장할 S3 버킷 (자격 증명은 boto3 기본 체인 — .env의 AWS_* 키).
 VISION_S3_BUCKET = os.getenv("VISION_S3_BUCKET", "")
 AWS_REGION = os.getenv("AWS_REGION", "ap-northeast-2")
+
+# Google Gemini API (허브 gemini 슬라이스 — 외부 LLM 답변). 비어 있으면 호출 시 계약 예외.
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
