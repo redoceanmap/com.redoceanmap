@@ -20,5 +20,5 @@ class ConciergeInteractor(ConciergeUseCase):
         return ConciergeResponse(
             id=query.id,
             name=query.name,
-            introduction="대화로 분석을 제공합니다. POST /chat/ask는 질문 의도를 분류해(phase0, 2.4B) 상권 질문은 2단계 추론으로 추천을, 주식 질문은 허브 StockAnalysisPort로 분석 카드를 반환하고, POST /chat/stream은 SSE로 토큰 스트리밍합니다. 대화는 conversations/messages에 보존됩니다.",
+            introduction="대화로 분석을 제공합니다. POST /chat/ask는 질문 의도를 분류해(phase0) 상권 질문은 2단계 추론으로 추천을, 주식 질문은 허브 StockAnalysisPort로 분석 카드를 반환하고, POST /chat/stream은 SSE로 토큰 스트리밍합니다. 대화는 conversations/messages에 보존됩니다.",
         )

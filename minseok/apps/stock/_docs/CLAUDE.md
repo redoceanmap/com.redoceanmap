@@ -16,7 +16,7 @@
 - 시세/지표/뉴스는 `YFinanceMarketDataAdapter`(yfinance, 키 불요·지연 시세). 실시간이 필요해지면
   KIS 등 벤더 어댑터로 교체한다(`MarketDataPort` 계약 동일). 헤드라인이 없으면 감성은 중립(0.0)으로
   두고 LLM을 부르지 않는다.
-- 감성 점수화는 `ExaoneSentimentAdapter`가 LLM 오케스트레이터(`orchestrate(model=EXAONE_2_4B)`)로 수행.
+- 감성 점수화는 `ExaoneSentimentAdapter`가 LLM 오케스트레이터(기본 모델 7.8B — 단일 모델 정책)로 수행.
 - **수집 뉴스(DB)**: n8n이 허브 `/automation/news`로 적재(허브 `NewsStoragePort`를
   `NewsStorageGateway`가 구현, `news_articles` 테이블·url 유니크). 분석 시 DB 뉴스를
   벤더(yfinance) 뉴스보다 우선 병합 — 한국 종목 뉴스 공백 해소. n8n은 허브만 안다.
@@ -34,7 +34,7 @@
   구현, `fundamental_snapshots` 테이블·(ticker, as_of, source) 유니크). PER/PBR/ROE/부채비율/FCF/EPS/BPS —
   버핏식 가치·체력 축. 한국 종목은 DART 연간 재무제표로 EPS/BPS→PER/PBR 자체 계산(source=dart 별도 행).
   판정(OutlookPredictor) 편입은 분기 지평 백테스트 설계 후 — 축적이 먼저(뉴스 감성과 동일 원칙).
-- **뉴스 LLM 라벨(DB)**: 야간 cron(`scripts/label_news.py`, EXAONE 2.4B AWQ 로컬 직로딩 —
+- **뉴스 LLM 라벨(DB)**: 야간 cron(`scripts/label_news.py`, EXAONE 7.8B Ollama 경유 —
   도메인 내부 추론 계층 준수)이 허브 `/automation/news-labels`로 적재(허브 `NewsLabelStoragePort`를
   `NewsLabelStorageGateway`가 구현, `news_labels` 테이블·(news_id, labeler) 유니크).
   감성(-1~1)·이벤트 유형·확신도. 라벨은 피처, 정답은 실현 수익률 — 라벨 품질은

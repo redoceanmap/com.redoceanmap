@@ -10,7 +10,7 @@ from stock.app.dtos.news_search_dto import NewsSearchRow
 from stock.app.ports.output.news_repository import NewsRepositoryPort
 from stock.domain.entities.news_article import NewsArticle
 
-DEFAULT_LABELER = "exaone-2.4b-awq"  # 검색 히트에 동반할 라벨 버전 — 상위 모델 도입 시 교체 지점
+DEFAULT_LABELER = "exaone-7.8b"  # 검색 히트에 동반할 라벨 버전 — 상위 모델 도입 시 교체 지점
 
 
 class NewsPgRepository(NewsRepositoryPort):

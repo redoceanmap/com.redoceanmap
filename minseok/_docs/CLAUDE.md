@@ -94,13 +94,13 @@ Python / FastAPI 백엔드. 앱 **내부**는 헥사고날/클린 아키텍처(`
   `sys.path`에 `apps/`를 등록하고, lint/스크립트는 `PYTHONPATH=apps`로 맞춘다.
 - 세션·베이스: `from core.database import get_db, Base`.
 - LLM 추론은 단일 LLM 오케스트레이터 `core/llm/llm_orchestrator.py`로 수렴한다 —
-  오케스트레이터가 7.8B를 기본 보유, 도메인은 `orchestrate(model=EXAONE_2_4B)`로 2.4B로 내려 쓴다.
+  오케스트레이터가 EXAONE 7.8B 하나만 보유한다(단일 모델 정책, 2026-07-15).
 
 ## LLM 모델 계층 바인딩
 
 | 지점 | 모델 |
 |------|------|
-| 도메인 내부 추론(예: chat phase1 상권/업종 선택) | EXAONE **2.4B** (`model=EXAONE_2_4B`) |
+| 도메인 내부 추론(예: chat phase1 상권/업종 선택) | EXAONE **7.8B** (단일 모델 정책 — 2.4B 폐지) |
 | 최종 사용자 답변(예: chat phase2·스트리밍) | EXAONE **7.8B** (오케스트레이터 기본) |
 
 ## async def vs def

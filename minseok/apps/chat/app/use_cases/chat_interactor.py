@@ -19,7 +19,7 @@ from chat.app.dtos.area_stat_dto import AreaStatDto
 from chat.app.ports.input.chat_use_case import ChatUseCase
 from chat.app.ports.output.conversation_repository import ConversationRepository
 from chat.domain.entities.conversation_entity import ConversationSummary, Message
-from core.llm.llm_orchestrator import EXAONE_2_4B, llm_orchestrator
+from core.llm.llm_orchestrator import llm_orchestrator
 from hub.app.dtos.commercial_data_dto import AreaRawStat, AreaScoreInfo, AreaSummary
 from hub.app.dtos.market_news_dto import MarketNewsHit
 from hub.app.dtos.news_dto import NewsHit
@@ -51,7 +51,7 @@ TIME_FIELDS = [
 ]
 
 # 서울 외 주요 지역명 — 상권 데이터가 서울뿐이라, 이 지명만 언급된 질문은
-# phase1(2.4B) 호출 전에 결정론적으로 "준비중" 안내로 차단한다.
+# phase1 호출 전에 결정론적으로 "준비중" 안내로 차단한다.
 # "경기"는 경기(景氣), "김포"는 김포공항(서울 강서구)과 겹쳐 제외.
 NON_SEOUL_REGIONS = (
     "수원", "인천", "부산", "대구", "대전", "광주", "울산", "세종", "제주",
@@ -222,7 +222,7 @@ class ChatInteractor(ChatUseCase):
     def _build_area_context(
         self, summary: AreaSummary, prompt: str = "", limit: int = 80
     ) -> str:
-        # 상권 1650개 전체를 넣으면 경량 모델(2.4B) 컨텍스트를 초과한다.
+        # 상권 1650개 전체를 넣으면 모델 컨텍스트를 초과한다.
         # 질문에 언급된 지역(자치구·행정동·상권명 어간)을 우선 포함하고,
         # 나머지는 월매출 상위로 상한까지 채운다. 언급 상권은 ★로 표시해 phase1 선택을 유도한다.
         def sales_of(a) -> int:
@@ -337,7 +337,7 @@ class ChatInteractor(ChatUseCase):
         history = await self._conversations.get_messages(conversation_id)
         await self._conversations.add_message(conversation_id, "user", prompt)
 
-        # phase0(의도 분류 = 도메인 판단) → 도메인 경량 모델(2.4B)로 내려 씀
+        # phase0(의도 분류 = 도메인 판단) — 단일 모델(7.8B) 정책
         intent, stock_query = await self._classify_intent(prompt, history)
         if intent == "stock":
             return await self._answer_stock(conversation_id, prompt, stock_query)
@@ -349,7 +349,7 @@ class ChatInteractor(ChatUseCase):
         if not quarter:
             raise CommercialDataUnavailableError("상권 데이터가 없습니다.")
 
-        # 서울 외 지역 가드 — 데이터가 서울뿐이라 phase1(2.4B)이 서울 상권을 임의로
+        # 서울 외 지역 가드 — 데이터가 서울뿐이라 phase1이 서울 상권을 임의로
         # 고르는 오답을 코드로 차단한다. 서울 지명이 함께 언급되면 기존 흐름(서울 분석) 유지.
         if not self._mentioned_codes(summary, prompt):
             region = next((r for r in NON_SEOUL_REGIONS if r in prompt), None)
@@ -376,9 +376,9 @@ class ChatInteractor(ChatUseCase):
             f"업종 코드 목록:\n{service_code_list}\n\n"
             f"서울 상권 데이터:\n{area_context}"
         )
-        # phase1(상권/업종 선택 = 도메인 판단) → 도메인 경량 모델(2.4B)로 내려 씀
+        # phase1(상권/업종 선택 = 도메인 판단) — 단일 모델(7.8B) 정책
         p1_raw = await llm_orchestrator.orchestrate(
-            f"{PHASE1_PROMPT}\n\n{phase1_contents}", model=EXAONE_2_4B, format="json",
+            f"{PHASE1_PROMPT}\n\n{phase1_contents}", format="json",
         )
 
         try:
@@ -393,7 +393,7 @@ class ChatInteractor(ChatUseCase):
         valid_codes = [c for c in trdar_codes if c in area_map]
 
         # 결정론적 지역 가드 — 질문에 지역이 언급되면 그 지역 상권으로 보정.
-        # 경량 모델(2.4B)이 ★ 지시를 무시하고 유명 상권(홍대 등)으로 쏠리는 경우를 코드로 방지한다.
+        # 모델이 ★ 지시를 무시하고 유명 상권(홍대 등)으로 쏠리는 경우를 코드로 방지한다.
         mentioned_codes = self._mentioned_codes(summary, prompt)
         if mentioned_codes:
             local = [c for c in valid_codes if c in mentioned_codes]
@@ -507,7 +507,7 @@ class ChatInteractor(ChatUseCase):
     async def _classify_intent(self, prompt: str, history: list[Message]) -> tuple[str, str]:
         raw = await llm_orchestrator.orchestrate(
             f"{INTENT_PROMPT}\n\n{self._history_block(history)}사용자 질문: {prompt}",
-            model=EXAONE_2_4B, format="json",
+            format="json",
         )
         try:
             parsed = _parse_llm_json(raw)

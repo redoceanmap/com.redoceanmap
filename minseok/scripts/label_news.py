@@ -1,13 +1,12 @@
-"""뉴스 LLM 라벨링 — EXAONE 2.4B AWQ(로컬)로 감성·이벤트·확신도 라벨 → 허브 적재.
+"""뉴스 LLM 라벨링 — EXAONE 7.8B(Ollama)로 감성·이벤트·확신도 라벨 → 허브 적재.
 
 허브에서 미라벨 뉴스를 받아(/automation/news-labels/pending) 라벨 후 되돌린다
 (/automation/news-labels). 라벨은 학습 피처 — 정답은 실현 수익률(price_bars 조인)이 담당한다.
 
-모델 계층 바인딩: 라벨링은 도메인 내부 추론이므로 2.4B를 쓴다(minseok CLAUDE).
-앱 런타임과 달리 cron 스크립트라 오케스트레이터(Ollama)가 아닌 루트 .venv HF 직로딩을 쓴다 —
-결과는 허브 HTTP 계약으로만 적재한다(collect_news/collect_prices 발자국).
+단일 모델 정책(2026-07-15): 프로젝트는 EXAONE 7.8B 하나만 쓴다. AWQ 2.4B 직로딩을
+Ollama HTTP(exaone3.5:7.8b, 상주 서빙)로 교체 — 결과는 허브 HTTP 계약으로만 적재한다.
 
-실행 (루트 .venv — torch/transformers 필요, minseok/venv 아님):
+실행 (루트 .venv — requests만 필요):
     ../.venv/bin/python scripts/label_news.py              # 미라벨 전부(기본 상한 3000)
     ../.venv/bin/python scripts/label_news.py --limit 20   # 상한 지정
     ../.venv/bin/python scripts/label_news.py --dry-run    # 라벨 출력만, 허브 POST 안 함
@@ -33,8 +32,9 @@ HUB_URL = os.getenv("HUB_URL", "http://localhost:8000")
 TOKEN = os.getenv("N8N_INBOUND_TOKEN", "")
 HEADERS = {"X-Webhook-Token": TOKEN}
 
-MODEL_DIR = ROOT.parent / "EXAONE-3.5-2.4B-Instruct-AWQ"
-LABELER = "exaone-2.4b-awq"
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+OLLAMA_MODEL = "exaone3.5:7.8b"
+LABELER = "exaone-7.8b"
 EVENT_TYPES = ("실적", "목표가·투자의견", "신제품·기술", "규제·소송", "거시", "수급·지분", "기타")
 POST_CHUNK = 200
 
@@ -90,21 +90,6 @@ def post_labels(items: list[dict]) -> int:
     return saved
 
 
-def load_model():
-    import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer, AwqConfig
-
-    tokenizer = AutoTokenizer.from_pretrained(str(MODEL_DIR), trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained(
-        str(MODEL_DIR),
-        dtype=torch.float16,
-        device_map="cuda",
-        trust_remote_code=True,
-        quantization_config=AwqConfig(bits=4, backend="gemm_triton"),  # Marlin은 nvcc 없어 JIT 실패
-    )
-    return tokenizer, model
-
-
 def parse_label(text: str) -> dict | None:
     match = re.search(r"\{.*?\}", text, re.DOTALL)
     if not match:
@@ -120,23 +105,24 @@ def parse_label(text: str) -> dict | None:
         return None
 
 
-def label_one(tokenizer, model, ticker: str, title: str) -> dict:
-    import torch
-
-    messages = [
-        {"role": "system", "content": SYSTEM},
-        {"role": "user", "content": PROMPT.format(
-            ticker=ticker, title=title, events=" | ".join(EVENT_TYPES))},
-    ]
-    inputs = tokenizer.apply_chat_template(
-        messages, tokenize=True, add_generation_prompt=True, return_tensors="pt"
+def label_one(ticker: str, title: str) -> dict:
+    res = requests.post(
+        f"{OLLAMA_URL}/api/chat",
+        json={
+            "model": OLLAMA_MODEL,
+            "messages": [
+                {"role": "system", "content": SYSTEM},
+                {"role": "user", "content": PROMPT.format(
+                    ticker=ticker, title=title, events=" | ".join(EVENT_TYPES))},
+            ],
+            "stream": False,
+            "format": "json",
+            "options": {"temperature": 0},
+        },
+        timeout=120,
     )
-    input_ids = inputs["input_ids"] if not isinstance(inputs, torch.Tensor) else inputs
-    out = model.generate(
-        input_ids.to("cuda"), max_new_tokens=48, do_sample=False,
-        pad_token_id=tokenizer.eos_token_id,
-    )
-    text = tokenizer.decode(out[0][input_ids.shape[1]:], skip_special_tokens=True)
+    res.raise_for_status()
+    text = res.json()["message"]["content"]
     # 파싱 실패는 중립·확신도 0으로 저장 — 미라벨로 남기면 매 실행 같은 건에서 재실패(수렴 불가)
     return parse_label(text) or {"sentiment": 0.0, "event": "기타", "confidence": 0.0}
 
@@ -150,12 +136,11 @@ def main() -> None:
     if not pending:
         print("미라벨 뉴스 없음 — 종료", flush=True)
         return
-    print(f"미라벨 {len(pending)}건 — 모델 로드 중...", flush=True)
-    tokenizer, model = load_model()
+    print(f"미라벨 {len(pending)}건 — Ollama({OLLAMA_MODEL}) 라벨링 시작", flush=True)
 
     items, parse_failed = [], 0
     for n, news in enumerate(pending, 1):
-        label = label_one(tokenizer, model, news["ticker"], news["title"])
+        label = label_one(news["ticker"], news["title"])
         if label["confidence"] == 0.0 and label["event"] == "기타":
             parse_failed += 1
         items.append({

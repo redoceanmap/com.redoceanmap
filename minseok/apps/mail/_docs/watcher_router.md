@@ -39,7 +39,7 @@
 
 1. **감시 및 후킹 (Watch & Hook)**: n8n(Gmail Push)으로부터 수신 메일 이벤트를 받는다.
 2. **1차 분류 (Validation & Triage)**: 발신자(중요 발신자 여부)와 본문(보고서 요청 등의
-   의도)을 경량 모델(EXAONE 2.4B)로 빠르게 분석 — chat phase0 의도 분류와 동일 패턴.
+   의도)을 EXAONE 7.8B(단일 모델 정책)로 분석 — chat phase0 의도 분류와 동일 패턴.
 3. **라우팅 결정 (Routing Decision)**:
    - 일반 메일 ➔ `mail/app/use_cases`(저장·임베딩)로 종결.
    - 중요/보고서 메일 ➔ 허브 포트를 통해 오케스트레이터 격상 파이프라인 발행.

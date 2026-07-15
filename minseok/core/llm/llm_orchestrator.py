@@ -1,9 +1,8 @@
 """LLM 오케스트레이터.
 
 등록된 LLM 모델 중 하나를 선택해 추론을 수행하는 중앙 LLM 오케스트레이터.
-모델을 계층에 바인딩한다: 오케스트레이터는 고품질 7.8B를 기본으로 보유하며,
-최종 사용자 답변을 만드는 지점이 이 기본 모델을 쓴다. 각 도메인(스포크)은
-내부 추론에서 orchestrate(model=EXAONE_2_4B)로 경량 2.4B로 내려 쓴다.
+단일 모델 정책(2026-07-15): 오케스트레이터는 EXAONE 7.8B 하나만 보유하며,
+의도 분류·도메인 내부 추론·최종 사용자 답변이 전부 이 모델로 수행된다.
 시스템 전체에 인스턴스는 하나(llm_orchestrator)이며, LLM 추론이 필요한
 모든 지점이 이 오케스트레이터로 수렴한다.
 """
@@ -67,8 +66,7 @@ class LLMOrchestrator:
         history: list[dict[str, str]] | None = None,
         format: str | None = None,
     ) -> str:
-        """프롬프트를 추론한다. model 미지정이면 오케스트레이터 기본 모델(7.8B)로,
-        도메인 내부 추론은 model=EXAONE_2_4B를 넘겨 경량 모델로 내려 쓴다.
+        """프롬프트를 추론한다. model 미지정이면 기본 모델(EXAONE 7.8B — 단일 모델 정책).
         system/history로 멀티턴 지원. format="json"이면 유효 JSON 출력을 강제한다."""
         kwargs: dict = {}
         if format:
@@ -113,9 +111,6 @@ class LLMOrchestrator:
 # --- LLM 오케스트레이터는 하나. 기본 모델로 7.8B를 보유한다. ---
 # 최종 사용자 답변은 이 기본 모델(7.8B)로 나간다.
 EXAONE_3_5_7_8B = ModelSpec(name="exaone3.5:7.8b", label="EXAONE 3.5 7.8B (기본)")
-
-# 도메인 계층(각 스포크 내부 추론)이 orchestrate(model=...)로 넘겨 쓰는 경량 태그.
-EXAONE_2_4B = "exaone3.5:2.4b"
 
 llm_orchestrator = LLMOrchestrator()
 llm_orchestrator.register("exaone-7.8b", EXAONE_3_5_7_8B, default=True)  # 기본 모델(7.8B)
