@@ -21,6 +21,7 @@ from hub.adapter.inbound.api.v1.email_request_router import email_request_router
 from hub.adapter.inbound.api.v1.face_recognition_router import face_recognition_router
 from hub.adapter.inbound.api.v1.fundamental_ingest_router import fundamental_ingest_router
 from hub.adapter.inbound.api.v1.mail_ingest_router import mail_ingest_router
+from hub.adapter.inbound.api.v1.market_news_ingest_router import market_news_ingest_router
 from hub.adapter.inbound.api.v1.news_ingest_router import news_ingest_router
 from hub.adapter.inbound.api.v1.news_label_ingest_router import news_label_ingest_router
 from hub.adapter.inbound.api.v1.postmaster_router import postmaster_router
@@ -28,6 +29,8 @@ from hub.adapter.inbound.api.v1.price_bar_ingest_router import price_bar_ingest_
 from hub.adapter.inbound.api.v1.signal_scan_router import signal_scan_router
 from hub.dependencies.fundamental_ingest_provider import get_fundamental_storage_port
 from hub.dependencies.mail_ingest_provider import get_mail_storage_port
+from hub.dependencies.market_news_ingest_provider import get_market_news_storage_port
+from hub.dependencies.market_news_search_provider import get_market_news_search_port
 from hub.dependencies.news_ingest_provider import get_news_storage_port
 from hub.dependencies.news_label_ingest_provider import get_news_label_storage_port
 from hub.dependencies.price_bar_ingest_provider import get_price_bar_storage_port
@@ -42,6 +45,10 @@ from hub.dependencies.news_search_provider import get_news_search_port
 from hub.dependencies.recommendation_record_provider import get_recommendation_record_port
 from hub.dependencies.stock_analysis_provider import get_stock_analysis_port
 from market.dependencies.commercial_data_provider import get_commercial_data_gateway
+from market.dependencies.market_news_provider import (
+    get_market_news_search_gateway,
+    get_market_news_storage_gateway,
+)
 from market.adapter.inbound.api.v1.area_router import area_router
 from market.adapter.inbound.api.v1.area_score_router import area_score_router
 from market.adapter.inbound.api.v1.area_stats_router import area_stats_router
@@ -88,6 +95,7 @@ app.include_router(auth_router)  # 공개 — register/login/refresh, me는 자�
 app.include_router(gatekeeper_router)  # 공개 — auth 자기소개 (기존 auth_router 소속과 동일 정책)
 # 공개 — 외부 자동화 창구(/automation/*), X-Webhook-Token 자체 검증 (dispatcher는 자기소개라 토큰 없음)
 app.include_router(news_ingest_router)
+app.include_router(market_news_ingest_router)
 app.include_router(price_bar_ingest_router)
 app.include_router(news_label_ingest_router)
 app.include_router(fundamental_ingest_router)
@@ -124,6 +132,8 @@ app.dependency_overrides[get_price_bar_storage_port] = get_price_bar_storage_gat
 app.dependency_overrides[get_news_label_storage_port] = get_news_label_storage_gateway
 app.dependency_overrides[get_fundamental_storage_port] = get_fundamental_storage_gateway
 app.dependency_overrides[get_news_search_port] = get_news_search_gateway
+app.dependency_overrides[get_market_news_storage_port] = get_market_news_storage_gateway
+app.dependency_overrides[get_market_news_search_port] = get_market_news_search_gateway
 app.dependency_overrides[get_email_composer] = lambda: EmailComposerN8nGateway()
 app.dependency_overrides[get_mail_storage_port] = get_mail_storage_gateway
 

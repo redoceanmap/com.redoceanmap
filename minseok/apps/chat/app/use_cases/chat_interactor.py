@@ -21,10 +21,12 @@ from chat.app.ports.output.conversation_repository import ConversationRepository
 from chat.domain.entities.conversation_entity import ConversationSummary, Message
 from core.llm.llm_orchestrator import EXAONE_2_4B, llm_orchestrator
 from hub.app.dtos.commercial_data_dto import AreaRawStat, AreaScoreInfo, AreaSummary
+from hub.app.dtos.market_news_dto import MarketNewsHit
 from hub.app.dtos.news_dto import NewsHit
 from hub.app.dtos.recommendation_record_dto import RecommendedArea
 from hub.app.dtos.stock_analysis_dto import StockAnalysisResult
 from hub.app.ports.output.commercial_data_port import CommercialDataPort
+from hub.app.ports.output.market_news_search_port import MarketNewsSearchPort
 from hub.app.ports.output.news_search_port import NewsSearchPort
 from hub.app.ports.output.recommendation_record_port import RecommendationRecordPort
 from hub.app.ports.output.stock_analysis_port import StockAnalysisPort, StockAnalysisUnavailable
@@ -124,7 +126,8 @@ PHASE2_PROMPT = """당신은 서울 창업 컨설턴트입니다.
 - reason에서 수치를 인용할 때는 실제 제공된 숫자 그대로 사용
 - 창업자가 실질적으로 도움받을 수 있는 인사이트 포함 (경쟁 강도, 수익성, 안정성 등)
 - 수치를 단순 나열하지 말고 의미를 해석해서 서술
-- '서울 평균 대비' 종합점수가 제공된 상권은 그 근거(성장·건강도·지속성)를 추천 이유에 반영 (50점 = 서울 평균 수준)"""
+- '서울 평균 대비' 종합점수가 제공된 상권은 그 근거(성장·건강도·지속성)를 추천 이유에 반영 (50점 = 서울 평균 수준)
+- '관련 지역 기사'가 제공되면 해당 지역 상권의 트렌드 근거로 반영 (기사 제목 인용 가능, 없는 사실 창작 금지)"""
 
 STREAM_SYSTEM_PROMPT = """당신은 서울 상권 분석 상담사입니다.
 사용자와 자연스럽게 대화하며 상권 선택·창업 관련 조언을 제공합니다.
@@ -160,12 +163,14 @@ class ChatInteractor(ChatUseCase):
         conversations: ConversationRepository,
         stocks: StockAnalysisPort,
         news: NewsSearchPort,
+        market_news: MarketNewsSearchPort,
     ) -> None:
         self._market = market
         self._recorder = recorder
         self._conversations = conversations
         self._stocks = stocks
         self._news = news
+        self._market_news = market_news
 
     def _history_block(self, history: list[Message]) -> str:
         if not history:
@@ -370,6 +375,8 @@ class ChatInteractor(ChatUseCase):
         real_stats = self._format_stats(raw_stats, quarter)
         # M3 스코어링 근거 주입 — 시도 벤치마크 대비 종합점수(산출 불가 상권은 라인 생략)
         area_scores = await self._market.get_area_scores(valid_codes)
+        # 상권 뉴스 RAG 근거 — 지역 기사 의미 검색(히트 없으면 블록 생략)
+        area_articles = await self._market_news.search(prompt, limit=4)
 
         quarter_label = f"{str(quarter)[:4]}년 {str(quarter)[4]}분기"
         stats_context_lines = [f"사용자 질문: {prompt}\n업종: {service_name}\n기준: {quarter_label}\n"]
@@ -388,6 +395,8 @@ class ChatInteractor(ChatUseCase):
                 f"- 상권변화: {st.get('change_text')} | {st.get('op_months_text')}\n"
                 f"{score_line}"
             )
+        if area_articles:
+            stats_context_lines.append(self._format_area_articles(area_articles))
 
         # phase2(최종 서술 = 최종 사용자 답변) → 오케스트레이터 기본 모델(7.8B)
         p2_raw = await llm_orchestrator.orchestrate(
@@ -564,6 +573,15 @@ class ChatInteractor(ChatUseCase):
         return AskResponse(
             text=text, recommendations=[], conversationId=conversation_id, stock=card,
         )
+
+    @staticmethod
+    def _format_area_articles(hits: list[MarketNewsHit]) -> str:
+        lines = ["[관련 지역 기사 — 의미 유사도 상위]"]
+        for h in hits:
+            date_text = f"{h.published_at:%Y-%m-%d}" if h.published_at else "날짜 미상"
+            area_text = h.area_tag or "지역 공통"
+            lines.append(f"- ({date_text} | {area_text} | {h.source}) {h.title}")
+        return "\n".join(lines)
 
     @staticmethod
     def _score_text(score: AreaScoreInfo) -> str:

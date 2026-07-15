@@ -43,6 +43,19 @@
 팩트 8개의 개별 조회 슬라이스(라우터·인터랙터·리포지토리·매퍼·엔티티)는 제거됨 —
 런타임 조회는 위 네 경로로 수렴한다. 팩트 ORM은 게이트웨이·적재 스크립트·마이그레이션이 사용하므로 유지.
 
+## 상권 뉴스 (RAG 코퍼스)
+
+market이 소유하는 두 번째 데이터 축 — 분기 공공데이터의 시의성 공백을 일 단위 기사로 보완한다.
+
+- **테이블**: `market_news_articles` — (url, area_tag) 유니크, 제목 bge-m3 임베딩(1024, nullable).
+  `area_tag`는 지역 어간(예: 성수) — 주식 뉴스의 ticker에 대응하는 결합 키.
+- **수집**: `scripts/collect_market_news.py`(매일 01:30 cron) — Google News RSS
+  "지역 어간 × 상권" + 정책 공통 키워드(`scripts/market_news_watchlist.txt`) → 허브
+  `POST /automation/market-news`.
+- **슬라이스**: `market_news_interactor`(적재+배치 임베딩+의미 검색) ← 허브 게이트웨이 2종
+  (`market_news_storage_gateway` · `market_news_search_gateway`)이 위임. 소비는 chat(허브
+  `MarketNewsSearchPort` 경유, 상권 답변 기사 근거). → hub CLAUDE
+
 ## 좌표
 
 `utils/coords.py`의 `tm_to_wgs84`(EPSG:5174→4326)가 TM 좌표를 위경도로 변환한다.

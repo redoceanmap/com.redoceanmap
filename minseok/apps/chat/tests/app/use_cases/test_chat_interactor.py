@@ -20,6 +20,7 @@ from hub.app.dtos.commercial_data_dto import (
     AreaSummary,
     ServiceCode,
 )
+from hub.app.dtos.market_news_dto import MarketNewsHit
 from hub.app.dtos.news_dto import NewsHit
 from hub.app.dtos.stock_analysis_dto import StockAnalysisResult
 from hub.app.ports.output.stock_analysis_port import StockAnalysisUnavailable
@@ -122,6 +123,16 @@ class _StubMarket:
         return self.scores
 
 
+class _StubMarketNews:
+    def __init__(self, hits: list[MarketNewsHit] | None = None):
+        self.hits = hits or []
+        self.calls: list[tuple[str, int]] = []
+
+    async def search(self, query: str, limit: int = 4) -> list[MarketNewsHit]:
+        self.calls.append((query, limit))
+        return self.hits
+
+
 class _StubRecorder:
     def __init__(self):
         self.recorded: list = []
@@ -175,19 +186,21 @@ def _area_score() -> AreaScoreInfo:
 
 
 def _build(monkeypatch, llm_responses, *, stocks=None, news=None, conversations=None,
-           market=None):
+           market=None, market_news=None):
     llm = _StubLLM(llm_responses)
     monkeypatch.setattr("chat.app.use_cases.chat_interactor.llm_orchestrator", llm)
     market, recorder = market or _StubMarket(), _StubRecorder()
     conversations = conversations or _StubConversations()
     stocks = stocks or _StubStocks(result=_analysis())
     news = news or _StubNewsSearch()
+    market_news = market_news or _StubMarketNews()
     interactor = ChatInteractor(
         market=market, recorder=recorder, conversations=conversations,
-        stocks=stocks, news=news,
+        stocks=stocks, news=news, market_news=market_news,
     )
     return interactor, llm, dict(market=market, recorder=recorder,
-                                 conversations=conversations, stocks=stocks, news=news)
+                                 conversations=conversations, stocks=stocks, news=news,
+                                 market_news=market_news)
 
 
 # --- phase0 3분류 라우팅 ---
@@ -234,6 +247,27 @@ async def test_종합점수가_없는_상권은_점수_라인을_생략한다(mo
     interactor, llm, _ = _build(monkeypatch, [INTENT_MARKET, PHASE1_JSON, PHASE2_JSON])
     await interactor.ask("역삼동 카페 어때?")
     assert "- 서울 평균 대비:" not in llm.calls[2][0]  # 규칙 문구가 아닌 컨텍스트 라인 기준
+
+
+async def test_상권_컨텍스트에_관련_지역_기사가_주입된다(monkeypatch):
+    market_news = _StubMarketNews(hits=[MarketNewsHit(
+        title="성수 상권 장기 정착형 리테일로 진화", area_tag="성수",
+        published_at=_NOW, source="패션비즈",
+    )])
+    interactor, llm, _ = _build(
+        monkeypatch, [INTENT_MARKET, PHASE1_JSON, PHASE2_JSON], market_news=market_news,
+    )
+    await interactor.ask("역삼동 카페 어때?")
+    phase2_prompt = llm.calls[2][0]
+    assert "[관련 지역 기사 — 의미 유사도 상위]" in phase2_prompt
+    assert f"({_NOW:%Y-%m-%d} | 성수 | 패션비즈) 성수 상권 장기 정착형 리테일로 진화" in phase2_prompt
+    assert market_news.calls == [("역삼동 카페 어때?", 4)]
+
+
+async def test_지역_기사가_없으면_기사_블록을_생략한다(monkeypatch):  # 무손상
+    interactor, llm, _ = _build(monkeypatch, [INTENT_MARKET, PHASE1_JSON, PHASE2_JSON])
+    await interactor.ask("역삼동 카페 어때?")
+    assert "[관련 지역 기사" not in llm.calls[2][0]
 
 
 async def test_의도_파싱_실패면_market_폴백(monkeypatch):
