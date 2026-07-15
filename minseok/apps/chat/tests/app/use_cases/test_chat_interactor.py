@@ -12,7 +12,14 @@ import pytest
 from chat.app.exceptions import ConversationNotFoundError
 from chat.app.use_cases.chat_interactor import ChatInteractor
 from chat.domain.entities.conversation_entity import Conversation, Message
-from hub.app.dtos.commercial_data_dto import AreaInfo, AreaRawStat, AreaSummary, ServiceCode
+from hub.app.dtos.commercial_data_dto import (
+    AreaInfo,
+    AreaRawStat,
+    AreaScoreComponent,
+    AreaScoreInfo,
+    AreaSummary,
+    ServiceCode,
+)
 from hub.app.dtos.news_dto import NewsHit
 from hub.app.dtos.stock_analysis_dto import StockAnalysisResult
 from hub.app.ports.output.stock_analysis_port import StockAnalysisUnavailable
@@ -93,8 +100,10 @@ class _StubNewsSearch:
 
 
 class _StubMarket:
-    def __init__(self):
+    def __init__(self, scores: dict[int, AreaScoreInfo] | None = None):
         self.summary_calls = 0
+        self.scores = scores or {}
+        self.score_calls: list[list[int]] = []
 
     async def get_area_summary(self) -> AreaSummary:
         self.summary_calls += 1
@@ -107,6 +116,10 @@ class _StubMarket:
 
     async def get_area_raw_stats(self, codes, service_code, quarter):
         return {c: _raw_stat() for c in codes}
+
+    async def get_area_scores(self, trdar_codes):
+        self.score_calls.append(list(trdar_codes))
+        return self.scores
 
 
 class _StubRecorder:
@@ -149,10 +162,23 @@ def _hit(**overrides) -> NewsHit:
     return NewsHit(**{**base, **overrides})
 
 
-def _build(monkeypatch, llm_responses, *, stocks=None, news=None, conversations=None):
+def _area_score() -> AreaScoreInfo:
+    return AreaScoreInfo(
+        total=59.6, grade="보통",
+        components=(
+            AreaScoreComponent(key="sales_growth", name="매출 성장",
+                               score=91.9, value=21.9, benchmark=5.2),
+            AreaScoreComponent(key="persistence", name="영업 지속성",
+                               score=16.1, value=76.0, benchmark=115.0),
+        ),
+    )
+
+
+def _build(monkeypatch, llm_responses, *, stocks=None, news=None, conversations=None,
+           market=None):
     llm = _StubLLM(llm_responses)
     monkeypatch.setattr("chat.app.use_cases.chat_interactor.llm_orchestrator", llm)
-    market, recorder = _StubMarket(), _StubRecorder()
+    market, recorder = market or _StubMarket(), _StubRecorder()
     conversations = conversations or _StubConversations()
     stocks = stocks or _StubStocks(result=_analysis())
     news = news or _StubNewsSearch()
@@ -189,6 +215,25 @@ async def test_market_의도면_기존_상권_경로가_그대로_동작한다(m
     assert len(result.recommendations) == 1
     assert result.recommendations[0].name == "테스트상권"
     assert len(stubs["recorder"].recorded) == 1
+
+
+async def test_상권_컨텍스트에_서울_평균_대비_종합점수가_주입된다(monkeypatch):
+    market = _StubMarket(scores={1000001: _area_score()})
+    interactor, llm, _ = _build(
+        monkeypatch, [INTENT_MARKET, PHASE1_JSON, PHASE2_JSON], market=market,
+    )
+    await interactor.ask("역삼동 카페 어때?")
+    phase2_prompt = llm.calls[2][0]
+    assert "서울 평균 대비: 종합 59.6점·보통 (50점=서울 평균 수준)" in phase2_prompt
+    assert "매출 성장 91.9점(상권 +21.9% vs 서울 +5.2%)" in phase2_prompt
+    assert "영업 지속성 16.1점" in phase2_prompt
+    assert market.score_calls == [[1000001]]
+
+
+async def test_종합점수가_없는_상권은_점수_라인을_생략한다(monkeypatch):  # 무손상
+    interactor, llm, _ = _build(monkeypatch, [INTENT_MARKET, PHASE1_JSON, PHASE2_JSON])
+    await interactor.ask("역삼동 카페 어때?")
+    assert "- 서울 평균 대비:" not in llm.calls[2][0]  # 규칙 문구가 아닌 컨텍스트 라인 기준
 
 
 async def test_의도_파싱_실패면_market_폴백(monkeypatch):

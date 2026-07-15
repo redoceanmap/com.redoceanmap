@@ -33,6 +33,26 @@ class AreaSummary:
 
 
 @dataclass(frozen=True)
+class AreaScoreComponent:
+    """종합점수 컴포넌트 1개 — 50점 = 시도 벤치마크 동률, 0~100."""
+
+    key: str  # sales_growth / floating_growth / store_health / persistence
+    name: str
+    score: float
+    value: float
+    benchmark: float
+
+
+@dataclass(frozen=True)
+class AreaScoreInfo:
+    """상권 1곳의 시도 벤치마크 대비 종합점수(0~100)."""
+
+    total: float
+    grade: str  # 우수 / 양호 / 보통 / 주의 / 위험
+    components: tuple[AreaScoreComponent, ...]
+
+
+@dataclass(frozen=True)
 class AreaRawStat:
     """상권 1곳의 원시 통계(특정 업종·분기). 값이 없으면 None, 존재 여부는 has_* 로 표기."""
 

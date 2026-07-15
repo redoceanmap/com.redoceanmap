@@ -4,7 +4,17 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
-from hub.app.dtos.commercial_data_dto import AreaInfo, AreaRawStat, AreaSummary, ServiceCode
+from hub.app.dtos.commercial_data_dto import (
+    AreaInfo,
+    AreaRawStat,
+    AreaScoreComponent,
+    AreaScoreInfo,
+    AreaSummary,
+    ServiceCode,
+)
+from market.adapter.outbound.pg.area_score_pg_repository import AreaScorePgRepository
+from market.app.dtos.area_score_dto import AreaScoreQuery
+from market.app.use_cases.area_score_interactor import AreaScoreInteractor
 from market.adapter.outbound.orm.change_indicator_orm import ChangeIndicatorOrm
 from market.adapter.outbound.orm.commercial_change_benchmark_orm import (
     CommercialChangeBenchmarkOrm,
@@ -74,6 +84,27 @@ class CommercialDataGateway(CommercialDataPort):
         return AreaSummary(
             areas=area_infos, latest_quarter=latest_quarter, sales_by_code=sales_by_code
         )
+
+    async def get_area_scores(self, trdar_codes: list[int]) -> dict[int, AreaScoreInfo]:
+        # area_score 슬라이스(도메인 스코어러 + PG 리포지토리)를 그대로 재사용해 허브 DTO로 변환
+        interactor = AreaScoreInteractor(repo=AreaScorePgRepository(session=self._session))
+        result: dict[int, AreaScoreInfo] = {}
+        for code in trdar_codes:
+            view = await interactor.get_score(AreaScoreQuery(trdar_code=code))
+            if view is None or view.score is None:
+                continue
+            result[code] = AreaScoreInfo(
+                total=view.score.total,
+                grade=view.score.grade,
+                components=tuple(
+                    AreaScoreComponent(
+                        key=c.key, name=c.name, score=c.score,
+                        value=c.value, benchmark=c.benchmark,
+                    )
+                    for c in view.score.components
+                ),
+            )
+        return result
 
     async def get_area_raw_stats(
         self, trdar_codes: list[int], service_code: str, quarter: int

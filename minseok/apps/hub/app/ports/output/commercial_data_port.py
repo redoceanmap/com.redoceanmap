@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from hub.app.dtos.commercial_data_dto import AreaRawStat, AreaSummary, ServiceCode
+from hub.app.dtos.commercial_data_dto import (
+    AreaRawStat,
+    AreaScoreInfo,
+    AreaSummary,
+    ServiceCode,
+)
 
 
 class CommercialDataPort(ABC):
@@ -27,4 +32,9 @@ class CommercialDataPort(ABC):
         self, trdar_codes: list[int], service_code: str, quarter: int
     ) -> dict[int, AreaRawStat]:
         """지정 상권들의 원시 통계(매출·점포·유동인구·상권변화)를 반환한다."""
+        ...
+
+    @abstractmethod
+    async def get_area_scores(self, trdar_codes: list[int]) -> dict[int, AreaScoreInfo]:
+        """지정 상권들의 시도 벤치마크 대비 종합점수 — 산출 근거 팩트가 없는 상권은 제외."""
         ...

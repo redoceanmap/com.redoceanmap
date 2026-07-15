@@ -20,7 +20,7 @@ from chat.app.ports.input.chat_use_case import ChatUseCase
 from chat.app.ports.output.conversation_repository import ConversationRepository
 from chat.domain.entities.conversation_entity import ConversationSummary, Message
 from core.llm.llm_orchestrator import EXAONE_2_4B, llm_orchestrator
-from hub.app.dtos.commercial_data_dto import AreaRawStat, AreaSummary
+from hub.app.dtos.commercial_data_dto import AreaRawStat, AreaScoreInfo, AreaSummary
 from hub.app.dtos.news_dto import NewsHit
 from hub.app.dtos.recommendation_record_dto import RecommendedArea
 from hub.app.dtos.stock_analysis_dto import StockAnalysisResult
@@ -123,7 +123,8 @@ PHASE2_PROMPT = """당신은 서울 창업 컨설턴트입니다.
 - text와 reason 모두 자연스러운 한국어로 작성
 - reason에서 수치를 인용할 때는 실제 제공된 숫자 그대로 사용
 - 창업자가 실질적으로 도움받을 수 있는 인사이트 포함 (경쟁 강도, 수익성, 안정성 등)
-- 수치를 단순 나열하지 말고 의미를 해석해서 서술"""
+- 수치를 단순 나열하지 말고 의미를 해석해서 서술
+- '서울 평균 대비' 종합점수가 제공된 상권은 그 근거(성장·건강도·지속성)를 추천 이유에 반영 (50점 = 서울 평균 수준)"""
 
 STREAM_SYSTEM_PROMPT = """당신은 서울 상권 분석 상담사입니다.
 사용자와 자연스럽게 대화하며 상권 선택·창업 관련 조언을 제공합니다.
@@ -367,12 +368,16 @@ class ChatInteractor(ChatUseCase):
 
         raw_stats = await self._market.get_area_raw_stats(valid_codes, service_code, quarter)
         real_stats = self._format_stats(raw_stats, quarter)
+        # M3 스코어링 근거 주입 — 시도 벤치마크 대비 종합점수(산출 불가 상권은 라인 생략)
+        area_scores = await self._market.get_area_scores(valid_codes)
 
         quarter_label = f"{str(quarter)[:4]}년 {str(quarter)[4]}분기"
         stats_context_lines = [f"사용자 질문: {prompt}\n업종: {service_name}\n기준: {quarter_label}\n"]
         for code in valid_codes:
             area = area_map[code]
             st = real_stats.get(code, {})
+            score = area_scores.get(code)
+            score_line = f"- 서울 평균 대비: {self._score_text(score)}\n" if score else ""
             stats_context_lines.append(
                 f"[{area.trdar_name} / {area.district_name}] (trdar_code: {code})\n"
                 f"- 수익: {st.get('revenue_text')} | {st.get('revenue_source')}\n"
@@ -381,6 +386,7 @@ class ChatInteractor(ChatUseCase):
                 f"- 유동인구: {st.get('foot_text')}\n"
                 f"- 주요 연령대: {st.get('top_age')} | 피크시간: {st.get('peak_time')}\n"
                 f"- 상권변화: {st.get('change_text')} | {st.get('op_months_text')}\n"
+                f"{score_line}"
             )
 
         # phase2(최종 서술 = 최종 사용자 답변) → 오케스트레이터 기본 모델(7.8B)
@@ -558,6 +564,19 @@ class ChatInteractor(ChatUseCase):
         return AskResponse(
             text=text, recommendations=[], conversationId=conversation_id, stock=card,
         )
+
+    @staticmethod
+    def _score_text(score: AreaScoreInfo) -> str:
+        """상권 종합점수 의미 해석 문장 — 성장 컴포넌트는 상권/서울 QoQ를 병기한다."""
+        parts = []
+        for c in score.components:
+            if c.key in ("sales_growth", "floating_growth"):
+                parts.append(
+                    f"{c.name} {c.score}점(상권 {c.value:+.1f}% vs 서울 {c.benchmark:+.1f}%)"
+                )
+            else:
+                parts.append(f"{c.name} {c.score}점")
+        return f"종합 {score.total}점·{score.grade} (50점=서울 평균 수준) — " + ", ".join(parts)
 
     @staticmethod
     def _volatility_text(atr_pct: float) -> str:
