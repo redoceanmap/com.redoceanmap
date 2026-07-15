@@ -1,8 +1,9 @@
 """자유 질의(종목명·티커) → 종목 코드 해석.
 
 한국 종목명은 KRX 상장 목록(FinanceDataReader)으로 6자리 코드에 매핑하고,
-그 외는 야후 검색으로 보조한다. 해외 종목의 한국어 이름(예: "테슬라")은
-소비자(chat)의 LLM이 티커로 정규화해 넘기는 것을 전제로 한다.
+그 외는 야후 검색으로 보조한다. 해외 종목의 한국어 이름(예: "테슬라", "샌디스크")은
+별칭 사전(_OVERSEAS_ALIASES)으로 해석한다 — 소비자(chat)의 LLM 정규화가
+실패해도 여기서 받아주는 안전망이다.
 """
 from __future__ import annotations
 
@@ -21,6 +22,41 @@ _KR_CODE_RE = re.compile(r"^\d{6}$")
 _US_TICKER_RE = re.compile(r"^[A-Za-z][A-Za-z.\-]{0,5}$")
 
 _krx_names: dict[str, str] | None = None  # 종목명 → 6자리 코드 (프로세스 캐시)
+
+# 해외 종목 한국어명(공백 제거형) → 티커. 한글 질의는 야후 검색을 스킵하므로(아래)
+# 여기 없는 해외 종목의 한국어명은 해석 실패가 된다 — 자주 묻는 종목 위주로 유지한다.
+_OVERSEAS_ALIASES: dict[str, str] = {
+    # 빅테크·반도체
+    "애플": "AAPL", "마이크로소프트": "MSFT", "엔비디아": "NVDA",
+    "알파벳": "GOOGL", "구글": "GOOGL", "아마존": "AMZN",
+    "메타": "META", "페이스북": "META", "테슬라": "TSLA",
+    "브로드컴": "AVGO", "오라클": "ORCL", "넷플릭스": "NFLX",
+    "인텔": "INTC", "퀄컴": "QCOM", "마이크론": "MU",
+    "세일즈포스": "CRM", "어도비": "ADBE", "팔란티어": "PLTR",
+    "ARM홀딩스": "ARM", "암홀딩스": "ARM",
+    "샌디스크": "SNDK", "웨스턴디지털": "WDC", "슈퍼마이크로": "SMCI",
+    "델": "DELL", "시스코": "CSCO", "텍사스인스트루먼트": "TXN",
+    "어플라이드머티리얼즈": "AMAT", "램리서치": "LRCX",
+    # 헬스케어
+    "일라이릴리": "LLY", "노보노디스크": "NVO", "존슨앤존슨": "JNJ",
+    "화이자": "PFE", "애브비": "ABBV", "유나이티드헬스": "UNH",
+    # 금융
+    "버크셔해서웨이": "BRK-B", "버크셔": "BRK-B",
+    "JP모건": "JPM", "제이피모건": "JPM", "골드만삭스": "GS",
+    "뱅크오브아메리카": "BAC", "비자": "V", "마스터카드": "MA",
+    "페이팔": "PYPL", "코인베이스": "COIN",
+    # 소비재·에너지·산업
+    "코카콜라": "KO", "펩시": "PEP", "맥도날드": "MCD", "스타벅스": "SBUX",
+    "나이키": "NKE", "디즈니": "DIS", "월트디즈니": "DIS",
+    "코스트코": "COST", "월마트": "WMT", "홈디포": "HD",
+    "프록터앤갬블": "PG", "엑슨모빌": "XOM", "셰브론": "CVX",
+    "보잉": "BA", "캐터필러": "CAT",
+    # 플랫폼·기타
+    "우버": "UBER", "에어비앤비": "ABNB", "스포티파이": "SPOT",
+    "로블록스": "RBLX", "스노우플레이크": "SNOW", "크라우드스트라이크": "CRWD",
+    "리비안": "RIVN", "루시드": "LCID", "알리바바": "BABA",
+    "마이크로스트래티지": "MSTR",
+}
 
 
 def _load_krx_names() -> dict[str, str]:
@@ -43,10 +79,14 @@ def _resolve_sync(query: str) -> str:
     if _US_TICKER_RE.match(q):
         return q.upper()
 
+    compact = q.replace(" ", "")
+    # 해외 종목 한국어명은 별칭 사전으로 해석 — KRX 조회(네트워크) 전에 처리한다.
+    if compact in _OVERSEAS_ALIASES:
+        return _OVERSEAS_ALIASES[compact]
+
     names = _load_krx_names()
     if q in names:
         return names[q]
-    compact = q.replace(" ", "")
     if compact in names:
         return names[compact]
 

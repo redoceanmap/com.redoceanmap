@@ -392,6 +392,24 @@ async def test_지역_언급_시_LLM이_다른_상권을_골라도_언급_지역
     assert [a.id for a in result.recommendations] == ["1"]  # 성수역만
 
 
+# --- 서울 외 지역 가드 ---
+
+async def test_서울_외_지역_질문은_LLM_호출_없이_준비중_안내(monkeypatch):
+    interactor, llm, stubs = _build(monkeypatch, [INTENT_MARKET])
+    result = await interactor.ask("수원역 상권 분석해줘")
+    assert "서울" in result.text and "준비 중" in result.text and "수원" in result.text
+    assert result.recommendations == []
+    assert len(llm.calls) == 1  # phase0(의도 분류)만 — phase1/phase2 미호출
+    assert stubs["conversations"].saved[-1] == ("assistant", result.text)
+
+
+async def test_서울_지명이_함께_언급되면_기존_흐름_유지(monkeypatch):
+    # 기본 스텁 상권이 강남구 — "강남" 언급이 있으면 서울 분석으로 진행한다
+    interactor, _, _ = _build(monkeypatch, [INTENT_MARKET, PHASE1_JSON, PHASE2_JSON])
+    result = await interactor.ask("강남이랑 수원 중에 카페는 어디가 나아?")
+    assert len(result.recommendations) == 1
+
+
 # --- 멀티턴 시나리오 (E2E 시나리오 3종 — 인터랙터 레벨) ---
 
 async def test_시나리오_주식_업황_상권_연속_질문(monkeypatch):

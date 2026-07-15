@@ -12,6 +12,15 @@ async def test_영문_티커는_대문자로():
     assert await symbol_resolver.resolve_symbol(" aapl ") == "AAPL"
 
 
+async def test_해외_종목_한국어명은_KRX_조회_없이_별칭으로_해석(monkeypatch):
+    def _no_krx():
+        raise AssertionError("별칭 히트는 KRX 로드가 없어야 한다")
+    monkeypatch.setattr(symbol_resolver, "_load_krx_names", _no_krx)
+    assert await symbol_resolver.resolve_symbol("샌디스크") == "SNDK"
+    assert await symbol_resolver.resolve_symbol("테슬라") == "TSLA"
+    assert await symbol_resolver.resolve_symbol("버크셔 해서웨이") == "BRK-B"  # 공백 제거 매칭
+
+
 async def test_한국_종목명은_KRX_목록에서_코드로(monkeypatch):
     monkeypatch.setattr(symbol_resolver, "_load_krx_names", lambda: {"삼성전자": "005930"})
     assert await symbol_resolver.resolve_symbol("삼성전자") == "005930"
