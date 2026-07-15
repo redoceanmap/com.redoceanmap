@@ -6,11 +6,13 @@ from chat.app.ports.input.chat_use_case import ChatUseCase
 from chat.app.use_cases.chat_interactor import ChatInteractor
 from core.database import get_db
 from hub.app.ports.output.commercial_data_port import CommercialDataPort
+from hub.app.ports.output.gemini_answer_port import GeminiAnswerPort
 from hub.app.ports.output.market_news_search_port import MarketNewsSearchPort
 from hub.app.ports.output.news_search_port import NewsSearchPort
 from hub.app.ports.output.recommendation_record_port import RecommendationRecordPort
 from hub.app.ports.output.stock_analysis_port import StockAnalysisPort
 from hub.dependencies.commercial_data_provider import get_commercial_data_port
+from hub.dependencies.gemini_provider import get_gemini_answer_port
 from hub.dependencies.market_news_search_provider import get_market_news_search_port
 from hub.dependencies.news_search_provider import get_news_search_port
 from hub.dependencies.recommendation_record_provider import get_recommendation_record_port
@@ -23,6 +25,7 @@ def get_chat_use_case(
     stocks: StockAnalysisPort = Depends(get_stock_analysis_port),
     news: NewsSearchPort = Depends(get_news_search_port),
     market_news: MarketNewsSearchPort = Depends(get_market_news_search_port),
+    gemini: GeminiAnswerPort = Depends(get_gemini_answer_port),
     db: AsyncSession = Depends(get_db),
 ) -> ChatUseCase:
     return ChatInteractor(
@@ -32,4 +35,5 @@ def get_chat_use_case(
         stocks=stocks,
         news=news,
         market_news=market_news,
+        gemini=gemini,
     )

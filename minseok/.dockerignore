@@ -3,3 +3,4 @@ __pycache__/
 .pytest_cache/
 data/raw/
 _docs/
+EXAONE-3.5-7.8B-Instruct/

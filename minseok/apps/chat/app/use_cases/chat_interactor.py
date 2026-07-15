@@ -26,6 +26,7 @@ from hub.app.dtos.news_dto import NewsHit
 from hub.app.dtos.recommendation_record_dto import RecommendedArea
 from hub.app.dtos.stock_analysis_dto import StockAnalysisResult
 from hub.app.ports.output.commercial_data_port import CommercialDataPort
+from hub.app.ports.output.gemini_answer_port import GeminiAnswerError, GeminiAnswerPort
 from hub.app.ports.output.market_news_search_port import MarketNewsSearchPort
 from hub.app.ports.output.news_search_port import NewsSearchPort
 from hub.app.ports.output.recommendation_record_port import RecommendationRecordPort
@@ -68,6 +69,7 @@ INTENT_PROMPT = """사용자 질문의 의도를 분류하라.
 - "stock": 특정 회사/종목(시세·전망·분석)을 묻는 질문. 회사 이름만 언급해도 stock이다.
 - "market_news": 특정 종목이 아니라 업종·산업·증시 전반의 동향/뉴스를 묻는 질문.
 - "market": 동네/상권/창업/입지를 묻는 질문.
+- "general": 위 셋에 해당하지 않는 질문 — 인사·잡담·일반 상식·인물·기술 등 상권/주식과 무관한 것 전부.
 
 stock이면 종목을 stock_query에 추출한다. 한국 회사는 **한국어 이름 그대로** 쓰고 절대
 티커를 지어내지 않는다. 해외(미국) 회사만 널리 알려진 공식 티커로 정규화한다
@@ -84,6 +86,8 @@ stock이면 종목을 stock_query에 추출한다. 한국 회사는 **한국어 
 - "AI 관련주 분위기 어때?" → {"intent": "market_news", "stock_query": ""}
 - "성수동은 어때?" → {"intent": "market", "stock_query": ""}
 - "홍대에 카페 차릴만해?" → {"intent": "market", "stock_query": ""}
+- "카파시가 누구야?" → {"intent": "general", "stock_query": ""}
+- "안녕! 뭐 할 수 있어?" → {"intent": "general", "stock_query": ""}
 
 반드시 아래 JSON 형식으로만 응답하라 (마크다운 코드블록 없이):
 {"intent": "market", "stock_query": ""}"""
@@ -185,6 +189,7 @@ class ChatInteractor(ChatUseCase):
         stocks: StockAnalysisPort,
         news: NewsSearchPort,
         market_news: MarketNewsSearchPort,
+        gemini: GeminiAnswerPort,
     ) -> None:
         self._market = market
         self._recorder = recorder
@@ -192,6 +197,7 @@ class ChatInteractor(ChatUseCase):
         self._stocks = stocks
         self._news = news
         self._market_news = market_news
+        self._gemini = gemini
 
     def _history_block(self, history: list[Message]) -> str:
         if not history:
@@ -343,6 +349,8 @@ class ChatInteractor(ChatUseCase):
             return await self._answer_stock(conversation_id, prompt, stock_query)
         if intent == "market_news":
             return await self._answer_market_news(conversation_id, prompt)
+        if intent == "general":
+            return await self._answer_general(conversation_id, prompt)
 
         summary = await self._market.get_area_summary()
         quarter = summary.latest_quarter
@@ -523,7 +531,20 @@ class ChatInteractor(ChatUseCase):
             return "market_news", ""
         if intent == "market_news":
             return "market_news", ""
+        if intent == "general":
+            return "general", ""
         return "market", ""  # 미지 라벨 포함 전부 market — 기존 동작 보존
+
+    async def _answer_general(self, conversation_id: int, prompt: str) -> AskResponse:
+        """상권/주식과 무관한 일반 질문 — 허브 GeminiAnswerPort(외부 Gemini API)로 답변."""
+        try:
+            text = (await self._gemini.generate(prompt)).answer
+        except GeminiAnswerError as exc:
+            # 외부 API 실패는 500 대신 안내로 열화 — 대화 흐름을 끊지 않는다.
+            logger.warning("[chat] general 분기 Gemini 실패: %s", exc)
+            text = "죄송해요, 지금 일반 질문 답변 기능에 일시적인 문제가 있어요. 상권이나 주식 질문은 바로 도와드릴 수 있어요."
+        await self._conversations.add_message(conversation_id, "assistant", text)
+        return AskResponse(text=text, recommendations=[], conversationId=conversation_id)
 
     async def _answer_market_news(self, conversation_id: int, prompt: str) -> AskResponse:
         """종목 무관 시장/업황 질문 — 수집 뉴스 의미 검색(RAG)을 근거로 서술."""

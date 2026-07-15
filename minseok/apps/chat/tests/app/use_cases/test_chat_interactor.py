@@ -31,6 +31,7 @@ INTENT_STOCK = '{"intent": "stock", "stock_query": "삼성전자"}'
 INTENT_STOCK_NO_QUERY = '{"intent": "stock", "stock_query": ""}'
 INTENT_MARKET_NEWS = '{"intent": "market_news", "stock_query": ""}'
 INTENT_MARKET = '{"intent": "market", "stock_query": ""}'
+INTENT_GENERAL = '{"intent": "general", "stock_query": ""}'
 PHASE1_JSON = '{"service_code": "CS100010", "service_name": "커피-음료", "trdar_codes": [1000001]}'
 PHASE2_JSON = '{"text": "상권 요약", "areas": [{"trdar_code": 1000001, "reason": "추천 이유"}]}'
 
@@ -133,6 +134,21 @@ class _StubMarketNews:
         return self.hits
 
 
+class _StubGemini:
+    def __init__(self, fail=False):
+        self.fail = fail
+        self.prompts = []
+
+    async def generate(self, prompt):
+        from hub.app.dtos.gemini_dto import GeminiAnswerResponse
+        from hub.app.ports.output.gemini_answer_port import GeminiAnswerError
+
+        self.prompts.append(prompt)
+        if self.fail:
+            raise GeminiAnswerError("키 미설정")
+        return GeminiAnswerResponse(answer="제미나이 답변", model="gemini-test")
+
+
 class _StubRecorder:
     def __init__(self):
         self.recorded: list = []
@@ -186,7 +202,7 @@ def _area_score() -> AreaScoreInfo:
 
 
 def _build(monkeypatch, llm_responses, *, stocks=None, news=None, conversations=None,
-           market=None, market_news=None):
+           market=None, market_news=None, gemini=None):
     llm = _StubLLM(llm_responses)
     monkeypatch.setattr("chat.app.use_cases.chat_interactor.llm_orchestrator", llm)
     market, recorder = market or _StubMarket(), _StubRecorder()
@@ -194,13 +210,14 @@ def _build(monkeypatch, llm_responses, *, stocks=None, news=None, conversations=
     stocks = stocks or _StubStocks(result=_analysis())
     news = news or _StubNewsSearch()
     market_news = market_news or _StubMarketNews()
+    gemini = gemini or _StubGemini()
     interactor = ChatInteractor(
         market=market, recorder=recorder, conversations=conversations,
-        stocks=stocks, news=news, market_news=market_news,
+        stocks=stocks, news=news, market_news=market_news, gemini=gemini,
     )
     return interactor, llm, dict(market=market, recorder=recorder,
                                  conversations=conversations, stocks=stocks, news=news,
-                                 market_news=market_news)
+                                 market_news=market_news, gemini=gemini)
 
 
 # --- phase0 3분류 라우팅 ---
@@ -514,3 +531,19 @@ async def test_구버전_익명_대화는_인증_사용자에게_허용된다(mo
     )
     interactor, _, _ = _build(monkeypatch, [], conversations=conversations)
     assert await interactor.conversation_messages(200, user_id=1) == []
+
+
+# --- phase0 general(제미나이) 분기 ---
+
+async def test_general_의도면_허브_Gemini_포트로_답한다(monkeypatch):
+    interactor, _, stubs = _build(monkeypatch, [INTENT_GENERAL])
+    result = await interactor.ask("카파시가 누구야?")
+    assert stubs["gemini"].prompts == ["카파시가 누구야?"]
+    assert result.text == "제미나이 답변"
+    assert result.recommendations == []
+
+
+async def test_general_분기에서_Gemini_실패면_안내로_열화한다(monkeypatch):
+    interactor, _, _ = _build(monkeypatch, [INTENT_GENERAL], gemini=_StubGemini(fail=True))
+    result = await interactor.ask("카파시가 누구야?")
+    assert "일시적인 문제" in result.text
