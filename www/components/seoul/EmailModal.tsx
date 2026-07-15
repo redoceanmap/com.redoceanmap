@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { X, Send, CheckCircle2 } from "lucide-react";
 import { authHeader } from "@/lib/tokenStorage";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+// 브라우저 직접 호출 — same-origin /api/backend(rewrites) 경유 (authApi와 동일 이유)
+const API_BASE = "/api/backend";
 
 type Props = {
   open: boolean;

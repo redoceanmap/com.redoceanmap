@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -100,8 +100,11 @@ export default function HomePage() {
     .slice(0, 4);
   const useRecent = recentAreas.length > 0;
 
-  const hour = new Date().getHours();
-  const greeting = getGreeting(hour);
+  // 시간대별 인사는 마운트 후 계산 — SSR(서버 시각)과 달라 하이드레이션 불일치를 내던 버그 수정
+  const [greeting, setGreeting] = useState("안녕하세요");
+  useEffect(() => {
+    setGreeting(getGreeting(new Date().getHours()));
+  }, []);
 
   return (
     <div className="flex-1 flex justify-center items-center px-6 py-12">

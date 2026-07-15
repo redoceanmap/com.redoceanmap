@@ -1,4 +1,12 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import {
+  getStoredRefreshToken,
+  setStoredRefreshToken,
+  setStoredToken,
+} from "./tokenStorage";
+
+// 브라우저에서 실행되므로 same-origin /api/backend(next.config rewrites)로 프록시한다 —
+// NEXT_PUBLIC_API_URL은 컨테이너 내부 호스트명(backend:8000)일 수 있어 브라우저가 해석 못 한다.
+const API_BASE = "/api/backend";
 
 export type AuthResponse = {
   access_token: string;
@@ -42,6 +50,20 @@ export async function apiRegister(
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.detail ?? "회원가입에 실패했습니다.");
   return data;
+}
+
+/** 리프레시 토큰 회전으로 액세스 토큰 재발급 — 성공 시 저장까지 마치고 true. */
+export async function tryRefreshToken(): Promise<boolean> {
+  const refresh = getStoredRefreshToken();
+  if (!refresh) return false;
+  try {
+    const renewed = await apiRefresh(refresh);
+    setStoredToken(renewed.access_token);
+    setStoredRefreshToken(renewed.refresh_token);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function apiMe(token: string): Promise<{ id: number; email: string; name: string }> {

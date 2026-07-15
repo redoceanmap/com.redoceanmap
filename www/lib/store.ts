@@ -1,7 +1,9 @@
 import { create } from "zustand";
 import type { Area, ConversationMessage, NewsCardItem, StockAnalysis } from "./types";
 import { fetchConversationMessages } from "./api";
+import { tryRefreshToken } from "./authApi";
 import { authHeader } from "./tokenStorage";
+import { useUIStore } from "./uiStore";
 
 export type { StockAnalysis } from "./types"; // 기존 임포트 호환 재수출
 
@@ -38,12 +40,27 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((s) => ({ messages: [...s.messages, userMsg], isLoading: true }));
 
     try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeader() },
-        body: JSON.stringify({ prompt, conversationId: get().conversationId }),
-      });
-
+      const request = () =>
+        fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...authHeader() },
+          body: JSON.stringify({ prompt, conversationId: get().conversationId }),
+        });
+      let res = await request();
+      // 액세스 토큰 만료(60분) → 리프레시 회전 후 1회 재시도
+      if (res.status === 401 && (await tryRefreshToken())) {
+        res = await request();
+      }
+      if (res.status === 401) {
+        useUIStore.getState().openAuth("login");
+        const loginMsg: Message = {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: "로그인 후 이용할 수 있어요. 로그인 창을 열어드렸으니 로그인하고 다시 물어봐 주세요.",
+        };
+        set((s) => ({ messages: [...s.messages, loginMsg], isLoading: false }));
+        return;
+      }
       if (!res.ok) throw new Error("AI 응답 오류");
 
       const data: {
