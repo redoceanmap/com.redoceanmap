@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 import sys
@@ -6,8 +5,10 @@ from contextlib import asynccontextmanager
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "apps"))
 
-from fastapi import Depends, FastAPI, Response
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
+from fastapi.responses import RedirectResponse
 
 from auth.adapter.inbound.api.v1.auth_router import auth_router
 from auth.adapter.inbound.api.v1.gatekeeper_router import gatekeeper_router
@@ -16,7 +17,7 @@ from chat.adapter.inbound.api.v1.chat_router import chat_router
 from chat.adapter.inbound.api.v1.concierge_router import concierge_router
 from core.database import dispose_engine, init_engine
 from core.redis import dispose_redis
-from core.security import get_current_user_id
+from core.security import get_current_user_id, verify_docs_credentials
 from chat.adapter.outbound.gateways.email_composer_gateway import EmailComposerN8nGateway
 from hub.adapter.inbound.api.v1.dispatcher_router import dispatcher_router
 from hub.adapter.inbound.api.v1.email_request_router import email_request_router
@@ -83,7 +84,14 @@ async def lifespan(app: FastAPI):
         await dispose_redis()
 
 
-app = FastAPI(title="redoceanmap API", lifespan=lifespan)
+# 문서 기본 라우트는 끄고 아래에서 HTTP Basic 가드를 걸어 다시 연다.
+app = FastAPI(
+    title="redoceanmap API",
+    lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -146,13 +154,28 @@ app.dependency_overrides[get_email_composer] = lambda: EmailComposerN8nGateway()
 app.dependency_overrides[get_mail_storage_port] = get_mail_storage_gateway
 
 
-@app.get("/")
+# API 문서 — 루트 접속 시 바로 브라우저 로그인창(HTTP Basic)이 뜨는 /docs로 보낸다.
+_docs_protected = [Depends(verify_docs_credentials)]
+
+
+@app.get("/", include_in_schema=False)
 def read_root():
-    content = {"message": "redoceanmap API", "docs": "/docs"}
-    return Response(
-        content=json.dumps(content, ensure_ascii=False, indent=2).encode("utf-8"),
-        media_type="application/json; charset=utf-8",
-    )
+    return RedirectResponse("/docs")
+
+
+@app.get("/docs", include_in_schema=False, dependencies=_docs_protected)
+def swagger_ui():
+    return get_swagger_ui_html(openapi_url="/openapi.json", title="redoceanmap API - Swagger UI")
+
+
+@app.get("/redoc", include_in_schema=False, dependencies=_docs_protected)
+def redoc_ui():
+    return get_redoc_html(openapi_url="/openapi.json", title="redoceanmap API - ReDoc")
+
+
+@app.get("/openapi.json", include_in_schema=False, dependencies=_docs_protected)
+def openapi_schema():
+    return app.openapi()
 
 
 @app.get("/health")

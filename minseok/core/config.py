@@ -12,6 +12,10 @@ DATABASE_URL = os.environ["DATABASE_URL"].replace(
 # JWT 서명 비밀키 — 발급(auth 인터랙터)과 검증(core/security)이 공유한다.
 JWT_SECRET = os.environ["JWT_SECRET"]
 
+# API 문서(/docs·/redoc·/openapi.json) 보호 — HTTP Basic. 미설정 시 문서 접근 전면 차단.
+DOCS_USER = os.getenv("DOCS_USER", "")
+DOCS_PASSWORD = os.getenv("DOCS_PASSWORD", "")
+
 # 리프레시 토큰 저장소 (auth) — 컨테이너는 redis://redis:6379/0 로 덮어쓴다.
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
