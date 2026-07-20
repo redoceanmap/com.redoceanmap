@@ -23,6 +23,7 @@ python-multipart==0.0.29
 # ---- 인증 (auth 앱) ----
 bcrypt==5.0.0
 python-jose==3.5.0
+redis==6.4.0
 
 # ---- LLM (오케스트레이터 → Ollama) ----
 ollama==0.6.2

@@ -15,6 +15,7 @@ from auth.adapter.inbound.api.v1.social_router import social_router
 from chat.adapter.inbound.api.v1.chat_router import chat_router
 from chat.adapter.inbound.api.v1.concierge_router import concierge_router
 from core.database import dispose_engine, init_engine
+from core.redis import dispose_redis
 from core.security import get_current_user_id
 from chat.adapter.outbound.gateways.email_composer_gateway import EmailComposerN8nGateway
 from hub.adapter.inbound.api.v1.dispatcher_router import dispatcher_router
@@ -79,6 +80,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         await dispose_engine()
+        await dispose_redis()
 
 
 app = FastAPI(title="redoceanmap API", lifespan=lifespan)
