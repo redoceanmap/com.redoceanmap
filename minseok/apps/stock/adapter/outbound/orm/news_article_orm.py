@@ -19,7 +19,7 @@ class NewsArticleOrm(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(Text)  # 원문 그대로 — 가공(접두·번역·요약) 저장 금지
     source: Mapped[str] = mapped_column(String(100), default="")
-    url: Mapped[str] = mapped_column(String(1000))
+    url: Mapped[str] = mapped_column(Text)  # Google News RSS는 쿼리를 base64로 감싸 1000자를 넘는다
     ticker: Mapped[str] = mapped_column(String(20), default="", index=True)  # 학습 라벨 조인 키
     published_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, index=True

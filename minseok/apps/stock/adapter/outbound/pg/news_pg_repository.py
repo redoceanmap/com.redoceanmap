@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import logging
+
 from sqlalchemy import and_, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from stock.adapter.outbound.orm.news_article_orm import NewsArticleOrm
@@ -9,6 +12,8 @@ from stock.adapter.outbound.orm.news_label_orm import NewsLabelOrm
 from stock.app.dtos.news_search_dto import NewsSearchRow
 from stock.app.ports.output.news_repository import NewsRepositoryPort
 from stock.domain.entities.news_article import NewsArticle
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_LABELER = "exaone-7.8b"  # 검색 히트에 동반할 라벨 버전 — 상위 모델 도입 시 교체 지점
 
@@ -19,8 +24,18 @@ class NewsPgRepository(NewsRepositoryPort):
         self._session = session
 
     async def save_many(self, articles: list[NewsArticle]) -> int:
+        """일괄 저장. 한 행이 거부돼도 배치 전체를 잃지 않도록 행 단위로 되짚는다."""
         if not articles:
             return 0
+        try:
+            return await self._insert(articles)
+        except DBAPIError as e:
+            if e.connection_invalidated:
+                raise  # 연결 유실은 행 문제가 아니다 — 되짚어봐야 전부 실패한다
+            await self._session.rollback()
+            return await self._insert_row_by_row(articles)
+
+    async def _insert(self, articles: list[NewsArticle]) -> int:
         stmt = (
             pg_insert(NewsArticleOrm)
             .values([
@@ -39,6 +54,21 @@ class NewsPgRepository(NewsRepositoryPort):
         result = await self._session.execute(stmt)
         await self._session.commit()
         return len(result.scalars().all())
+
+    async def _insert_row_by_row(self, articles: list[NewsArticle]) -> int:
+        saved = 0
+        for a in articles:
+            try:
+                saved += await self._insert([a])
+            except DBAPIError as e:
+                if e.connection_invalidated:
+                    raise
+                await self._session.rollback()
+                logger.warning(
+                    "[stock-news] 행 거부 — 건너뜀 (ticker=%s, url %d자): %s",
+                    a.ticker, len(a.url), e.orig,
+                )
+        return saved
 
     async def recent_titles(self, query: str, ticker: str = "", limit: int = 5) -> list[str]:
         # ticker 정확 일치(거래소 접미 포함) 우선 + 제목 부분 일치 폴백(티커 미기록 구버전 행)
