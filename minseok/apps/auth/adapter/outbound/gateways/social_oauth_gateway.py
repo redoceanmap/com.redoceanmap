@@ -12,6 +12,11 @@ from core.config import (
 )
 
 
+# 카카오싱크 콘솔(간편가입)에 이 태그명 그대로 등록해야 한다 — 자체 동의 화면과 동일 범위 강제.
+KAKAO_REQUIRED_TAGS = {"age", "terms", "privacy"}  # 만 14세·이용약관·개인정보 수집
+KAKAO_MARKETING_TAG = "marketing"
+
+
 class SocialOauthGateway(SocialProfilePort):
     """인가 코드를 각 사 토큰 엔드포인트에서 교환하고 프로필 API로 이메일·이름을 가져온다."""
 
@@ -94,9 +99,10 @@ class SocialOauthGateway(SocialProfilePort):
     ) -> tuple[bool, bool]:
         """카카오싱크 간편가입 동의 내역 조회 — (필수 약관 전부 동의, 마케팅 동의).
 
-        콘솔에 간편가입 약관이 등록돼 있으면 카카오 동의 화면에서 필수 약관까지 받으므로
-        자체 동의 페이지를 건너뛴다. 미설정·조회 실패 시 (False, False)로 두어
-        기존 자체 동의 페이지로 자연스럽게 폴백한다. 마케팅 약관은 태그 "marketing" 기준.
+        자체 동의 화면과 동일한 범위(KAKAO_REQUIRED_TAGS 3종)가 전부 동의된 경우에만
+        카카오 화면 동의로 인정한다 — 콘솔에 일부만 등록됐으면(예: 만14세 누락)
+        자체 동의 페이지로 폴백해 동의 범위가 좁아지는 일을 막는다.
+        미설정·조회 실패 시에도 (False, False) 폴백.
         """
         try:
             res = await client.get(
@@ -108,11 +114,12 @@ class SocialOauthGateway(SocialProfilePort):
             return False, False
         if res.status_code != 200:
             return False, False
-        terms = res.json().get("service_terms") or []
-        required = [t for t in terms if t.get("required")]
-        all_required_agreed = bool(required) and all(t.get("agreed") for t in required)
-        marketing = any(t.get("tag") == "marketing" and t.get("agreed") for t in terms)
-        return all_required_agreed, marketing
+        return self._parse_kakao_terms(res.json().get("service_terms") or [])
+
+    @staticmethod
+    def _parse_kakao_terms(terms: list) -> tuple[bool, bool]:
+        agreed_tags = {t.get("tag") for t in terms if t.get("agreed")}
+        return KAKAO_REQUIRED_TAGS <= agreed_tags, KAKAO_MARKETING_TAG in agreed_tags
 
     async def _naver(self, code: str, redirect_uri: str) -> SocialProfileDto:
         if not NAVER_CLIENT_ID or not NAVER_CLIENT_SECRET:
