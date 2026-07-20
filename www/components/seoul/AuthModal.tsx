@@ -5,6 +5,7 @@ import { X, ArrowLeft, Eye, EyeOff, Info } from "lucide-react";
 import { useUIStore, type AuthMode } from "@/lib/uiStore";
 import { apiLogin, apiRegister } from "@/lib/authApi";
 import { setStoredRefreshToken, setStoredToken } from "@/lib/tokenStorage";
+import { startSocialLogin, type SocialProvider } from "@/lib/socialAuth";
 
 function PinMark({ size = 32 }: { size?: number }) {
   return (
@@ -51,6 +52,13 @@ function ToggleTabs({
 }
 
 function SnsButtons({ label }: { label: string }) {
+  const handleClick = (provider: SocialProvider) => {
+    try {
+      startSocialLogin(provider);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "소셜 로그인을 시작할 수 없습니다.");
+    }
+  };
   return (
     <div className="mt-6">
       <p className="text-center text-sm font-semibold text-foreground mb-3">
@@ -60,6 +68,7 @@ function SnsButtons({ label }: { label: string }) {
         <button
           type="button"
           aria-label="카카오로 시작"
+          onClick={() => handleClick("kakao")}
           className="w-11 h-11 rounded-full bg-[#FEE500] grid place-items-center hover:opacity-90 transition-opacity"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="#000">
@@ -69,6 +78,7 @@ function SnsButtons({ label }: { label: string }) {
         <button
           type="button"
           aria-label="네이버로 시작"
+          onClick={() => handleClick("naver")}
           className="w-11 h-11 rounded-full bg-[#03C75A] grid place-items-center text-white font-bold text-base hover:opacity-90 transition-opacity"
         >
           N
@@ -76,6 +86,7 @@ function SnsButtons({ label }: { label: string }) {
         <button
           type="button"
           aria-label="구글로 시작"
+          onClick={() => handleClick("google")}
           className="w-11 h-11 rounded-full bg-white border border-border grid place-items-center hover:bg-black/[0.03] transition-colors"
         >
           <svg width="18" height="18" viewBox="0 0 24 24">

@@ -28,3 +28,11 @@ AWS_REGION = os.getenv("AWS_REGION", "ap-northeast-2")
 # Google Gemini API (허브 gemini 슬라이스 — 외부 LLM 답변). 비어 있으면 호출 시 계약 예외.
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
+
+# 소셜 로그인 OAuth (auth social 슬라이스). 비어 있으면 해당 프로바이더 로그인 시 401.
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+KAKAO_CLIENT_ID = os.getenv("KAKAO_CLIENT_ID", "")  # 카카오 REST API 키
+KAKAO_CLIENT_SECRET = os.getenv("KAKAO_CLIENT_SECRET", "")  # 콘솔에서 선택 사항
+NAVER_CLIENT_ID = os.getenv("NAVER_CLIENT_ID", "")
+NAVER_CLIENT_SECRET = os.getenv("NAVER_CLIENT_SECRET", "")

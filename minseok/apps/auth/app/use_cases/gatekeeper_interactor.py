@@ -20,5 +20,5 @@ class GatekeeperInteractor(GatekeeperUseCase):
         return GatekeeperResponse(
             id=query.id,
             name=query.name,
-            introduction="회원 인증을 담당합니다. POST /auth/register 회원가입, POST /auth/login 로그인(JWT 발급), GET /auth/me 내 정보 조회를 제공합니다. 비밀번호는 bcrypt로 해시하고 토큰은 JWT로 검증합니다.",
+            introduction="회원 인증을 담당합니다. POST /auth/register 회원가입, POST /auth/login 로그인(JWT 발급), POST /auth/social/login 소셜 로그인(구글·카카오·네이버 인가 코드 교환), GET /auth/me 내 정보 조회를 제공합니다. 비밀번호는 bcrypt로 해시하고 토큰은 JWT로 검증합니다.",
         )

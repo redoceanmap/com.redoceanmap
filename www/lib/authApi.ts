@@ -52,6 +52,21 @@ export async function apiRegister(
   return data;
 }
 
+export async function apiSocialLogin(
+  provider: string,
+  code: string,
+  redirectUri: string,
+): Promise<AuthResponse> {
+  const res = await fetch(`${API_BASE}/auth/social/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ provider, code, redirect_uri: redirectUri }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail ?? "소셜 로그인에 실패했습니다.");
+  return data;
+}
+
 /** 리프레시 토큰 회전으로 액세스 토큰 재발급 — 성공 시 저장까지 마치고 true. */
 export async function tryRefreshToken(): Promise<boolean> {
   const refresh = getStoredRefreshToken();

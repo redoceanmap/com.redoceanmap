@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from auth.adapter.inbound.api.v1.auth_router import auth_router
 from auth.adapter.inbound.api.v1.gatekeeper_router import gatekeeper_router
+from auth.adapter.inbound.api.v1.social_router import social_router
 from chat.adapter.inbound.api.v1.chat_router import chat_router
 from chat.adapter.inbound.api.v1.concierge_router import concierge_router
 from core.database import dispose_engine, init_engine
@@ -95,6 +96,7 @@ _authenticated = [Depends(get_current_user_id)]
 
 app.include_router(auth_router)  # 공개 — register/login/refresh, me는 자체 검증
 app.include_router(gatekeeper_router)  # 공개 — auth 자기소개 (기존 auth_router 소속과 동일 정책)
+app.include_router(social_router)  # 공개 — 소셜 로그인(google·kakao·naver), 코드 교환 후 자체 JWT 발급
 # 공개 — 외부 자동화 창구(/automation/*), X-Webhook-Token 자체 검증 (dispatcher는 자기소개라 토큰 없음)
 app.include_router(news_ingest_router)
 app.include_router(market_news_ingest_router)
