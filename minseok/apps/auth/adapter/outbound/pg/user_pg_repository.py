@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,9 +24,24 @@ class UserPgRepository(UserRepository):
         orm = result.scalar_one_or_none()
         return UserMapper.to_entity(orm) if orm is not None else None
 
-    async def create(self, email: str, password_hash: str, name: str) -> User:
+    async def create(
+        self,
+        email: str,
+        password_hash: str,
+        name: str,
+        terms_agreed_at: datetime | None = None,
+        marketing_agreed: bool = False,
+    ) -> User:
         result = await self._session.execute(
-            insert(UserOrm).values(email=email, password_hash=password_hash, name=name).returning(UserOrm)
+            insert(UserOrm)
+            .values(
+                email=email,
+                password_hash=password_hash,
+                name=name,
+                terms_agreed_at=terms_agreed_at,
+                marketing_agreed=marketing_agreed,
+            )
+            .returning(UserOrm)
         )
         await self._session.commit()
         return UserMapper.to_entity(result.scalar_one())

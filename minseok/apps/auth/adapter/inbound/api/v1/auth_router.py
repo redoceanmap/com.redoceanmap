@@ -20,7 +20,13 @@ async def register(
     use_case: AuthUseCase = Depends(get_auth_use_case),
 ):
     try:
-        return await use_case.register(body.email, body.password, body.name)
+        return await use_case.register(
+            body.email,
+            body.password,
+            body.name,
+            terms_agreed=body.terms_agreed,
+            marketing_agreed=body.marketing_agreed,
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

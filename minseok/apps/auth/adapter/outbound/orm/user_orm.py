@@ -1,4 +1,6 @@
-from sqlalchemy import String
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, String, false
 from sqlalchemy.orm import Mapped, mapped_column
 
 from core.database import Base
@@ -11,3 +13,6 @@ class UserOrm(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     name: Mapped[str] = mapped_column(String(100))
+    # 약관 동의 증빙 — 필수 약관(이용약관·개인정보) 동의 시각. 기존 유저는 NULL(소급 없음).
+    terms_agreed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    marketing_agreed: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())

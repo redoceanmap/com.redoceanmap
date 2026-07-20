@@ -44,6 +44,9 @@ export function startSocialLogin(provider: SocialProvider): void {
     state,
   });
   if (provider === "google") params.set("scope", "openid email profile");
+  // 프로바이더에 세션이 남아 있어도 자동 통과시키지 않고 항상 계정 로그인 화면을 띄운다.
+  if (provider === "kakao") params.set("prompt", "login");
+  if (provider === "naver") params.set("auth_type", "reauthenticate");
   window.location.href = `${AUTHORIZE_URLS[provider]}?${params.toString()}`;
 }
 

@@ -74,13 +74,45 @@ class SocialOauthGateway(SocialProfilePort):
                 "https://kapi.kakao.com/v2/user/me",
                 headers={"Authorization": f"Bearer {access_token}"},
             )
+            terms_agreed, marketing_agreed = await self._kakao_service_terms(client, access_token)
         info = res.json() if res.status_code == 200 else {}
         account = info.get("kakao_account") or {}
         email = account.get("email")
         if not email:
             raise ValueError("카카오 계정의 이메일 제공 동의가 필요합니다.")
         nickname = (account.get("profile") or {}).get("nickname")
-        return SocialProfileDto(provider="kakao", email=email, name=nickname or email.split("@")[0])
+        return SocialProfileDto(
+            provider="kakao",
+            email=email,
+            name=nickname or email.split("@")[0],
+            provider_terms_agreed=terms_agreed,
+            marketing_agreed=marketing_agreed,
+        )
+
+    async def _kakao_service_terms(
+        self, client: httpx.AsyncClient, access_token: str
+    ) -> tuple[bool, bool]:
+        """카카오싱크 간편가입 동의 내역 조회 — (필수 약관 전부 동의, 마케팅 동의).
+
+        콘솔에 간편가입 약관이 등록돼 있으면 카카오 동의 화면에서 필수 약관까지 받으므로
+        자체 동의 페이지를 건너뛴다. 미설정·조회 실패 시 (False, False)로 두어
+        기존 자체 동의 페이지로 자연스럽게 폴백한다. 마케팅 약관은 태그 "marketing" 기준.
+        """
+        try:
+            res = await client.get(
+                "https://kapi.kakao.com/v2/user/service_terms",
+                params={"result": "app_service_terms"},  # 앱에 등록된 전체 약관 + 동의 여부
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+        except httpx.HTTPError:
+            return False, False
+        if res.status_code != 200:
+            return False, False
+        terms = res.json().get("service_terms") or []
+        required = [t for t in terms if t.get("required")]
+        all_required_agreed = bool(required) and all(t.get("agreed") for t in required)
+        marketing = any(t.get("tag") == "marketing" and t.get("agreed") for t in terms)
+        return all_required_agreed, marketing
 
     async def _naver(self, code: str, redirect_uri: str) -> SocialProfileDto:
         if not NAVER_CLIENT_ID or not NAVER_CLIENT_SECRET:

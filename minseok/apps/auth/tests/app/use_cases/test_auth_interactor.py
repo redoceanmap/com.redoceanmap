@@ -18,9 +18,16 @@ class _StubUserRepository:
     async def find_by_id(self, user_id):
         return self.users.get(user_id)
 
-    async def create(self, email, password_hash, name):
+    async def create(self, email, password_hash, name, terms_agreed_at=None, marketing_agreed=False):
         self._seq += 1
-        user = User(id=self._seq, email=email, password_hash=password_hash, name=name)
+        user = User(
+            id=self._seq,
+            email=email,
+            password_hash=password_hash,
+            name=name,
+            terms_agreed_at=terms_agreed_at,
+            marketing_agreed=marketing_agreed,
+        )
         self.users[user.id] = user
         return user
 
@@ -55,6 +62,20 @@ async def test_가입은_액세스와_리프레시_토큰_쌍을_발급한다():
     assert result.refresh_token
     assert result.email == "a@b.c"
     assert result.refresh_token in interactor.refresh_repository.tokens
+
+
+async def test_가입은_필수_약관_동의_시각을_기록한다():
+    interactor = _interactor()
+    await interactor.register("a@b.c", "pw1234", "장민석", terms_agreed=True, marketing_agreed=True)
+    user = await interactor.repository.find_by_email("a@b.c")
+    assert user.terms_agreed_at is not None
+    assert user.marketing_agreed is True
+
+
+async def test_필수_약관_미동의_가입은_거부된다():
+    interactor = _interactor()
+    with pytest.raises(ValueError):
+        await interactor.register("a@b.c", "pw1234", "장민석", terms_agreed=False)
 
 
 async def test_중복_이메일_가입은_거부된다():

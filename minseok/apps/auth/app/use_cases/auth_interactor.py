@@ -51,11 +51,26 @@ class AuthInteractor(AuthUseCase):
             email=user.email,
         )
 
-    async def register(self, email: str, password: str, name: str) -> TokenDto:
+    async def register(
+        self,
+        email: str,
+        password: str,
+        name: str,
+        terms_agreed: bool = True,
+        marketing_agreed: bool = False,
+    ) -> TokenDto:
+        if not terms_agreed:
+            raise ValueError("필수 약관에 동의해야 가입할 수 있습니다.")
         existing = await self.repository.find_by_email(email)
         if existing:
             raise ValueError("이미 사용 중인 이메일입니다.")
-        user = await self.repository.create(email, self._hash_password(password), name)
+        user = await self.repository.create(
+            email,
+            self._hash_password(password),
+            name,
+            terms_agreed_at=datetime.now(timezone.utc),
+            marketing_agreed=marketing_agreed,
+        )
         return await self._issue_tokens(user)
 
     async def login(self, email: str, password: str) -> TokenDto:

@@ -41,22 +41,29 @@ export async function apiRegister(
   email: string,
   password: string,
   name: string,
+  marketingAgreed: boolean,
 ): Promise<AuthResponse> {
   const res = await fetch(`${API_BASE}/auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password, name }),
+    // terms_agreed: 필수 약관 체크를 통과해야만 제출되므로 항상 true
+    body: JSON.stringify({ email, password, name, terms_agreed: true, marketing_agreed: marketingAgreed }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.detail ?? "회원가입에 실패했습니다.");
   return data;
 }
 
+/** 소셜 로그인 응답 — 기존 유저면 토큰, 신규 유저면 약관 동의 요구. */
+export type SocialLoginResponse =
+  | ({ status: "ok" } & AuthResponse)
+  | { status: "consent_required"; consent_token: string; name: string; email: string };
+
 export async function apiSocialLogin(
   provider: string,
   code: string,
   redirectUri: string,
-): Promise<AuthResponse> {
+): Promise<SocialLoginResponse> {
   const res = await fetch(`${API_BASE}/auth/social/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -64,6 +71,21 @@ export async function apiSocialLogin(
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.detail ?? "소셜 로그인에 실패했습니다.");
+  return data;
+}
+
+/** 신규 소셜 유저의 약관 동의 완료 — 이 시점에 가입되고 토큰이 발급된다. */
+export async function apiSocialConsent(
+  consentToken: string,
+  marketingAgreed: boolean,
+): Promise<AuthResponse> {
+  const res = await fetch(`${API_BASE}/auth/social/consent`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ consent_token: consentToken, marketing_agreed: marketingAgreed }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail ?? "약관 동의 처리에 실패했습니다.");
   return data;
 }
 

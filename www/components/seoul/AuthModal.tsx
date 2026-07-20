@@ -114,10 +114,10 @@ function SnsButtons({ label }: { label: string }) {
 }
 
 const SIGNUP_TERMS = [
-  { label: "(필수) 만 14세 이상입니다.", required: true },
-  { label: "(필수) 이용약관 동의", required: true, link: true },
-  { label: "(필수) 개인정보 수집 및 이용 동의", required: true, link: true },
-  { label: "(선택) 마케팅 정보 수신 동의", required: false },
+  { name: "age", label: "(필수) 만 14세 이상입니다.", required: true },
+  { name: "terms", label: "(필수) 이용약관 동의", required: true, href: "/terms" },
+  { name: "privacy", label: "(필수) 개인정보 수집 및 이용 동의", required: true, href: "/privacy" },
+  { name: "marketing", label: "(선택) 마케팅 정보 수신 동의", required: false },
 ];
 
 export default function AuthModal() {
@@ -177,9 +177,14 @@ export default function AuthModal() {
       setUI((prev) => ({ ...prev, error: "비밀번호가 일치하지 않습니다." }));
       return;
     }
+    const unchecked = SIGNUP_TERMS.filter((t) => t.required && formData.get(t.name) !== "on");
+    if (unchecked.length > 0) {
+      setUI((prev) => ({ ...prev, error: "필수 약관에 모두 동의해 주세요." }));
+      return;
+    }
     setUI((prev) => ({ ...prev, error: "", loading: true }));
     try {
-      const res = await apiRegister(email, password, name);
+      const res = await apiRegister(email, password, name, formData.get("marketing") === "on");
       setStoredToken(res.access_token);
       setStoredRefreshToken(res.refresh_token);
       setToken(res.access_token);
@@ -410,7 +415,18 @@ export default function AuthModal() {
 
             <div className="mt-2 flex flex-col gap-2 text-sm">
               <label className="flex items-center gap-2 font-semibold cursor-pointer">
-                <input type="checkbox" className="accent-brand" />
+                <input
+                  type="checkbox"
+                  className="accent-brand"
+                  onChange={(e) => {
+                    const form = e.currentTarget.form;
+                    if (!form) return;
+                    for (const t of SIGNUP_TERMS) {
+                      const box = form.elements.namedItem(t.name);
+                      if (box instanceof HTMLInputElement) box.checked = e.currentTarget.checked;
+                    }
+                  }}
+                />
                 전체 동의합니다.
               </label>
               {SIGNUP_TERMS.map((t) => (
@@ -418,14 +434,20 @@ export default function AuthModal() {
                   key={t.label}
                   className="flex items-center gap-2 text-foreground-muted cursor-pointer pl-5"
                 >
-                  <input type="checkbox" className="accent-brand" />
-                  {t.link ? (
+                  <input type="checkbox" name={t.name} className="accent-brand" />
+                  {t.href ? (
                     <span>
                       {t.label.split(/(이용약관|개인정보 수집 및 이용)/).map((part, i) =>
                         part === "이용약관" || part === "개인정보 수집 및 이용" ? (
-                          <span key={i} className="underline">
+                          <a
+                            key={i}
+                            href={t.href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline hover:text-foreground"
+                          >
                             {part}
-                          </span>
+                          </a>
                         ) : (
                           <span key={i}>{part}</span>
                         )
