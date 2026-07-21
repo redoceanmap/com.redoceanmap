@@ -26,13 +26,18 @@ class _StubResult:
 
 
 class _StubSession:
-    """require_permission의 조인 조회를 흉내낸다 — granted 여부만 제어."""
+    """가드의 두 조회를 흉내낸다 — users 상태 조회는 정상 계정, 권한 조회는 granted 제어."""
 
     def __init__(self, granted: bool):
         self._granted = granted
 
-    async def execute(self, *_args, **_kwargs):
+    async def execute(self, query, *_args, **_kwargs):
+        if "FROM users" in str(query):
+            return _StubResult((None, None))  # (suspended_at, deleted_at) — 정상 계정
         return _StubResult((1,) if self._granted else None)
+
+    async def rollback(self):
+        pass
 
 
 def _override_db(granted: bool):

@@ -16,3 +16,7 @@ class UserOrm(Base):
     # 약관 동의 증빙 — 필수 약관(이용약관·개인정보) 동의 시각. 기존 유저는 NULL(소급 없음).
     terms_agreed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     marketing_agreed: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    # 운영 제재 — 정지(해제 가능)와 탈퇴(익명화, 비가역). NULL = 정상.
+    suspended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    suspended_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

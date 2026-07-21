@@ -1,19 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, KeyRound, Search, ShieldCheck } from "lucide-react";
+import { Ban, Download, KeyRound, LogOut, RotateCcw, Search, ShieldCheck, UserX } from "lucide-react";
 import {
   downloadCsv,
   fetchAdminMembers,
   fetchAdminRoles,
   fetchAllAdminMembers,
   grantAdminRole,
+  reinstateMember,
   revokeAdminRole,
+  revokeMemberSessions,
+  suspendMember,
+  withdrawMember,
   formatDate,
   type AdminMember,
 } from "@/lib/adminApi";
 import BlockSkeleton from "@/components/admin/BlockSkeleton";
+import ConfirmDialog from "@/components/admin/ConfirmDialog";
 import Empty from "@/components/admin/Empty";
 import Kpi from "@/components/admin/Kpi";
 import { showToast } from "@/components/admin/toast";
@@ -25,20 +30,55 @@ const PERMISSION_DESC: Record<string, string> = {
   "dashboard:read": "대시보드 KPI 조회",
   "areas:read": "상권 목록 조회",
   "members:read": "회원·역할 구성 조회",
-  "members:write": "회원 역할 부여/회수",
+  "members:write": "회원 역할 부여/회수·제재",
   "recommendations:read": "추천 기록 조회",
   "datasources:read": "데이터셋 현황 조회",
   "audit:read": "감사 로그 조회",
 };
 
+type DialogAction = "suspend" | "revoke-sessions" | "withdraw";
+
+const DIALOG_META: Record<
+  DialogAction,
+  { title: string; message: string; confirmLabel: string; danger: boolean; withReason: boolean }
+> = {
+  suspend: {
+    title: "계정 정지",
+    message:
+      "정지하면 즉시 모든 API 접근이 차단되고 강제 로그아웃됩니다.\n해제하면 재로그인 후 이전 상태 그대로 복구됩니다.",
+    confirmLabel: "정지",
+    danger: false,
+    withReason: true,
+  },
+  "revoke-sessions": {
+    title: "세션 강제 만료",
+    message: "이 회원의 모든 로그인 세션(리프레시 토큰)을 폐기합니다.\n회원은 다시 로그인해야 합니다.",
+    confirmLabel: "세션 만료",
+    danger: false,
+    withReason: false,
+  },
+  withdraw: {
+    title: "탈퇴 처리 (비가역)",
+    message:
+      "이메일·이름이 익명화되고 로그인 수단이 무효화됩니다.\n되돌릴 수 없습니다. 약관 제8조의 이메일 접수 요청 처리에만 사용하세요.",
+    confirmLabel: "탈퇴 처리",
+    danger: true,
+    withReason: false,
+  },
+};
+
 export default function MembersPage() {
-  // REACT_RULES 패턴 B: 목록 질의 상태는 단일 객체 useState (검색어 입력은 패턴 A — FormData 제출)
-  const [query, setQuery] = useState({ search: "", page: 0 });
+  // REACT_RULES 패턴 B: 질의·모달 상태를 단일 객체 useState로 (사유 입력은 모달의 FormData — 패턴 A)
+  const [ui, setUi] = useState<{
+    search: string;
+    page: number;
+    dialog: { action: DialogAction; member: AdminMember } | null;
+  }>({ search: "", page: 0, dialog: null });
   const queryClient = useQueryClient();
 
   const { data, isPending, isError } = useQuery({
-    queryKey: ["admin-members", query],
-    queryFn: () => fetchAdminMembers(query.search, PAGE_SIZE, query.page * PAGE_SIZE),
+    queryKey: ["admin-members", ui.search, ui.page],
+    queryFn: () => fetchAdminMembers(ui.search, PAGE_SIZE, ui.page * PAGE_SIZE),
   });
   const { data: rolesData } = useQuery({
     queryKey: ["admin-roles"],
@@ -64,24 +104,47 @@ export default function MembersPage() {
     },
     onError: (e) => showToast(e instanceof Error ? e.message : "역할 회수에 실패했습니다.", "error"),
   });
+  const moderate = useMutation({
+    mutationFn: async ({
+      action,
+      userId,
+      reason,
+    }: {
+      action: DialogAction | "reinstate";
+      userId: number;
+      reason: string;
+    }) => {
+      if (action === "suspend") return { kind: "정지", result: await suspendMember(userId, reason) };
+      if (action === "reinstate") return { kind: "정지 해제", result: await reinstateMember(userId) };
+      if (action === "withdraw") return { kind: "탈퇴 처리", result: await withdrawMember(userId) };
+      const { revoked } = await revokeMemberSessions(userId);
+      return { kind: `세션 만료(${revoked}건 폐기)`, result: null };
+    },
+    onSuccess: ({ kind }) => {
+      invalidate();
+      showToast(`${kind}를 완료했습니다.`);
+    },
+    onError: (e) => showToast(e instanceof Error ? e.message : "처리에 실패했습니다.", "error"),
+  });
 
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    setQuery({ search: String(formData.get("q") ?? "").trim(), page: 0 });
+    setUi((prev) => ({ ...prev, search: String(formData.get("q") ?? "").trim(), page: 0 }));
   };
 
   const exportCsv = async () => {
     try {
-      const all = await fetchAllAdminMembers(query.search);
+      const all = await fetchAllAdminMembers(ui.search);
       downloadCsv(
         "admin-members.csv",
-        ["ID", "이름", "이메일", "가입일", "마케팅 동의", "역할"],
+        ["ID", "이름", "이메일", "가입일", "상태", "마케팅 동의", "역할"],
         all.map((m) => [
           m.id,
           m.name,
           m.email,
           formatDate(m.joined_at),
+          m.deleted_at ? "탈퇴" : m.suspended_at ? "정지" : "활성",
           m.marketing_agreed ? "동의" : "미동의",
           m.roles.join("|"),
         ]),
@@ -95,7 +158,15 @@ export default function MembersPage() {
   const roles = rolesData?.roles ?? [];
   const total = data?.total ?? 0;
   const lastPage = Math.max(Math.ceil(total / PAGE_SIZE) - 1, 0);
-  const mutating = grant.isPending || revoke.isPending;
+  const mutating = grant.isPending || revoke.isPending || moderate.isPending;
+
+  // 마지막 페이지의 마지막 회원이 목록에서 빠지면(탈퇴로 검색 조건 이탈 등) 빈 페이지에
+  // 고립되므로 유효 범위로 되돌린다.
+  useEffect(() => {
+    if (!isPending && data && data.items.length === 0 && ui.page > 0) {
+      setUi((prev) => ({ ...prev, page: Math.min(prev.page - 1, lastPage) }));
+    }
+  }, [isPending, data, ui.page, lastPage]);
 
   const toggleRole = (member: AdminMember, roleCode: string) => {
     if (mutating) return;
@@ -103,12 +174,24 @@ export default function MembersPage() {
     (has ? revoke : grant).mutate({ userId: member.id, roleCode });
   };
 
+  // 해제는 모달 없이 즉시 실행 — 재렌더 전 연타로 중복 요청되지 않게 mutate 직전에도 잠근다.
+  const handleReinstate = (userId: number) => {
+    if (moderate.isPending) return;
+    moderate.mutate({ action: "reinstate", userId, reason: "" });
+  };
+
+  const openDialog = (action: DialogAction, member: AdminMember) =>
+    setUi((prev) => ({ ...prev, dialog: { action, member } }));
+  const closeDialog = () => setUi((prev) => ({ ...prev, dialog: null }));
+
   return (
     <div className="max-w-7xl mx-auto space-y-5">
       <div className="flex items-end justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight">회원 관리</h1>
-          <p className="mt-1 text-sm text-foreground-muted">가입 회원 조회 및 역할(RBAC) 부여</p>
+          <p className="mt-1 text-sm text-foreground-muted">
+            회원 조회 · 역할(RBAC) 부여 · 정지/탈퇴 처리
+          </p>
         </div>
         <button
           type="button"
@@ -121,10 +204,7 @@ export default function MembersPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 max-w-md">
-        <Kpi
-          label={query.search ? "전체 회원 (검색 결과)" : "전체 회원"}
-          value={total.toLocaleString()}
-        />
+        <Kpi label={ui.search ? "전체 회원 (검색 결과)" : "전체 회원"} value={total.toLocaleString()} />
         <Kpi label="운영 역할 종류" value={String(roles.length)} />
       </div>
 
@@ -133,7 +213,7 @@ export default function MembersPage() {
           <Search size={16} className="text-foreground-muted shrink-0" />
           <input
             name="q"
-            defaultValue={query.search}
+            defaultValue={ui.search}
             placeholder="이름 또는 이메일 검색 (Enter)"
             className="bg-transparent outline-none flex-1 placeholder:text-foreground-muted"
           />
@@ -154,8 +234,9 @@ export default function MembersPage() {
                   <tr className="text-left text-xs text-foreground-muted border-b border-border bg-background/60">
                     <th className="font-medium px-5 py-2.5">회원</th>
                     <th className="font-medium px-5 py-2.5">가입일</th>
-                    <th className="font-medium px-5 py-2.5">마케팅 동의</th>
-                    <th className="font-medium px-5 py-2.5 text-right">역할</th>
+                    <th className="font-medium px-5 py-2.5">상태</th>
+                    <th className="font-medium px-5 py-2.5">역할</th>
+                    <th className="font-medium px-5 py-2.5 text-right">관리</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -173,19 +254,35 @@ export default function MembersPage() {
                         </div>
                       </td>
                       <td className="px-5 py-3 text-foreground-muted tabular-nums">{formatDate(m.joined_at)}</td>
-                      <td className="px-5 py-3 text-foreground-muted">{m.marketing_agreed ? "동의" : "—"}</td>
                       <td className="px-5 py-3">
-                        <div className="flex justify-end gap-1.5 flex-wrap">
-                          {roles.map((r) => (
-                            <RoleChip
-                              key={r.code}
-                              label={r.name}
-                              active={m.roles.includes(r.code)}
-                              disabled={mutating}
-                              onClick={() => toggleRole(m, r.code)}
-                            />
-                          ))}
+                        <StatusBadge member={m} />
+                      </td>
+                      <td className="px-5 py-3">
+                        <div className="flex gap-1.5 flex-wrap">
+                          {m.deleted_at ? (
+                            <span className="text-xs text-foreground-muted">—</span>
+                          ) : (
+                            roles.map((r) => (
+                              <RoleChip
+                                key={r.code}
+                                label={r.name}
+                                active={m.roles.includes(r.code)}
+                                disabled={mutating}
+                                onClick={() => toggleRole(m, r.code)}
+                              />
+                            ))
+                          )}
                         </div>
+                      </td>
+                      <td className="px-5 py-3">
+                        <MemberActions
+                          member={m}
+                          disabled={mutating}
+                          onSuspend={() => openDialog("suspend", m)}
+                          onReinstate={() => handleReinstate(m.id)}
+                          onRevokeSessions={() => openDialog("revoke-sessions", m)}
+                          onWithdraw={() => openDialog("withdraw", m)}
+                        />
                       </td>
                     </tr>
                   ))}
@@ -205,18 +302,31 @@ export default function MembersPage() {
                         {m.email} · {formatDate(m.joined_at)}
                       </p>
                     </div>
+                    <StatusBadge member={m} />
                   </div>
-                  <div className="mt-2 flex gap-1.5 flex-wrap">
-                    {roles.map((r) => (
-                      <RoleChip
-                        key={r.code}
-                        label={r.name}
-                        active={m.roles.includes(r.code)}
+                  {!m.deleted_at && (
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <div className="flex gap-1.5 flex-wrap">
+                        {roles.map((r) => (
+                          <RoleChip
+                            key={r.code}
+                            label={r.name}
+                            active={m.roles.includes(r.code)}
+                            disabled={mutating}
+                            onClick={() => toggleRole(m, r.code)}
+                          />
+                        ))}
+                      </div>
+                      <MemberActions
+                        member={m}
                         disabled={mutating}
-                        onClick={() => toggleRole(m, r.code)}
+                        onSuspend={() => openDialog("suspend", m)}
+                        onReinstate={() => handleReinstate(m.id)}
+                        onRevokeSessions={() => openDialog("revoke-sessions", m)}
+                        onWithdraw={() => openDialog("withdraw", m)}
                       />
-                    ))}
-                  </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -229,19 +339,19 @@ export default function MembersPage() {
         <div className="flex items-center justify-center gap-3 text-sm">
           <button
             type="button"
-            disabled={query.page === 0}
-            onClick={() => setQuery((prev) => ({ ...prev, page: prev.page - 1 }))}
+            disabled={ui.page === 0}
+            onClick={() => setUi((prev) => ({ ...prev, page: prev.page - 1 }))}
             className="px-4 h-9 rounded-full border border-border disabled:opacity-40 hover:bg-black/5 transition-colors"
           >
             이전
           </button>
           <span className="text-foreground-muted tabular-nums">
-            {query.page + 1} / {lastPage + 1}
+            {ui.page + 1} / {lastPage + 1}
           </span>
           <button
             type="button"
-            disabled={query.page >= lastPage}
-            onClick={() => setQuery((prev) => ({ ...prev, page: prev.page + 1 }))}
+            disabled={ui.page >= lastPage}
+            onClick={() => setUi((prev) => ({ ...prev, page: prev.page + 1 }))}
             className="px-4 h-9 rounded-full border border-border disabled:opacity-40 hover:bg-black/5 transition-colors"
           >
             다음
@@ -285,7 +395,109 @@ export default function MembersPage() {
           </div>
         ))}
       </section>
+
+      {ui.dialog && (
+        <ConfirmDialog
+          {...DIALOG_META[ui.dialog.action]}
+          message={`대상: ${ui.dialog.member.name} (${ui.dialog.member.email})\n\n${DIALOG_META[ui.dialog.action].message}`}
+          onClose={closeDialog}
+          onConfirm={(reason) => {
+            moderate.mutate({ action: ui.dialog!.action, userId: ui.dialog!.member.id, reason });
+            closeDialog();
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function StatusBadge({ member }: { member: AdminMember }) {
+  if (member.deleted_at) {
+    return (
+      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-foreground/5 text-foreground-muted">
+        탈퇴
+      </span>
+    );
+  }
+  if (member.suspended_at) {
+    return (
+      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700">
+        정지
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700">
+      활성
+    </span>
+  );
+}
+
+function MemberActions({
+  member,
+  disabled,
+  onSuspend,
+  onReinstate,
+  onRevokeSessions,
+  onWithdraw,
+}: {
+  member: AdminMember;
+  disabled: boolean;
+  onSuspend: () => void;
+  onReinstate: () => void;
+  onRevokeSessions: () => void;
+  onWithdraw: () => void;
+}) {
+  if (member.deleted_at) return <span className="block text-right text-xs text-foreground-muted">—</span>;
+  return (
+    <div className="flex justify-end gap-1">
+      {member.suspended_at ? (
+        <ActionIcon title="정지 해제" onClick={onReinstate} disabled={disabled}>
+          <RotateCcw size={15} />
+        </ActionIcon>
+      ) : (
+        <ActionIcon title="계정 정지" onClick={onSuspend} disabled={disabled}>
+          <Ban size={15} />
+        </ActionIcon>
+      )}
+      <ActionIcon title="세션 강제 만료" onClick={onRevokeSessions} disabled={disabled}>
+        <LogOut size={15} />
+      </ActionIcon>
+      <ActionIcon title="탈퇴 처리 (비가역)" onClick={onWithdraw} disabled={disabled} danger>
+        <UserX size={15} />
+      </ActionIcon>
+    </div>
+  );
+}
+
+function ActionIcon({
+  title,
+  onClick,
+  disabled,
+  danger = false,
+  children,
+}: {
+  title: string;
+  onClick: () => void;
+  disabled: boolean;
+  danger?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      disabled={disabled}
+      onClick={onClick}
+      className={`grid place-items-center w-8 h-8 rounded-full border border-border transition-colors disabled:opacity-40 ${
+        danger
+          ? "text-red-500 hover:bg-red-50 hover:text-red-700"
+          : "text-foreground-muted hover:bg-black/5 hover:text-foreground"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 

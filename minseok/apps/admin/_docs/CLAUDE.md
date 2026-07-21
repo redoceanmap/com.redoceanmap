@@ -16,8 +16,19 @@
 - 권한 코드 7종: `dashboard:read` · `areas:read` · `members:read` · `members:write` ·
   `recommendations:read` · `datasources:read` · `audit:read`. RBAC 테이블(roles 등 4종)은 **auth 소유**,
   시드는 alembic `f0a1b2c3d4e5`(6종) + `a1b2c3d4e5f6`(audit:read), 최초 부여는 `scripts/grant_admin.py <email>`.
-- **감사 로그**: 역할 부여/회수 등 변경 행위를 `AuditLogPort`(PG, `admin_audit_logs`)에 기록한다.
-  steward record 포트(로그 출력, 관찰성)와 구분 — 매 요청성 관찰은 DB에 남기지 않는다.
+- **감사 로그**: 역할 부여/회수·정지/해제/세션 폐기/탈퇴 등 변경 행위를 `AuditLogPort`(PG,
+  `admin_audit_logs`)에 기록한다. steward record 포트(로그 출력, 관찰성)와 구분 —
+  매 요청성 관찰은 DB에 남기지 않는다.
+- **회원 제재**(alembic `b2c3d4e5f6a7` — users.suspended_at/suspended_reason/deleted_at):
+  정지는 즉시 차단(core/security.get_current_user_id가 매 요청 users 상태 검사, 기발급
+  액세스 토큰도 403) + 리프레시 토큰 전량 폐기(강제 로그아웃). 해제는 상태만 복원 —
+  세션은 복원하지 않고 재로그인(표준). 탈퇴는 비가역 — 개인정보 익명화
+  (email=deleted-{id}-{rand}@removed.local, name=탈퇴회원, 비번 무효화) + 역할 회수 + 토큰 폐기.
+  약관 제8조의 이메일 접수 탈퇴 요청을 운영자가 처리하는 도구다.
+  - **배포 순서 주의**: get_current_user_id가 매 요청 `suspended_at/deleted_at`을 SELECT하므로,
+    신코드 재기동 **전에 반드시 alembic upgrade**를 먼저 해야 한다(컬럼 부재 시 전 인증 요청 500).
+  - 세션 강제 폐기는 Redis 역인덱스 우선 + `SCAN` 폴백이라 역인덱스 도입 전 발급된 레거시
+    토큰도 누락 없이 폐기한다(관리 작업 저빈도라 SCAN 비용 무시).
 
 ## 슬라이스 (1:1 컨벤션)
 
@@ -25,7 +36,7 @@
 |---|---|---|
 | steward (페르소나) | GET /admin/myself · GET /admin/me | MemberDirectoryPort |
 | dashboard | GET /admin/dashboard | MemberDirectory + RecommendationDirectory + CommercialData |
-| member | GET /admin/members · GET /admin/members/roles · POST /admin/members/{id}/roles · DELETE /admin/members/{id}/roles/{code} | MemberDirectoryPort |
+| member | GET /admin/members · GET /admin/members/roles · POST/DELETE /admin/members/{id}/roles[/{code}] · POST /admin/members/{id}/{suspend,reinstate,revoke-sessions,withdraw} | MemberDirectoryPort |
 | area | GET /admin/areas | CommercialDataPort (get_area_overview) |
 | recommendation_log | GET /admin/recommendations | RecommendationDirectoryPort |
 | data_source | GET /admin/data-sources | CommercialData (get_dataset_stats) + RecommendationDirectory + PriceBarStorage (coverage) |

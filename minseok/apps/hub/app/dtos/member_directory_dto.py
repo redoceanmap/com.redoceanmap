@@ -17,6 +17,8 @@ class MemberInfo:
     joined_at: datetime | None  # terms_agreed_at 프록시 — 동의 이력 없는 구유저는 None
     marketing_agreed: bool
     roles: tuple[str, ...]  # role code 목록 (예: ("admin",))
+    suspended_at: datetime | None = None  # 정지 시각 (None = 정상)
+    deleted_at: datetime | None = None  # 탈퇴 시각 — 개인정보 익명화됨
 
 
 @dataclass(frozen=True)

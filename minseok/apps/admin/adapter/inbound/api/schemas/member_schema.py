@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class MemberSchema(BaseModel):
@@ -10,6 +10,8 @@ class MemberSchema(BaseModel):
     joined_at: datetime | None
     marketing_agreed: bool
     roles: list[str]
+    suspended_at: datetime | None = None
+    deleted_at: datetime | None = None
 
 
 class MemberListResponseSchema(BaseModel):
@@ -29,3 +31,11 @@ class RoleListResponseSchema(BaseModel):
 
 class RoleGrantRequestSchema(BaseModel):
     role_code: str
+
+
+class SuspendRequestSchema(BaseModel):
+    reason: str = Field("", max_length=200)  # users.suspended_reason 컬럼 폭과 일치
+
+
+class SessionRevokeResponseSchema(BaseModel):
+    revoked: int

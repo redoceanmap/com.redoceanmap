@@ -14,4 +14,7 @@ class UserMapper:
             name=orm.name,
             terms_agreed_at=orm.terms_agreed_at,
             marketing_agreed=orm.marketing_agreed,
+            suspended_at=orm.suspended_at,
+            suspended_reason=orm.suspended_reason,
+            deleted_at=orm.deleted_at,
         )

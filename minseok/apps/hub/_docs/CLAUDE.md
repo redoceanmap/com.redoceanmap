@@ -48,11 +48,13 @@ apps/hub/dependencies/commercial_data_provider.py  # get_commercial_data_port (N
 apps/hub/app/
 ├── ports/output/member_directory_port.py   # MemberDirectoryPort (ABC)
 │     list_members / member_stats / list_roles / grant_role / revoke_role / list_user_permissions
-└── dtos/member_directory_dto.py            # MemberInfo · MemberPage · MemberStats · RoleInfo
+│     / suspend / reinstate / revoke_sessions / withdraw(익명화·비가역)
+└── dtos/member_directory_dto.py            # MemberInfo(suspended_at·deleted_at 포함) · MemberPage · MemberStats · RoleInfo
 apps/hub/dependencies/member_directory_provider.py  # get_member_directory_port (NotImplementedError 스텁)
 ```
 
-- **구현**: `auth`의 `MemberDirectoryGateway`(users·RBAC 조인 조회, 부여/회수는 멱등).
+- **구현**: `auth`의 `MemberDirectoryGateway`(users·RBAC 조인 조회, 부여/회수는 멱등,
+  제재는 리프레시 저장소와 협력 — 정지/탈퇴 시 토큰 전량 폐기).
 - **소비**: `admin`의 member·steward·dashboard 인터랙터(회원 관리·/admin/me 권한 판정·KPI).
 - **배선**: `main.py`에서 `app.dependency_overrides[get_member_directory_port] = get_member_directory_gateway`.
 

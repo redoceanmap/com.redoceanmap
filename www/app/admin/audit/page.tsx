@@ -6,10 +6,14 @@ import { fetchAdminAudit } from "@/lib/adminApi";
 import BlockSkeleton from "@/components/admin/BlockSkeleton";
 import Empty from "@/components/admin/Empty";
 
-// action 코드 → 한글 라벨·아이콘
+// action 코드 → 한글 라벨·아이콘 (grant=긍정적 행위는 초록, 아니면 주황)
 const ACTION_META: Record<string, { label: string; grant: boolean }> = {
   "role.grant": { label: "역할 부여", grant: true },
   "role.revoke": { label: "역할 회수", grant: false },
+  "member.suspend": { label: "계정 정지", grant: false },
+  "member.reinstate": { label: "정지 해제", grant: true },
+  "member.sessions.revoke": { label: "세션 만료", grant: false },
+  "member.withdraw": { label: "탈퇴 처리", grant: false },
 };
 
 export default function AuditPage() {
@@ -25,7 +29,7 @@ export default function AuditPage() {
       <div>
         <h1 className="text-xl sm:text-2xl font-bold tracking-tight">감사 로그</h1>
         <p className="mt-1 text-sm text-foreground-muted">
-          관리자 행위 기록 (역할 부여/회수 · 최근 50건)
+          관리자 행위 기록 (역할·정지·탈퇴·세션 · 최근 50건)
         </p>
       </div>
 

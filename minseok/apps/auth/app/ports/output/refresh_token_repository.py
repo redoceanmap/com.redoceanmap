@@ -14,3 +14,8 @@ class RefreshTokenRepository(ABC):
 
     @abstractmethod
     async def delete(self, token: str) -> None: ...
+
+    @abstractmethod
+    async def delete_all_for_user(self, user_id: int) -> int:
+        """유저의 리프레시 토큰 전량 폐기(강제 로그아웃) — 폐기 건수를 반환한다."""
+        ...

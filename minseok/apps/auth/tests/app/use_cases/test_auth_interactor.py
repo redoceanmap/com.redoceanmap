@@ -121,3 +121,29 @@ async def test_알_수_없는_리프레시_토큰은_거부된다():
     interactor = _interactor()
     with pytest.raises(ValueError):
         await interactor.refresh("없는토큰")
+
+
+async def test_정지된_계정은_로그인과_리프레시가_거부된다():
+    from dataclasses import replace
+
+    repo = _StubUserRepository()
+    refresh_repo = _StubRefreshTokenRepository()
+    interactor = AuthInteractor(repository=repo, refresh_repository=refresh_repo)
+    tokens = await interactor.register("ban@b.c", "pw1234", "정지자")
+    repo.users[1] = replace(repo.users[1], suspended_at=datetime.now(timezone.utc))
+
+    with pytest.raises(ValueError):
+        await interactor.login("ban@b.c", "pw1234")
+    with pytest.raises(ValueError):
+        await interactor.refresh(tokens.refresh_token)
+
+
+async def test_정지된_계정은_get_me가_None을_반환한다():
+    from dataclasses import replace
+
+    repo = _StubUserRepository()
+    interactor = AuthInteractor(repository=repo, refresh_repository=_StubRefreshTokenRepository())
+    tokens = await interactor.register("ban2@b.c", "pw1234", "정지자")
+    repo.users[1] = replace(repo.users[1], suspended_at=datetime.now(timezone.utc))
+
+    assert await interactor.get_me(tokens.access_token) is None

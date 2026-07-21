@@ -25,9 +25,16 @@ _bearer = HTTPBearer(auto_error=False)
 _basic = HTTPBasic(auto_error=False)
 
 
-def get_current_user_id(
+async def get_current_user_id(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+    db: AsyncSession = Depends(get_db),
 ) -> int:
+    """JWT 서명 검증 + 계정 상태 검사 — 정지/탈퇴는 기발급 토큰도 즉시 차단한다.
+
+    매 요청 users PK 조회 1회가 비용이지만, 정지가 액세스 토큰 수명(60분)만큼
+    지연되는 것을 막는다(운영 결정 2026-07-21). 원시 SQL인 이유는 core가
+    apps ORM을 import할 수 없어서다(스타 토폴로지).
+    """
     if credentials is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -36,13 +43,34 @@ def get_current_user_id(
         )
     try:
         payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[ALGORITHM])
-        return int(payload["sub"])
+        user_id = int(payload["sub"])
     except (JWTError, KeyError, ValueError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="토큰이 유효하지 않습니다.",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    row = (
+        await db.execute(
+            text("SELECT suspended_at, deleted_at FROM users WHERE id = :uid"),
+            {"uid": user_id},
+        )
+    ).first()
+    if row is None or row[1] is not None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="유효하지 않은 계정입니다.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if row[0] is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="정지된 계정입니다. 관리자에게 문의해 주세요.",
+        )
+    # 가드 SELECT가 연 트랜잭션을 즉시 닫아 커넥션을 반환한다 —
+    # 이 세션을 재사용하는 긴 응답(예: chat SSE) 동안 풀 점유를 막는다.
+    await db.rollback()
+    return user_id
 
 
 def require_permission(code: str):
@@ -65,7 +93,9 @@ def require_permission(code: str):
             ),
             {"uid": user_id, "code": code},
         )
-        if found.first() is None:
+        granted = found.first() is not None
+        await db.rollback()  # 권한 조회 트랜잭션도 즉시 종료(가드와 동일 사유)
+        if not granted:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="권한이 없습니다.")
         return user_id
 

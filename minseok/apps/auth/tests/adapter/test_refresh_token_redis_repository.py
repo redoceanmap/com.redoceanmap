@@ -8,6 +8,7 @@ from auth.adapter.outbound.redis.refresh_token_redis_repository import (
 class _FakeRedis:
     def __init__(self):
         self.store: dict[str, str] = {}
+        self.sets: dict[str, set[str]] = {}
         self.exat: dict[str, int] = {}
 
     async def set(self, key, value, exat=None):
@@ -18,7 +19,29 @@ class _FakeRedis:
         return self.store.get(key)
 
     async def delete(self, key):
+        existed = key in self.store or key in self.sets
         self.store.pop(key, None)
+        self.sets.pop(key, None)
+        return 1 if existed else 0
+
+    async def sadd(self, key, member):
+        self.sets.setdefault(key, set()).add(member)
+
+    async def srem(self, key, member):
+        self.sets.get(key, set()).discard(member)
+
+    async def smembers(self, key):
+        return set(self.sets.get(key, set()))
+
+    async def expireat(self, key, when):
+        self.exat[key] = when
+
+    async def scan_iter(self, match=None):
+        import fnmatch
+
+        for key in list(self.store):
+            if match is None or fnmatch.fnmatch(key, match):
+                yield key
 
 
 def _expires_at():
@@ -51,7 +74,41 @@ async def test_없는_토큰은_None을_돌려준다():
 
 
 async def test_삭제하면_더_이상_조회되지_않는다():
-    repository = RefreshTokenRedisRepository(redis=_FakeRedis())
+    redis = _FakeRedis()
+    repository = RefreshTokenRedisRepository(redis=redis)
     await repository.create(user_id=1, token="tok", expires_at=_expires_at())
     await repository.delete("tok")
     assert await repository.find_by_token("tok") is None
+    assert "tok" not in redis.sets.get("auth:refresh:user:1", set())  # 역인덱스도 정리
+
+
+async def test_유저_단위_전량_폐기는_모든_토큰과_인덱스를_지운다():
+    redis = _FakeRedis()
+    repository = RefreshTokenRedisRepository(redis=redis)
+    await repository.create(user_id=1, token="tok-a", expires_at=_expires_at())
+    await repository.create(user_id=1, token="tok-b", expires_at=_expires_at())
+    await repository.create(user_id=2, token="tok-c", expires_at=_expires_at())
+
+    revoked = await repository.delete_all_for_user(1)
+
+    assert revoked == 2
+    assert await repository.find_by_token("tok-a") is None
+    assert await repository.find_by_token("tok-b") is None
+    assert await repository.find_by_token("tok-c") is not None  # 다른 유저는 무관
+    assert "auth:refresh:user:1" not in redis.sets
+
+
+async def test_역인덱스에_없는_레거시_토큰도_SCAN으로_폐기된다():
+    redis = _FakeRedis()
+    repository = RefreshTokenRedisRepository(redis=redis)
+    # 역인덱스 도입 전처럼 토큰만 있고 유저 인덱스 set이 없는 상태를 흉내
+    import json
+
+    exat = int(_expires_at().timestamp())
+    redis.store["auth:refresh:legacy"] = json.dumps({"user_id": 1, "expires_at": "x"})
+    redis.exat["auth:refresh:legacy"] = exat
+
+    revoked = await repository.delete_all_for_user(1)
+
+    assert revoked == 1
+    assert await repository.find_by_token("legacy") is None

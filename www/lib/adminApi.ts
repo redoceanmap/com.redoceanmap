@@ -45,6 +45,8 @@ export type AdminMember = {
   joined_at: string | null;
   marketing_agreed: boolean;
   roles: string[];
+  suspended_at: string | null;
+  deleted_at: string | null;
 };
 
 export type AdminMembersPage = { total: number; items: AdminMember[] };
@@ -128,6 +130,21 @@ export const revokeAdminRole = (userId: number, roleCode: string): Promise<Admin
     method: "DELETE",
   });
 
+export const suspendMember = (userId: number, reason: string): Promise<AdminMember> =>
+  request(`/admin/members/${userId}/suspend`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+
+export const reinstateMember = (userId: number): Promise<AdminMember> =>
+  request(`/admin/members/${userId}/reinstate`, { method: "POST", body: JSON.stringify({}) });
+
+export const revokeMemberSessions = (userId: number): Promise<{ revoked: number }> =>
+  request(`/admin/members/${userId}/revoke-sessions`, { method: "POST", body: JSON.stringify({}) });
+
+export const withdrawMember = (userId: number): Promise<AdminMember> =>
+  request(`/admin/members/${userId}/withdraw`, { method: "POST", body: JSON.stringify({}) });
+
 export const fetchAdminRecommendations = (limit = 50): Promise<AdminRecommendationLogs> =>
   request(`/admin/recommendations?limit=${limit}`);
 
@@ -152,8 +169,11 @@ export const fetchAllAdminMembers = async (search: string): Promise<AdminMember[
 // BOM 포함 CSV 다운로드 (엑셀 한글 호환)
 export const downloadCsv = (filename: string, header: string[], rows: (string | number)[][]) => {
   const escape = (v: string | number) => {
-    const s = String(v);
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    let s = String(v);
+    // CSV 수식 주입 방어 — 사용자 제어 값(이름·이메일)이 =,+,-,@로 시작하면
+    // 스프레드시트가 수식으로 실행하므로 작은따옴표로 무력화한다.
+    if (/^[=+\-@]/.test(s)) s = `'${s}`;
+    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   const csv = [header, ...rows].map((r) => r.map(escape).join(",")).join("\n");
   const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });

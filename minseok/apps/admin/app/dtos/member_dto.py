@@ -32,3 +32,28 @@ class RoleChangeCommand:
 @dataclass(frozen=True)
 class RoleChangeResponse:
     member: MemberInfo
+
+
+@dataclass(frozen=True)
+class SuspendCommand:
+    actor_id: int
+    user_id: int
+    reason: str
+
+
+@dataclass(frozen=True)
+class MemberActionCommand:
+    """대상 유저 1명에 대한 단순 행위(해제·세션 폐기·탈퇴) 공용 커맨드."""
+
+    actor_id: int
+    user_id: int
+
+
+@dataclass(frozen=True)
+class MemberActionResponse:
+    member: MemberInfo
+
+
+@dataclass(frozen=True)
+class SessionRevokeResponse:
+    revoked: int  # 폐기된 리프레시 토큰 수

@@ -77,6 +77,7 @@ class AuthInteractor(AuthUseCase):
         user = await self.repository.find_by_email(email)
         if not user or not self._verify_password(password, user.password_hash):
             raise ValueError("이메일 또는 비밀번호가 올바르지 않습니다.")
+        user.ensure_active()  # 정지/탈퇴 계정 거부
         return await self._issue_tokens(user)
 
     async def refresh(self, refresh_token: str) -> TokenDto:
@@ -89,10 +90,14 @@ class AuthInteractor(AuthUseCase):
         user = await self.repository.find_by_id(stored.user_id)
         if user is None:
             raise ValueError("사용자를 찾을 수 없습니다.")
+        user.ensure_active()  # 정지/탈퇴 계정은 재발급 거부
         return await self._issue_tokens(user)
 
     async def get_me(self, token: str) -> User | None:
         user_id = self._decode_token(token)
         if user_id is None:
             return None
-        return await self.repository.find_by_id(user_id)
+        user = await self.repository.find_by_id(user_id)
+        if user is None or user.deleted_at is not None or user.suspended_at is not None:
+            return None  # 정지/탈퇴 계정은 세션 복원 차단 — 즉시 차단 정책과 일치
+        return user

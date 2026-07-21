@@ -41,3 +41,23 @@ class MemberDirectoryPort(ABC):
     async def list_user_permissions(self, user_id: int) -> list[str]:
         """해당 유저가 보유한 permission 코드 목록을 반환한다(비관리자는 빈 리스트)."""
         ...
+
+    @abstractmethod
+    async def suspend(self, user_id: int, reason: str) -> MemberInfo:
+        """계정 정지(해제 가능) + 리프레시 토큰 전량 폐기. 대상 부재/탈퇴 계정은 ValueError."""
+        ...
+
+    @abstractmethod
+    async def reinstate(self, user_id: int) -> MemberInfo:
+        """정지 해제 — 상태 플래그만 되돌린다(세션은 복원하지 않음, 재로그인 필요)."""
+        ...
+
+    @abstractmethod
+    async def revoke_sessions(self, user_id: int) -> int:
+        """리프레시 토큰 전량 폐기(강제 로그아웃) — 폐기 건수 반환. 대상 부재 시 ValueError."""
+        ...
+
+    @abstractmethod
+    async def withdraw(self, user_id: int) -> MemberInfo:
+        """탈퇴 처리(비가역) — 개인정보 익명화 + 역할 회수 + 토큰 폐기. 이미 탈퇴면 ValueError."""
+        ...

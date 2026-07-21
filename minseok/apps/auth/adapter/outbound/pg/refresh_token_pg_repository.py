@@ -37,3 +37,10 @@ class RefreshTokenPgRepository(RefreshTokenRepository):
             delete(RefreshTokenOrm).where(RefreshTokenOrm.token == token)
         )
         await self._session.commit()
+
+    async def delete_all_for_user(self, user_id: int) -> int:
+        result = await self._session.execute(
+            delete(RefreshTokenOrm).where(RefreshTokenOrm.user_id == user_id)
+        )
+        await self._session.commit()
+        return result.rowcount or 0

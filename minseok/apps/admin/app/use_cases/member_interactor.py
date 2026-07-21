@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 from admin.app.dtos.member_dto import (
+    MemberActionCommand,
+    MemberActionResponse,
     MemberListQuery,
     MemberListResponse,
     RoleChangeCommand,
     RoleChangeResponse,
     RoleListResponse,
+    SessionRevokeResponse,
+    SuspendCommand,
 )
 from admin.app.ports.input.member_use_case import MemberUseCase
 from admin.app.ports.output.audit_log_port import AuditLogPort
@@ -47,3 +51,43 @@ class MemberInteractor(MemberUseCase):
             detail=f"user={command.user_id}({member.email}) role={command.role_code}",
         )
         return RoleChangeResponse(member=member)
+
+    async def suspend(self, command: SuspendCommand) -> MemberActionResponse:
+        if command.actor_id == command.user_id:
+            raise ValueError("자기 자신은 정지할 수 없습니다.")  # 콘솔 잠금 방지
+        member = await self._members.suspend(command.user_id, command.reason)
+        await self._audit.write(
+            actor_id=command.actor_id,
+            action="member.suspend",
+            detail=f"user={command.user_id}({member.email}) reason={command.reason or '-'}",
+        )
+        return MemberActionResponse(member=member)
+
+    async def reinstate(self, command: MemberActionCommand) -> MemberActionResponse:
+        member = await self._members.reinstate(command.user_id)
+        await self._audit.write(
+            actor_id=command.actor_id,
+            action="member.reinstate",
+            detail=f"user={command.user_id}({member.email})",
+        )
+        return MemberActionResponse(member=member)
+
+    async def revoke_sessions(self, command: MemberActionCommand) -> SessionRevokeResponse:
+        revoked = await self._members.revoke_sessions(command.user_id)
+        await self._audit.write(
+            actor_id=command.actor_id,
+            action="member.sessions.revoke",
+            detail=f"user={command.user_id} revoked={revoked}",
+        )
+        return SessionRevokeResponse(revoked=revoked)
+
+    async def withdraw(self, command: MemberActionCommand) -> MemberActionResponse:
+        if command.actor_id == command.user_id:
+            raise ValueError("자기 자신은 탈퇴 처리할 수 없습니다. 다른 관리자에게 요청하세요.")
+        member = await self._members.withdraw(command.user_id)
+        await self._audit.write(
+            actor_id=command.actor_id,
+            action="member.withdraw",
+            detail=f"user={command.user_id} (개인정보 익명화 완료)",
+        )
+        return MemberActionResponse(member=member)

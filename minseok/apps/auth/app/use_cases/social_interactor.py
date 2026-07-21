@@ -101,6 +101,7 @@ class SocialInteractor(SocialUseCase):
                 consent_token=self._create_consent_token(profile),
                 profile=profile,
             )
+        user.ensure_active()  # 정지/탈퇴 계정 거부
         return SocialLoginResultDto(status="ok", token=await self._issue_tokens(user))
 
     async def complete_consent(self, consent_token: str, marketing_agreed: bool) -> TokenDto:
@@ -114,4 +115,5 @@ class SocialInteractor(SocialUseCase):
                 terms_agreed_at=datetime.now(timezone.utc),
                 marketing_agreed=marketing_agreed,
             )
+        user.ensure_active()  # 정지/탈퇴 계정 거부
         return await self._issue_tokens(user)

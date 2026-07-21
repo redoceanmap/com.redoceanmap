@@ -3,11 +3,15 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 from admin.app.dtos.member_dto import (
+    MemberActionCommand,
+    MemberActionResponse,
     MemberListQuery,
     MemberListResponse,
     RoleChangeCommand,
     RoleChangeResponse,
     RoleListResponse,
+    SessionRevokeResponse,
+    SuspendCommand,
 )
 
 
@@ -32,4 +36,24 @@ class MemberUseCase(ABC):
     @abstractmethod
     async def revoke_role(self, command: RoleChangeCommand) -> RoleChangeResponse:
         """역할 회수(멱등). 대상 부재 시 ValueError 전파."""
+        ...
+
+    @abstractmethod
+    async def suspend(self, command: SuspendCommand) -> MemberActionResponse:
+        """계정 정지 + 강제 로그아웃 + 감사 기록. 해제는 reinstate."""
+        ...
+
+    @abstractmethod
+    async def reinstate(self, command: MemberActionCommand) -> MemberActionResponse:
+        """정지 해제(상태만 복원, 재로그인 필요) + 감사 기록."""
+        ...
+
+    @abstractmethod
+    async def revoke_sessions(self, command: MemberActionCommand) -> SessionRevokeResponse:
+        """리프레시 토큰 전량 폐기(강제 로그아웃) + 감사 기록."""
+        ...
+
+    @abstractmethod
+    async def withdraw(self, command: MemberActionCommand) -> MemberActionResponse:
+        """탈퇴 처리(개인정보 익명화, 비가역) + 감사 기록 — 이메일 접수 탈퇴 요청 처리 도구."""
         ...
