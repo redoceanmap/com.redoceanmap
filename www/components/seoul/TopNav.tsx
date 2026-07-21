@@ -8,32 +8,35 @@ import Wordmark from "./Wordmark";
 import EmailModal from "./EmailModal";
 import { useUIStore } from "@/lib/uiStore";
 import { clearStoredToken } from "@/lib/tokenStorage";
+import { useVisibleTabs, type TabKey } from "@/lib/useVisibleTabs";
 
 type NavItem = {
   icon: LucideIcon;
   label: string;
   href: string;
+  key?: TabKey; // 등급 게이팅 키 — 없으면 항상 노출
   children?: { label: string; href: string }[];
 };
 
 const navItems: NavItem[] = [
   { icon: Plus, label: "새로 물어보기", href: "/" },
-  { icon: MessageSquare, label: "지난 대화", href: "/history" },
-  { icon: MapPin, label: "상권 분석", href: "/market" },
-  { icon: CandlestickChart, label: "주식 분석", href: "/stock" },
+  { icon: MessageSquare, label: "지난 대화", href: "/history", key: "history" },
+  { icon: MapPin, label: "상권 분석", href: "/market", key: "market" },
+  { icon: CandlestickChart, label: "주식 분석", href: "/stock", key: "stock" },
   {
     icon: ScanEye,
     label: "비전처리",
     href: "/vision",
+    key: "vision",
     children: [{ label: "얼굴 인식", href: "/vision/faces" }],
   },
 ];
 
 // 모바일 컴팩트 내비 — BottomTabBar 폐기 후 핵심 이동 경로만 아이콘으로
-const mobileNavItems = [
-  { icon: MapPin, label: "상권 분석", href: "/market" },
-  { icon: CandlestickChart, label: "주식 분석", href: "/stock" },
-  { icon: MessageSquare, label: "지난 대화", href: "/history" },
+const mobileNavItems: NavItem[] = [
+  { icon: MapPin, label: "상권 분석", href: "/market", key: "market" },
+  { icon: CandlestickChart, label: "주식 분석", href: "/stock", key: "stock" },
+  { icon: MessageSquare, label: "지난 대화", href: "/history", key: "history" },
 ];
 
 export default function TopNav() {
@@ -43,6 +46,7 @@ export default function TopNav() {
   const logoutStore = useUIStore((s) => s.logout);
   const logout = () => { clearStoredToken(); logoutStore(); };
   const [emailOpen, setEmailOpen] = useState(false);
+  const tabs = useVisibleTabs(); // null = 로딩 중 — 게이팅 탭 미표시(사라지는 플래시 방지)
 
   if (pathname?.startsWith("/admin")) return null;
 
@@ -51,7 +55,9 @@ export default function TopNav() {
       <Wordmark />
 
       <nav className="hidden sm:flex items-center gap-1">
-        {navItems.map(({ icon: Icon, label, href, children }) => (
+        {navItems
+          .filter((item) => !item.key || tabs?.has(item.key))
+          .map(({ icon: Icon, label, href, children }) => (
           <div key={label} className="relative group">
             <Link
               href={href}
@@ -77,20 +83,24 @@ export default function TopNav() {
             )}
           </div>
         ))}
-        <button
-          type="button"
-          onClick={() => setEmailOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-foreground/80 hover:bg-black/5 hover:text-foreground transition-colors"
-        >
-          <Zap size={15} strokeWidth={1.75} className="text-brand" />
-          자동화
-        </button>
+        {tabs?.has("automation") && (
+          <button
+            type="button"
+            onClick={() => setEmailOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-foreground/80 hover:bg-black/5 hover:text-foreground transition-colors"
+          >
+            <Zap size={15} strokeWidth={1.75} className="text-brand" />
+            자동화
+          </button>
+        )}
       </nav>
 
       <EmailModal open={emailOpen} onClose={() => setEmailOpen(false)} />
 
       <nav className="sm:hidden ml-auto flex items-center gap-0.5" aria-label="주요 화면">
-        {mobileNavItems.map(({ icon: Icon, label, href }) => (
+        {mobileNavItems
+          .filter((item) => !item.key || tabs?.has(item.key))
+          .map(({ icon: Icon, label, href }) => (
           <Link
             key={label}
             href={href}

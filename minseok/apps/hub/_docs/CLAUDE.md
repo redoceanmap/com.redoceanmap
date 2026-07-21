@@ -58,6 +58,24 @@ apps/hub/dependencies/member_directory_provider.py  # get_member_directory_port 
 - **소비**: `admin`의 member·steward·dashboard 인터랙터(회원 관리·/admin/me 권한 판정·KPI).
 - **배선**: `main.py`에서 `app.dependency_overrides[get_member_directory_port] = get_member_directory_gateway`.
 
+## 소유 계약 — GradePolicyPort
+
+등급(=roles 재해석) 구성 협력. admin(소비)과 auth(구현·영속: roles + role_tabs)를 잇는다.
+MemberDirectoryPort(회원·역할 부여/회수)와 별개인 등급 CRUD 전용 계약(Directory/Record 분리 선례).
+
+```
+apps/hub/app/
+├── ports/output/grade_policy_port.py   # GradePolicyPort (ABC)
+│     list_grades / create_grade / update_grade / delete_grade (중복·부재는 ValueError)
+└── dtos/grade_dto.py                   # GradeInfo(code·name·tabs·member_count)
+apps/hub/dependencies/grade_policy_provider.py  # get_grade_policy_port (NotImplementedError 스텁)
+```
+
+- **구현**: `auth`의 `GradePolicyGateway`. delete는 role_tabs·role_permissions·user_roles 동반 삭제.
+- **소비**: `admin`의 grade 인터랙터(탭 키·code 형식 검증, admin 삭제·개명 보호, 감사 기록).
+- **배선**: `main.py`에서 `app.dependency_overrides[get_grade_policy_port] = get_grade_policy_gateway`.
+- 유저 개인의 노출 탭 조회(`GET /auth/tabs`)는 auth 스포크 내부 관심사 — 이 계약에 없다.
+
 ## 소유 계약 — RecommendationDirectoryPort
 
 추천 기록 열람 협력(RecommendationRecordPort의 쓰기와 별개인 조회 전용). admin(소비)과
@@ -150,7 +168,9 @@ apps/hub/
 
 앱들이 공유하는 규범·어휘는 `hub/domain/`에 둔다(ragwatson star_craft의 온톨로지 역할).
 현재: `domain/email/email_ontology.py` — 발신 이메일 작성 규범(EmailDirective)과
-지시 합성(render_instruction, 순수 함수).
+지시 합성(render_instruction, 순수 함수). `domain/navigation/tab_ontology.py` —
+등급 게이팅 대상 탭 키 5종(`TAB_KEYS`: history·market·stock·vision·automation, 프론트
+라벨·경로는 프론트 소유).
 
 ## 소유 계약 — EmailComposerPort
 

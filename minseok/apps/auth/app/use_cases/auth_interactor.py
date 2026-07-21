@@ -7,6 +7,7 @@ from jose import JWTError, jwt
 from auth.app.dtos.token_dto import TokenDto
 from auth.domain.entities.user_entity import User
 from auth.app.ports.input.auth_use_case import AuthUseCase
+from auth.app.ports.output.grade_repository import GradeRepository
 from auth.app.ports.output.refresh_token_repository import RefreshTokenRepository
 from auth.app.ports.output.user_repository import UserRepository
 from core.config import JWT_SECRET
@@ -18,9 +19,15 @@ REFRESH_TOKEN_EXPIRE_DAYS = 14
 
 class AuthInteractor(AuthUseCase):
 
-    def __init__(self, repository: UserRepository, refresh_repository: RefreshTokenRepository) -> None:
+    def __init__(
+        self,
+        repository: UserRepository,
+        refresh_repository: RefreshTokenRepository,
+        grades: GradeRepository,
+    ) -> None:
         self.repository = repository
         self.refresh_repository = refresh_repository
+        self.grades = grades
 
     def _hash_password(self, password: str) -> str:
         return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
@@ -71,6 +78,7 @@ class AuthInteractor(AuthUseCase):
             terms_agreed_at=datetime.now(timezone.utc),
             marketing_agreed=marketing_agreed,
         )
+        await self.grades.grant_basic(user.id)
         return await self._issue_tokens(user)
 
     async def login(self, email: str, password: str) -> TokenDto:
@@ -101,3 +109,8 @@ class AuthInteractor(AuthUseCase):
         if user is None or user.deleted_at is not None or user.suspended_at is not None:
             return None  # 정지/탈퇴 계정은 세션 복원 차단 — 즉시 차단 정책과 일치
         return user
+
+    async def get_tabs(self, token: str | None) -> list[str]:
+        # 무효 토큰도 비로그인과 동일 취급 — 탭 조회는 실패로 끊지 않는다(열화 동작).
+        user_id = self._decode_token(token) if token else None
+        return await self.grades.visible_tabs(user_id)

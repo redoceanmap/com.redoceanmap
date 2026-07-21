@@ -48,10 +48,26 @@ class _StubRefreshTokenRepository:
         self.tokens.pop(token, None)
 
 
+class _StubGradeRepository:
+    def __init__(self, basic_tabs=("history", "market"), tabs_by_user=None):
+        self.granted: list[int] = []
+        self.basic_tabs = list(basic_tabs)
+        self.tabs_by_user = tabs_by_user or {}
+
+    async def grant_basic(self, user_id):
+        self.granted.append(user_id)
+
+    async def visible_tabs(self, user_id):
+        if user_id is None:
+            return self.basic_tabs
+        return self.tabs_by_user.get(user_id, self.basic_tabs)
+
+
 def _interactor():
     return AuthInteractor(
         repository=_StubUserRepository(),
         refresh_repository=_StubRefreshTokenRepository(),
+        grades=_StubGradeRepository(),
     )
 
 
@@ -128,7 +144,9 @@ async def test_정지된_계정은_로그인과_리프레시가_거부된다():
 
     repo = _StubUserRepository()
     refresh_repo = _StubRefreshTokenRepository()
-    interactor = AuthInteractor(repository=repo, refresh_repository=refresh_repo)
+    interactor = AuthInteractor(
+        repository=repo, refresh_repository=refresh_repo, grades=_StubGradeRepository()
+    )
     tokens = await interactor.register("ban@b.c", "pw1234", "정지자")
     repo.users[1] = replace(repo.users[1], suspended_at=datetime.now(timezone.utc))
 
@@ -138,11 +156,44 @@ async def test_정지된_계정은_로그인과_리프레시가_거부된다():
         await interactor.refresh(tokens.refresh_token)
 
 
+async def test_가입_시_기본_등급이_자동_부여된다():
+    interactor = _interactor()
+    await interactor.register("a@b.c", "pw1234", "장민석")
+    assert interactor.grades.granted == [1]
+
+
+async def test_get_tabs는_비로그인이면_기본_등급_탭을_반환한다():
+    interactor = _interactor()
+    assert await interactor.get_tabs(None) == ["history", "market"]
+
+
+async def test_get_tabs는_무효_토큰도_비로그인과_동일하게_처리한다():
+    interactor = _interactor()
+    assert await interactor.get_tabs("깨진토큰") == ["history", "market"]
+
+
+async def test_get_tabs는_유효_토큰이면_유저_등급_탭_합집합을_반환한다():
+    grades = _StubGradeRepository(tabs_by_user={1: ["history", "market", "stock", "vision"]})
+    interactor = AuthInteractor(
+        repository=_StubUserRepository(),
+        refresh_repository=_StubRefreshTokenRepository(),
+        grades=grades,
+    )
+    tokens = await interactor.register("a@b.c", "pw1234", "장민석")
+    assert await interactor.get_tabs(tokens.access_token) == [
+        "history", "market", "stock", "vision",
+    ]
+
+
 async def test_정지된_계정은_get_me가_None을_반환한다():
     from dataclasses import replace
 
     repo = _StubUserRepository()
-    interactor = AuthInteractor(repository=repo, refresh_repository=_StubRefreshTokenRepository())
+    interactor = AuthInteractor(
+        repository=repo,
+        refresh_repository=_StubRefreshTokenRepository(),
+        grades=_StubGradeRepository(),
+    )
     tokens = await interactor.register("ban2@b.c", "pw1234", "정지자")
     repo.users[1] = replace(repo.users[1], suspended_at=datetime.now(timezone.utc))
 

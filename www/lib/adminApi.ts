@@ -53,6 +53,8 @@ export type AdminMembersPage = { total: number; items: AdminMember[] };
 
 export type AdminRole = { code: string; name: string; permissions: string[] };
 
+export type AdminGrade = { code: string; name: string; tabs: string[]; member_count: number };
+
 export type AdminRecommendationLog = {
   id: number;
   trdar_code: number;
@@ -144,6 +146,24 @@ export const revokeMemberSessions = (userId: number): Promise<{ revoked: number 
 
 export const withdrawMember = (userId: number): Promise<AdminMember> =>
   request(`/admin/members/${userId}/withdraw`, { method: "POST", body: JSON.stringify({}) });
+
+export const fetchAdminGrades = (): Promise<{ grades: AdminGrade[] }> =>
+  request("/admin/grades");
+
+export const createAdminGrade = (code: string, name: string, tabs: string[]): Promise<AdminGrade> =>
+  request("/admin/grades", { method: "POST", body: JSON.stringify({ code, name, tabs }) });
+
+export const updateAdminGrade = (
+  code: string,
+  body: { name?: string; tabs?: string[] },
+): Promise<AdminGrade> =>
+  request(`/admin/grades/${encodeURIComponent(code)}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+
+export const deleteAdminGrade = (code: string): Promise<{ deleted: string }> =>
+  request(`/admin/grades/${encodeURIComponent(code)}`, { method: "DELETE" });
 
 export const fetchAdminRecommendations = (limit = 50): Promise<AdminRecommendationLogs> =>
   request(`/admin/recommendations?limit=${limit}`);

@@ -57,11 +57,23 @@ class _StubRefreshTokenRepository:
         self.tokens.pop(token, None)
 
 
+class _StubGradeRepository:
+    def __init__(self):
+        self.granted: list[int] = []
+
+    async def grant_basic(self, user_id):
+        self.granted.append(user_id)
+
+    async def visible_tabs(self, user_id):
+        return []
+
+
 def _interactor(profile: SocialProfileDto | None):
     return SocialInteractor(
         profile_port=_StubProfilePort(profile),
         repository=_StubUserRepository(),
         refresh_repository=_StubRefreshTokenRepository(),
+        grades=_StubGradeRepository(),
     )
 
 
@@ -101,6 +113,30 @@ async def test_카카오싱크로_필수_약관까지_동의한_신규_유저는
     user = await interactor.repository.find_by_email("k@b.c")
     assert user.terms_agreed_at is not None
     assert user.marketing_agreed is True
+
+
+async def test_카카오싱크_즉시_가입도_기본_등급이_자동_부여된다():
+    interactor = _interactor(
+        SocialProfileDto(
+            provider="kakao", email="k@b.c", name="카카오", provider_terms_agreed=True
+        )
+    )
+    await interactor.login("kakao", "code", "http://localhost:3000/oauth/kakao")
+    assert interactor.grades.granted == [1]
+
+
+async def test_동의_완료_가입도_기본_등급이_자동_부여된다():
+    interactor = _interactor(SocialProfileDto(provider="google", email="a@b.c", name="장민석"))
+    pending = await interactor.login("google", "code", "http://localhost:3000/oauth/google")
+    await interactor.complete_consent(pending.consent_token, marketing_agreed=False)
+    assert interactor.grades.granted == [1]
+
+
+async def test_기존_계정_로그인은_등급을_다시_부여하지_않는다():
+    interactor = _interactor(SocialProfileDto(provider="kakao", email="a@b.c", name="카카오"))
+    await interactor.repository.create("a@b.c", "기존해시", "장민석")
+    await interactor.login("kakao", "code", "http://localhost:3000/oauth/kakao")
+    assert interactor.grades.granted == []
 
 
 async def test_프로바이더_동의가_없으면_카카오라도_자체_동의를_요구한다():

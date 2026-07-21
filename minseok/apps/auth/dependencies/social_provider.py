@@ -2,6 +2,7 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.adapter.outbound.gateways.social_oauth_gateway import SocialOauthGateway
+from auth.adapter.outbound.pg.grade_pg_repository import GradePgRepository
 from auth.adapter.outbound.pg.user_pg_repository import UserPgRepository
 from auth.adapter.outbound.redis.refresh_token_redis_repository import RefreshTokenRedisRepository
 from auth.app.ports.input.social_use_case import SocialUseCase
@@ -15,4 +16,5 @@ def get_social_use_case(db: AsyncSession = Depends(get_db)) -> SocialUseCase:
         profile_port=SocialOauthGateway(),
         repository=UserPgRepository(session=db),
         refresh_repository=RefreshTokenRedisRepository(redis=get_redis()),
+        grades=GradePgRepository(session=db),
     )

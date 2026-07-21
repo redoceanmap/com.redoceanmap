@@ -14,6 +14,7 @@ from admin.adapter.inbound.api.v1.area_router import area_router as admin_area_r
 from admin.adapter.inbound.api.v1.audit_router import audit_router
 from admin.adapter.inbound.api.v1.dashboard_router import dashboard_router as admin_dashboard_router
 from admin.adapter.inbound.api.v1.data_source_router import data_source_router as admin_data_source_router
+from admin.adapter.inbound.api.v1.grade_router import grade_router as admin_grade_router
 from admin.adapter.inbound.api.v1.member_router import member_router as admin_member_router
 from admin.adapter.inbound.api.v1.recommendation_log_router import (
     recommendation_log_router as admin_recommendation_log_router,
@@ -22,6 +23,7 @@ from admin.adapter.inbound.api.v1.steward_router import steward_router
 from auth.adapter.inbound.api.v1.auth_router import auth_router
 from auth.adapter.inbound.api.v1.gatekeeper_router import gatekeeper_router
 from auth.adapter.inbound.api.v1.social_router import social_router
+from auth.dependencies.grade_policy_provider import get_grade_policy_gateway
 from auth.dependencies.member_directory_provider import get_member_directory_gateway
 from chat.adapter.inbound.api.v1.chat_router import chat_router
 from chat.adapter.inbound.api.v1.concierge_router import concierge_router
@@ -57,6 +59,7 @@ from mail.adapter.inbound.api.v1.postman_router import postman_router
 from mail.adapter.inbound.api.v1.watcher_router import watcher_router
 from mail.dependencies.watcher_provider import get_mail_storage_gateway
 from hub.dependencies.commercial_data_provider import get_commercial_data_port
+from hub.dependencies.grade_policy_provider import get_grade_policy_port
 from hub.dependencies.member_directory_provider import get_member_directory_port
 from hub.dependencies.news_search_provider import get_news_search_port
 from hub.dependencies.recommendation_directory_provider import get_recommendation_directory_port
@@ -157,6 +160,7 @@ app.include_router(steward_router, dependencies=_authenticated)
 app.include_router(admin_dashboard_router, dependencies=_authenticated)
 app.include_router(admin_area_router, dependencies=_authenticated)
 app.include_router(admin_member_router, dependencies=_authenticated)
+app.include_router(admin_grade_router, dependencies=_authenticated)
 app.include_router(admin_recommendation_log_router, dependencies=_authenticated)
 app.include_router(admin_data_source_router, dependencies=_authenticated)
 app.include_router(audit_router, dependencies=_authenticated)
@@ -177,6 +181,7 @@ app.dependency_overrides[get_market_news_storage_port] = get_market_news_storage
 app.dependency_overrides[get_market_news_search_port] = get_market_news_search_gateway
 app.dependency_overrides[get_email_composer] = lambda: EmailComposerN8nGateway()
 app.dependency_overrides[get_member_directory_port] = get_member_directory_gateway
+app.dependency_overrides[get_grade_policy_port] = get_grade_policy_gateway
 app.dependency_overrides[get_recommendation_directory_port] = get_recommendation_directory_gateway
 app.dependency_overrides[get_mail_storage_port] = get_mail_storage_gateway
 

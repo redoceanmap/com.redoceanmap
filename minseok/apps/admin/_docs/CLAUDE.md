@@ -37,6 +37,7 @@
 | steward (페르소나) | GET /admin/myself · GET /admin/me | MemberDirectoryPort |
 | dashboard | GET /admin/dashboard | MemberDirectory + RecommendationDirectory + CommercialData |
 | member | GET /admin/members · GET /admin/members/roles · POST/DELETE /admin/members/{id}/roles[/{code}] · POST /admin/members/{id}/{suspend,reinstate,revoke-sessions,withdraw} | MemberDirectoryPort |
+| grade | GET/POST /admin/grades · PATCH/DELETE /admin/grades/{code} — 등급(=역할)별 탭 노출 구성. 권한은 members:read/write 재사용, 탭 키는 허브 tab_ontology 검증, admin은 삭제·개명 차단(탭 변경 허용), 감사 grade.create/update/delete | GradePolicyPort |
 | area | GET /admin/areas | CommercialDataPort (get_area_overview) |
 | recommendation_log | GET /admin/recommendations | RecommendationDirectoryPort |
 | data_source | GET /admin/data-sources | CommercialData (get_dataset_stats) + RecommendationDirectory + PriceBarStorage (coverage) |

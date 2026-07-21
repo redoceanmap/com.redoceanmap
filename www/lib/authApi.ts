@@ -110,3 +110,12 @@ export async function apiMe(token: string): Promise<{ id: number; email: string;
   if (!res.ok) throw new Error("인증이 만료되었습니다.");
   return res.json();
 }
+
+/** 보이는 탭 키 목록 — 등급(역할) 합집합. 비로그인(token null)은 기본 등급 구성. */
+export async function apiTabs(token: string | null): Promise<{ tabs: string[] }> {
+  const res = await fetch(`${API_BASE}/auth/tabs`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error("탭 구성을 불러오지 못했습니다.");
+  return res.json();
+}

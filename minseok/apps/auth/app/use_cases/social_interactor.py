@@ -7,6 +7,7 @@ from jose import JWTError, jwt
 from auth.app.dtos.social_dto import SocialLoginResultDto, SocialProfileDto
 from auth.app.dtos.token_dto import TokenDto
 from auth.app.ports.input.social_use_case import SocialUseCase
+from auth.app.ports.output.grade_repository import GradeRepository
 from auth.app.ports.output.refresh_token_repository import RefreshTokenRepository
 from auth.app.ports.output.social_profile_port import SocialProfilePort
 from auth.app.ports.output.user_repository import UserRepository
@@ -29,10 +30,12 @@ class SocialInteractor(SocialUseCase):
         profile_port: SocialProfilePort,
         repository: UserRepository,
         refresh_repository: RefreshTokenRepository,
+        grades: GradeRepository,
     ) -> None:
         self.profile_port = profile_port
         self.repository = repository
         self.refresh_repository = refresh_repository
+        self.grades = grades
 
     def _unusable_password_hash(self) -> str:
         # 소셜 계정은 비밀번호 로그인 불가 — 아무도 모르는 랜덤 값을 해시해 저장한다.
@@ -94,6 +97,7 @@ class SocialInteractor(SocialUseCase):
                     terms_agreed_at=datetime.now(timezone.utc),
                     marketing_agreed=profile.marketing_agreed,
                 )
+                await self.grades.grant_basic(user.id)
                 return SocialLoginResultDto(status="ok", token=await self._issue_tokens(user))
             # 그 외 신규 유저는 약관 동의 전까지 만들지 않는다 — 동의 대기 토큰만 발급.
             return SocialLoginResultDto(
@@ -115,5 +119,6 @@ class SocialInteractor(SocialUseCase):
                 terms_agreed_at=datetime.now(timezone.utc),
                 marketing_agreed=marketing_agreed,
             )
+            await self.grades.grant_basic(user.id)
         user.ensure_active()  # 정지/탈퇴 계정 거부
         return await self._issue_tokens(user)

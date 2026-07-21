@@ -41,3 +41,14 @@ class RolePermissionOrm(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     role_id: Mapped[int] = mapped_column(ForeignKey("roles.id"), index=True)
     permission_id: Mapped[int] = mapped_column(ForeignKey("permissions.id"), index=True)
+
+
+class RoleTabOrm(Base):
+    """역할(=등급)별 노출 탭 — 유저의 보이는 탭은 보유 역할들의 탭 합집합."""
+
+    __tablename__ = "role_tabs"
+    __table_args__ = (UniqueConstraint("role_id", "tab_key"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    role_id: Mapped[int] = mapped_column(ForeignKey("roles.id"), index=True)
+    tab_key: Mapped[str] = mapped_column(String(50))

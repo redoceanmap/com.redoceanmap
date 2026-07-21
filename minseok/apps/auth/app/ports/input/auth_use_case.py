@@ -24,3 +24,6 @@ class AuthUseCase(ABC):
 
     @abstractmethod
     async def get_me(self, token: str) -> User | None: ...
+
+    @abstractmethod
+    async def get_tabs(self, token: str | None) -> list[str]: ...

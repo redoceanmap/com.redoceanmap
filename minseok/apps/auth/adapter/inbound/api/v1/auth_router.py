@@ -12,6 +12,7 @@ from auth.dependencies.auth_provider import get_auth_use_case
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 bearer = HTTPBearer()
+_optional_bearer = HTTPBearer(auto_error=False)  # /tabs — 비로그인도 basic 구성으로 응답
 
 
 @auth_router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
@@ -51,6 +52,16 @@ async def refresh(
         return await use_case.refresh(body.refresh_token)
     except ValueError as e:
         raise HTTPException(status_code=401, detail=str(e))
+
+
+@auth_router.get("/tabs")
+async def tabs(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_optional_bearer),
+    use_case: AuthUseCase = Depends(get_auth_use_case),
+):
+    """보이는 탭 키 목록 — 등급(역할) 합집합. 토큰 없음/무효면 기본 등급(basic) 구성."""
+    token = credentials.credentials if credentials else None
+    return {"tabs": await use_case.get_tabs(token)}
 
 
 @auth_router.get("/me")
