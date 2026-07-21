@@ -24,6 +24,7 @@ class RoleListResponse:
 
 @dataclass(frozen=True)
 class RoleChangeCommand:
+    actor_id: int  # 행위자(관리자) — 감사 로그 기록용
     user_id: int
     role_code: str
 

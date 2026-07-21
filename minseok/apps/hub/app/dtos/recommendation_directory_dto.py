@@ -12,6 +12,7 @@ from datetime import datetime
 @dataclass(frozen=True)
 class RecommendationInfo:
     id: int
+    trdar_code: int  # 소비자(admin)가 본체 딥링크(/market?trdar=)를 걸 때 사용
     trdar_name: str
     district_name: str
     category: str

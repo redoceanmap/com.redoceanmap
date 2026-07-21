@@ -1,8 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
 import { fetchAdminRecommendations } from "@/lib/adminApi";
+import BlockSkeleton from "@/components/admin/BlockSkeleton";
+import Empty from "@/components/admin/Empty";
+import Kpi from "@/components/admin/Kpi";
 
 export default function RecommendationsPage() {
   const { data, isPending, isError } = useQuery({
@@ -20,22 +24,12 @@ export default function RecommendationsPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 max-w-md">
-        <div className="rounded-2xl bg-surface border border-border p-4 sm:p-5">
-          <p className="text-2xl font-bold tracking-tight">
-            {data ? data.today.toLocaleString() : "—"}
-          </p>
-          <p className="text-xs text-foreground-muted mt-0.5">오늘 추천</p>
-        </div>
-        <div className="rounded-2xl bg-surface border border-border p-4 sm:p-5">
-          <p className="text-2xl font-bold tracking-tight">
-            {data ? data.total.toLocaleString() : "—"}
-          </p>
-          <p className="text-xs text-foreground-muted mt-0.5">누적 추천</p>
-        </div>
+        <Kpi label="오늘 추천" value={data ? data.today.toLocaleString() : "—"} />
+        <Kpi label="누적 추천" value={data ? data.total.toLocaleString() : "—"} />
       </div>
 
       <section className="rounded-2xl bg-surface border border-border overflow-hidden">
-        {isPending && <Empty msg="추천 기록을 불러오는 중…" />}
+        {isPending && <BlockSkeleton rows={5} />}
         {isError && <Empty msg="추천 기록을 불러오지 못했습니다." />}
         {!isPending && !isError && items.length === 0 && <Empty msg="아직 추천 기록이 없습니다." />}
         {items.length > 0 && (
@@ -55,9 +49,13 @@ export default function RecommendationsPage() {
                   {items.map((l) => (
                     <tr key={l.id} className="border-b border-border last:border-0 hover:bg-background/40">
                       <td className="px-5 py-3">
-                        <span className="inline-flex items-center gap-1.5 text-brand font-medium">
+                        <Link
+                          href={`/market?trdar=${l.trdar_code}`}
+                          className="inline-flex items-center gap-1.5 text-brand font-medium hover:underline"
+                          title="서비스 지도에서 열기"
+                        >
                           <Sparkles size={13} /> {l.trdar_name}
-                        </span>
+                        </Link>
                       </td>
                       <td className="px-5 py-3 text-foreground-muted">{l.district_name}</td>
                       <td className="px-5 py-3 text-foreground-muted">{l.category}</td>
@@ -76,9 +74,12 @@ export default function RecommendationsPage() {
               {items.map((l) => (
                 <div key={l.id} className="px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
-                    <span className="inline-flex items-center gap-1.5 text-brand font-medium text-sm">
+                    <Link
+                      href={`/market?trdar=${l.trdar_code}`}
+                      className="inline-flex items-center gap-1.5 text-brand font-medium text-sm hover:underline"
+                    >
                       <Sparkles size={13} /> {l.trdar_name}
-                    </span>
+                    </Link>
                     <span className="text-xs text-foreground-muted tabular-nums">
                       {l.created_at.slice(0, 10)}
                     </span>
@@ -95,8 +96,4 @@ export default function RecommendationsPage() {
       </section>
     </div>
   );
-}
-
-function Empty({ msg }: { msg: string }) {
-  return <p className="p-8 text-center text-sm text-foreground-muted">{msg}</p>;
 }

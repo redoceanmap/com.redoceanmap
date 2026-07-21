@@ -9,6 +9,7 @@ export type AdminMonthCount = { month: string; count: number };
 export type AdminCategoryCount = { category: string; count: number };
 export type AdminRecentRecommendation = {
   id: number;
+  trdar_code: number;
   trdar_name: string;
   district_name: string;
   category: string;
@@ -52,6 +53,7 @@ export type AdminRole = { code: string; name: string; permissions: string[] };
 
 export type AdminRecommendationLog = {
   id: number;
+  trdar_code: number;
   trdar_name: string;
   district_name: string;
   category: string;
@@ -70,6 +72,14 @@ export type AdminDatasetStat = {
   name: string;
   row_count: number;
   latest_label: string | null;
+};
+
+export type AdminAuditEntry = {
+  id: number;
+  actor_id: number;
+  action: string;
+  detail: string;
+  created_at: string;
 };
 
 /* ── 요청 헬퍼 — lib/api.ts의 getJson 패턴 + 쓰기 메서드 ── */
@@ -123,6 +133,37 @@ export const fetchAdminRecommendations = (limit = 50): Promise<AdminRecommendati
 
 export const fetchAdminDataSources = (): Promise<{ datasets: AdminDatasetStat[] }> =>
   request("/admin/data-sources");
+
+export const fetchAdminAudit = (limit = 50): Promise<{ items: AdminAuditEntry[] }> =>
+  request(`/admin/audit?limit=${limit}`);
+
+// CSV 내보내기용 — 서버 limit 상한(100)에 맞춰 offset 순회로 전량 수집
+export const fetchAllAdminMembers = async (search: string): Promise<AdminMember[]> => {
+  const all: AdminMember[] = [];
+  let offset = 0;
+  for (;;) {
+    const page = await fetchAdminMembers(search, 100, offset);
+    all.push(...page.items);
+    offset += 100;
+    if (all.length >= page.total || page.items.length === 0) return all;
+  }
+};
+
+// BOM 포함 CSV 다운로드 (엑셀 한글 호환)
+export const downloadCsv = (filename: string, header: string[], rows: (string | number)[][]) => {
+  const escape = (v: string | number) => {
+    const s = String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const csv = [header, ...rows].map((r) => r.map(escape).join(",")).join("\n");
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+};
 
 /* ── 표시 헬퍼 ── */
 

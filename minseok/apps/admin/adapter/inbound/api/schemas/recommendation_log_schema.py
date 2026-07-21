@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 class RecommendationLogSchema(BaseModel):
     id: int
+    trdar_code: int
     trdar_name: str
     district_name: str
     category: str

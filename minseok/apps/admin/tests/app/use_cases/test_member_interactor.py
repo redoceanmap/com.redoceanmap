@@ -16,6 +16,17 @@ def _member(user_id=1, roles=()):
     )
 
 
+class _StubAudit:
+    def __init__(self):
+        self.writes = []
+
+    async def write(self, actor_id, action, detail):
+        self.writes.append((actor_id, action, detail))
+
+    async def list_recent(self, limit):
+        return []
+
+
 class _StubDirectory:
     def __init__(self):
         self.calls = []
@@ -38,24 +49,30 @@ class _StubDirectory:
 
 async def test_목록은_limit을_상한으로_보정한다():
     directory = _StubDirectory()
-    interactor = MemberInteractor(members=directory)
+    interactor = MemberInteractor(members=directory, audit=_StubAudit())
     await interactor.list_members(MemberListQuery(search=None, limit=9999, offset=-5))
     assert directory.calls[0] == ("list", None, 100, 0)
 
 
-async def test_역할_부여는_갱신된_회원을_반환한다():
-    interactor = MemberInteractor(members=_StubDirectory())
-    result = await interactor.grant_role(RoleChangeCommand(user_id=1, role_code="admin"))
+async def test_역할_부여는_갱신된_회원을_반환하고_감사_기록을_남긴다():
+    audit = _StubAudit()
+    interactor = MemberInteractor(members=_StubDirectory(), audit=audit)
+    result = await interactor.grant_role(RoleChangeCommand(actor_id=7, user_id=1, role_code="admin"))
     assert result.member.roles == ("admin",)
+    assert audit.writes == [(7, "role.grant", "user=1(a@b.c) role=admin")]
 
 
-async def test_없는_유저_부여는_ValueError를_전파한다():
-    interactor = MemberInteractor(members=_StubDirectory())
+async def test_없는_유저_부여는_ValueError를_전파하고_기록하지_않는다():
+    audit = _StubAudit()
+    interactor = MemberInteractor(members=_StubDirectory(), audit=audit)
     with pytest.raises(ValueError):
-        await interactor.grant_role(RoleChangeCommand(user_id=999, role_code="admin"))
+        await interactor.grant_role(RoleChangeCommand(actor_id=7, user_id=999, role_code="admin"))
+    assert audit.writes == []
 
 
-async def test_역할_회수는_빈_역할을_반환한다():
-    interactor = MemberInteractor(members=_StubDirectory())
-    result = await interactor.revoke_role(RoleChangeCommand(user_id=1, role_code="admin"))
+async def test_역할_회수는_빈_역할을_반환하고_감사_기록을_남긴다():
+    audit = _StubAudit()
+    interactor = MemberInteractor(members=_StubDirectory(), audit=audit)
+    result = await interactor.revoke_role(RoleChangeCommand(actor_id=7, user_id=1, role_code="admin"))
     assert result.member.roles == ()
+    assert audit.writes[0][1] == "role.revoke"

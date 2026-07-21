@@ -1,13 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { Store, Users, Sparkles, Database } from "lucide-react";
-import {
-  fetchAdminDashboard,
-  formatLatestLabel,
-  type AdminDashboard,
-  type AdminMonthCount,
-} from "@/lib/adminApi";
+import { fetchAdminDashboard, formatLatestLabel, type AdminMonthCount } from "@/lib/adminApi";
+import BlockSkeleton from "@/components/admin/BlockSkeleton";
+import Empty from "@/components/admin/Empty";
+import Kpi from "@/components/admin/Kpi";
 
 /* ────────────────────────── 작은 차트 ────────────────────────── */
 
@@ -63,8 +62,13 @@ export default function AdminDashboard() {
     queryFn: fetchAdminDashboard,
   });
 
-  if (isPending) return <PageState msg="대시보드를 불러오는 중…" />;
-  if (isError || !data) return <PageState msg="대시보드를 불러오지 못했습니다." />;
+  if (isPending)
+    return (
+      <div className="max-w-7xl mx-auto">
+        <BlockSkeleton rows={6} />
+      </div>
+    );
+  if (isError || !data) return <Empty msg="대시보드를 불러오지 못했습니다." />;
 
   return (
     <div className="max-w-7xl mx-auto space-y-5">
@@ -144,18 +148,24 @@ export default function AdminDashboard() {
               <p className="text-sm text-foreground-muted">아직 추천 기록이 없습니다.</p>
             )}
             {data.recent.map((r) => (
-              <li key={r.id} className="relative flex gap-3">
-                <span className="grid place-items-center w-8 h-8 rounded-full bg-brand/10 text-brand shrink-0">
-                  <Sparkles size={14} />
-                </span>
-                <div className="min-w-0">
-                  <p className="text-sm leading-snug font-medium">
-                    {r.trdar_name} <span className="font-normal text-foreground-muted">· {r.category}</span>
-                  </p>
-                  <p className="text-xs text-foreground-muted mt-0.5">
-                    {r.district_name} · {r.created_at.slice(0, 10)}
-                  </p>
-                </div>
+              <li key={r.id}>
+                <Link
+                  href={`/market?trdar=${r.trdar_code}`}
+                  className="relative flex gap-3 group"
+                  title="서비스 지도에서 열기"
+                >
+                  <span className="grid place-items-center w-8 h-8 rounded-full bg-brand/10 text-brand shrink-0">
+                    <Sparkles size={14} />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm leading-snug font-medium group-hover:text-brand transition-colors">
+                      {r.trdar_name} <span className="font-normal text-foreground-muted">· {r.category}</span>
+                    </p>
+                    <p className="text-xs text-foreground-muted mt-0.5">
+                      {r.district_name} · {r.created_at.slice(0, 10)}
+                    </p>
+                  </div>
+                </Link>
               </li>
             ))}
           </ol>
@@ -165,35 +175,3 @@ export default function AdminDashboard() {
   );
 }
 
-function Kpi({
-  icon: Icon,
-  label,
-  value,
-  sub,
-}: {
-  icon: typeof Store;
-  label: string;
-  value: string;
-  sub?: string;
-}) {
-  return (
-    <div className="rounded-2xl bg-surface border border-border p-4 sm:p-5">
-      <span className="grid place-items-center w-9 h-9 rounded-xl bg-brand/10 text-brand">
-        <Icon size={17} strokeWidth={1.9} />
-      </span>
-      <p className="mt-3 text-2xl font-bold tracking-tight">{value}</p>
-      <div className="mt-0.5 flex items-center gap-1.5 text-xs">
-        <span className="text-foreground-muted">{label}</span>
-        {sub && <span className="ml-auto text-foreground-muted tabular-nums">{sub}</span>}
-      </div>
-    </div>
-  );
-}
-
-function PageState({ msg }: { msg: string }) {
-  return (
-    <div className="max-w-7xl mx-auto grid place-items-center h-64 text-sm text-foreground-muted">
-      {msg}
-    </div>
-  );
-}

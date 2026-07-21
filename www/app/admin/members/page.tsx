@@ -2,17 +2,34 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, ShieldCheck } from "lucide-react";
+import { Download, KeyRound, Search, ShieldCheck } from "lucide-react";
 import {
+  downloadCsv,
   fetchAdminMembers,
   fetchAdminRoles,
+  fetchAllAdminMembers,
   grantAdminRole,
   revokeAdminRole,
   formatDate,
   type AdminMember,
 } from "@/lib/adminApi";
+import BlockSkeleton from "@/components/admin/BlockSkeleton";
+import Empty from "@/components/admin/Empty";
+import Kpi from "@/components/admin/Kpi";
+import { showToast } from "@/components/admin/toast";
 
 const PAGE_SIZE = 20;
+
+// permission 코드 → 설명 (백엔드 alembic 시드와 동일한 7종)
+const PERMISSION_DESC: Record<string, string> = {
+  "dashboard:read": "대시보드 KPI 조회",
+  "areas:read": "상권 목록 조회",
+  "members:read": "회원·역할 구성 조회",
+  "members:write": "회원 역할 부여/회수",
+  "recommendations:read": "추천 기록 조회",
+  "datasources:read": "데이터셋 현황 조회",
+  "audit:read": "감사 로그 조회",
+};
 
 export default function MembersPage() {
   // REACT_RULES 패턴 B: 목록 질의 상태는 단일 객체 useState (검색어 입력은 패턴 A — FormData 제출)
@@ -32,18 +49,47 @@ export default function MembersPage() {
   const grant = useMutation({
     mutationFn: ({ userId, roleCode }: { userId: number; roleCode: string }) =>
       grantAdminRole(userId, roleCode),
-    onSuccess: invalidate,
+    onSuccess: (m) => {
+      invalidate();
+      showToast(`${m.name}에게 역할을 부여했습니다.`);
+    },
+    onError: (e) => showToast(e instanceof Error ? e.message : "역할 부여에 실패했습니다.", "error"),
   });
   const revoke = useMutation({
     mutationFn: ({ userId, roleCode }: { userId: number; roleCode: string }) =>
       revokeAdminRole(userId, roleCode),
-    onSuccess: invalidate,
+    onSuccess: (m) => {
+      invalidate();
+      showToast(`${m.name}의 역할을 회수했습니다.`);
+    },
+    onError: (e) => showToast(e instanceof Error ? e.message : "역할 회수에 실패했습니다.", "error"),
   });
 
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     setQuery({ search: String(formData.get("q") ?? "").trim(), page: 0 });
+  };
+
+  const exportCsv = async () => {
+    try {
+      const all = await fetchAllAdminMembers(query.search);
+      downloadCsv(
+        "admin-members.csv",
+        ["ID", "이름", "이메일", "가입일", "마케팅 동의", "역할"],
+        all.map((m) => [
+          m.id,
+          m.name,
+          m.email,
+          formatDate(m.joined_at),
+          m.marketing_agreed ? "동의" : "미동의",
+          m.roles.join("|"),
+        ]),
+      );
+      showToast(`회원 ${all.length}명을 CSV로 내보냈습니다.`);
+    } catch {
+      showToast("CSV 내보내기에 실패했습니다.", "error");
+    }
   };
 
   const roles = rolesData?.roles ?? [];
@@ -59,20 +105,27 @@ export default function MembersPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-5">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold tracking-tight">회원 관리</h1>
-        <p className="mt-1 text-sm text-foreground-muted">가입 회원 조회 및 역할(RBAC) 부여</p>
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">회원 관리</h1>
+          <p className="mt-1 text-sm text-foreground-muted">가입 회원 조회 및 역할(RBAC) 부여</p>
+        </div>
+        <button
+          type="button"
+          onClick={exportCsv}
+          disabled={total === 0}
+          className="inline-flex items-center gap-1.5 px-4 h-10 rounded-full border border-border bg-surface text-sm font-medium hover:bg-black/5 transition-colors disabled:opacity-40"
+        >
+          <Download size={15} /> CSV 내보내기
+        </button>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 max-w-md">
-        <div className="rounded-2xl bg-surface border border-border p-4 sm:p-5">
-          <p className="text-2xl font-bold tracking-tight">{total.toLocaleString()}</p>
-          <p className="text-xs text-foreground-muted mt-1">전체 회원{query.search && " (검색 결과)"}</p>
-        </div>
-        <div className="rounded-2xl bg-surface border border-border p-4 sm:p-5">
-          <p className="text-2xl font-bold tracking-tight">{roles.length}</p>
-          <p className="text-xs text-foreground-muted mt-1">운영 역할 종류</p>
-        </div>
+        <Kpi
+          label={query.search ? "전체 회원 (검색 결과)" : "전체 회원"}
+          value={total.toLocaleString()}
+        />
+        <Kpi label="운영 역할 종류" value={String(roles.length)} />
       </div>
 
       <form onSubmit={handleSearch}>
@@ -88,7 +141,7 @@ export default function MembersPage() {
       </form>
 
       <section className="rounded-2xl bg-surface border border-border overflow-hidden">
-        {isPending && <Empty msg="회원 목록을 불러오는 중…" />}
+        {isPending && <BlockSkeleton rows={5} />}
         {isError && <Empty msg="회원 목록을 불러오지 못했습니다." />}
         {!isPending && !isError && (data?.items.length ?? 0) === 0 && (
           <Empty msg="조건에 맞는 회원이 없습니다." />
@@ -195,6 +248,43 @@ export default function MembersPage() {
           </button>
         </div>
       )}
+
+      {/* 역할·권한(RBAC) 구성 — 읽기 전용 (구 설정 페이지에서 이동) */}
+      <section className="space-y-4 pt-2">
+        <div>
+          <h2 className="text-lg font-bold tracking-tight">역할·권한 구성</h2>
+          <p className="mt-0.5 text-sm text-foreground-muted">
+            읽기 전용 — 역할 부여/회수는 위 회원 목록에서, 변경 이력은 감사 로그에서 확인
+          </p>
+        </div>
+        {roles.map((role) => (
+          <div key={role.code} className="rounded-2xl bg-surface border border-border p-5">
+            <div className="flex items-center gap-2.5">
+              <span className="grid place-items-center w-9 h-9 rounded-xl bg-brand/10 text-brand">
+                <ShieldCheck size={17} strokeWidth={1.9} />
+              </span>
+              <div>
+                <h3 className="font-semibold">{role.name}</h3>
+                <p className="text-xs text-foreground-muted font-mono">{role.code}</p>
+              </div>
+            </div>
+            <div className="mt-4 divide-y divide-border">
+              {role.permissions.length === 0 && (
+                <p className="py-3 text-sm text-foreground-muted">부여된 권한이 없습니다.</p>
+              )}
+              {role.permissions.map((code) => (
+                <div key={code} className="flex items-center gap-3 py-3">
+                  <KeyRound size={14} className="text-foreground-muted shrink-0" />
+                  <span className="text-sm font-mono">{code}</span>
+                  <span className="ml-auto text-xs text-foreground-muted">
+                    {PERMISSION_DESC[code] ?? ""}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </section>
     </div>
   );
 }
@@ -225,8 +315,4 @@ function RoleChip({
       <ShieldCheck size={12} /> {label}
     </button>
   );
-}
-
-function Empty({ msg }: { msg: string }) {
-  return <p className="p-8 text-center text-sm text-foreground-muted">{msg}</p>;
 }

@@ -15,6 +15,7 @@ class CategoryCountSchema(BaseModel):
 
 class RecentRecommendationSchema(BaseModel):
     id: int
+    trdar_code: int
     trdar_name: str
     district_name: str
     category: str

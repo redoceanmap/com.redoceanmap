@@ -3,6 +3,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { Database } from "lucide-react";
 import { fetchAdminDataSources, formatLatestLabel } from "@/lib/adminApi";
+import BlockSkeleton from "@/components/admin/BlockSkeleton";
+import Empty from "@/components/admin/Empty";
 
 // 데이터셋 key → 부가 설명 (수집 경로는 백엔드/cron 소관 — 어드민은 열람만)
 const NOTES: Record<string, string> = {
@@ -12,6 +14,7 @@ const NOTES: Record<string, string> = {
   floating_population: "서울 열린데이터광장 · 분기 팩트",
   market_news: "Google News RSS · 일 단위 수집",
   recommendations: "AI 추천 파이프라인 산출물",
+  price_bars: "yfinance OHLCV · 자동 수집",
 };
 
 export default function DataSourcesPage() {
@@ -31,7 +34,7 @@ export default function DataSourcesPage() {
         </p>
       </div>
 
-      {isPending && <Empty msg="적재 현황을 불러오는 중…" />}
+      {isPending && <BlockSkeleton rows={4} />}
       {isError && <Empty msg="적재 현황을 불러오지 못했습니다." />}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -69,8 +72,4 @@ export default function DataSourcesPage() {
       </div>
     </div>
   );
-}
-
-function Empty({ msg }: { msg: string }) {
-  return <p className="p-8 text-center text-sm text-foreground-muted">{msg}</p>;
 }

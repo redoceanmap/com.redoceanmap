@@ -64,15 +64,17 @@ async def list_roles(
 @member_router.post(
     "/members/{user_id}/roles",
     response_model=MemberSchema,
-    dependencies=[Depends(require_permission("members:write"))],
 )
 async def grant_role(
     user_id: int,
     body: RoleGrantRequestSchema,
+    actor_id: int = Depends(require_permission("members:write")),
     use_case: MemberUseCase = Depends(get_member_use_case),
 ) -> MemberSchema:
     try:
-        result = await use_case.grant_role(RoleChangeCommand(user_id=user_id, role_code=body.role_code))
+        result = await use_case.grant_role(
+            RoleChangeCommand(actor_id=actor_id, user_id=user_id, role_code=body.role_code)
+        )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     return _to_member_schema(result.member)
@@ -81,15 +83,17 @@ async def grant_role(
 @member_router.delete(
     "/members/{user_id}/roles/{role_code}",
     response_model=MemberSchema,
-    dependencies=[Depends(require_permission("members:write"))],
 )
 async def revoke_role(
     user_id: int,
     role_code: str,
+    actor_id: int = Depends(require_permission("members:write")),
     use_case: MemberUseCase = Depends(get_member_use_case),
 ) -> MemberSchema:
     try:
-        result = await use_case.revoke_role(RoleChangeCommand(user_id=user_id, role_code=role_code))
+        result = await use_case.revoke_role(
+            RoleChangeCommand(actor_id=actor_id, user_id=user_id, role_code=role_code)
+        )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     return _to_member_schema(result.member)

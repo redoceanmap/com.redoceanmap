@@ -1,16 +1,32 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Search } from "lucide-react";
-import { fetchAdminAreas, formatSalesMan, type AdminAreaRow } from "@/lib/adminApi";
+import { ArrowDown, ArrowUp, Download, Search } from "lucide-react";
+import { downloadCsv, fetchAdminAreas, formatSalesMan, type AdminAreaRow } from "@/lib/adminApi";
+import BlockSkeleton from "@/components/admin/BlockSkeleton";
+import Empty from "@/components/admin/Empty";
+import Kpi from "@/components/admin/Kpi";
 
 // 폐업률이 이 값 이상이면 "주의" 배지 — 어드민 목록 표시용 임계값
 const CLOSURE_WARN = 7;
 
+type SortKey = "store_count" | "monthly_sales" | "closure_rate";
+
+const SORT_COLUMNS: { key: SortKey; label: string }[] = [
+  { key: "store_count", label: "점포수" },
+  { key: "monthly_sales", label: "추정매출(월)" },
+  { key: "closure_rate", label: "폐업률" },
+];
+
 export default function AreasPage() {
-  // REACT_RULES 패턴 B: 실시간 필터 상태는 단일 객체 useState
-  const [filter, setFilter] = useState({ q: "", gu: "전체" });
+  // REACT_RULES 패턴 B: 실시간 필터·정렬 상태는 단일 객체 useState
+  const [filter, setFilter] = useState<{
+    q: string;
+    gu: string;
+    sort: { key: SortKey; dir: "asc" | "desc" } | null;
+  }>({ q: "", gu: "전체", sort: null });
   const { data, isPending, isError } = useQuery({
     queryKey: ["admin-areas"],
     queryFn: fetchAdminAreas,
@@ -23,32 +39,76 @@ export default function AreasPage() {
     [areas],
   );
 
-  const rows = useMemo(
-    () =>
-      areas.filter(
-        (a) =>
-          (filter.gu === "전체" || a.gu_name === filter.gu) &&
-          (!filter.q || a.trdar_name.includes(filter.q) || a.dong_name.includes(filter.q)),
-      ),
-    [areas, filter],
-  );
+  const rows = useMemo(() => {
+    const filtered = areas.filter(
+      (a) =>
+        (filter.gu === "전체" || a.gu_name === filter.gu) &&
+        (!filter.q || a.trdar_name.includes(filter.q) || a.dong_name.includes(filter.q)),
+    );
+    if (!filter.sort) return filtered;
+    const { key, dir } = filter.sort;
+    return [...filtered].sort((a, b) => {
+      const av = a[key];
+      const bv = b[key];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1; // null은 항상 뒤로
+      if (bv == null) return -1;
+      return dir === "asc" ? av - bv : bv - av;
+    });
+  }, [areas, filter]);
 
   const warnCount = rows.filter(
     (a) => a.closure_rate != null && a.closure_rate >= CLOSURE_WARN,
   ).length;
 
+  const toggleSort = (key: SortKey) =>
+    setFilter((prev) => ({
+      ...prev,
+      sort:
+        prev.sort?.key !== key
+          ? { key, dir: "desc" }
+          : prev.sort.dir === "desc"
+            ? { key, dir: "asc" }
+            : null,
+    }));
+
+  const exportCsv = () =>
+    downloadCsv(
+      "admin-areas.csv",
+      ["상권코드", "상권", "자치구", "행정동", "점포수", "추정매출(월,원)", "폐업률(%)"],
+      rows.map((a) => [
+        a.trdar_code,
+        a.trdar_name,
+        a.gu_name,
+        a.dong_name,
+        a.store_count ?? "",
+        a.monthly_sales ?? "",
+        a.closure_rate != null ? a.closure_rate.toFixed(1) : "",
+      ]),
+    );
+
   return (
     <div className="max-w-7xl mx-auto space-y-5">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold tracking-tight">상권 관리</h1>
-        <p className="mt-1 text-sm text-foreground-muted">서울시 등록 상권 데이터 (최신 분기 집계)</p>
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">상권 관리</h1>
+          <p className="mt-1 text-sm text-foreground-muted">서울시 등록 상권 데이터 (최신 분기 집계)</p>
+        </div>
+        <button
+          type="button"
+          onClick={exportCsv}
+          disabled={rows.length === 0}
+          className="inline-flex items-center gap-1.5 px-4 h-10 rounded-full border border-border bg-surface text-sm font-medium hover:bg-black/5 transition-colors disabled:opacity-40"
+        >
+          <Download size={15} /> CSV 내보내기
+        </button>
       </div>
 
       {/* 요약 */}
       <div className="grid grid-cols-3 gap-3 sm:gap-4">
-        <Stat label="전체 상권" value={areas.length.toLocaleString()} />
-        <Stat label="조회 결과" value={rows.length.toLocaleString()} />
-        <Stat label={`주의 (폐업률 ${CLOSURE_WARN}%↑)`} value={warnCount.toLocaleString()} />
+        <Kpi label="전체 상권" value={areas.length.toLocaleString()} />
+        <Kpi label="조회 결과" value={rows.length.toLocaleString()} />
+        <Kpi label={`주의 (폐업률 ${CLOSURE_WARN}%↑)`} value={warnCount.toLocaleString()} />
       </div>
 
       {/* 검색 + 자치구 필터 */}
@@ -80,7 +140,7 @@ export default function AreasPage() {
 
       {/* 목록 */}
       <section className="rounded-2xl bg-surface border border-border overflow-hidden">
-        {isPending && <Empty msg="상권 데이터를 불러오는 중…" />}
+        {isPending && <BlockSkeleton rows={6} />}
         {isError && <Empty msg="상권 데이터를 불러오지 못했습니다." />}
         {!isPending && !isError && rows.length === 0 && <Empty msg="조건에 맞는 상권이 없습니다." />}
         {rows.length > 0 && (
@@ -92,16 +152,38 @@ export default function AreasPage() {
                     <th className="font-medium px-5 py-2.5">상권</th>
                     <th className="font-medium px-5 py-2.5">자치구</th>
                     <th className="font-medium px-5 py-2.5">행정동</th>
-                    <th className="font-medium px-5 py-2.5 text-right">점포수</th>
-                    <th className="font-medium px-5 py-2.5 text-right">추정매출(월)</th>
-                    <th className="font-medium px-5 py-2.5 text-right">폐업률</th>
+                    {SORT_COLUMNS.map((c) => (
+                      <th key={c.key} className="font-medium px-5 py-2.5 text-right">
+                        <button
+                          type="button"
+                          onClick={() => toggleSort(c.key)}
+                          className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+                        >
+                          {c.label}
+                          {filter.sort?.key === c.key &&
+                            (filter.sort.dir === "desc" ? (
+                              <ArrowDown size={12} />
+                            ) : (
+                              <ArrowUp size={12} />
+                            ))}
+                        </button>
+                      </th>
+                    ))}
                     <th className="font-medium px-5 py-2.5 text-right">상태</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((a) => (
                     <tr key={a.trdar_code} className="border-b border-border last:border-0 hover:bg-background/40">
-                      <td className="px-5 py-3 font-medium">{a.trdar_name}</td>
+                      <td className="px-5 py-3 font-medium">
+                        <Link
+                          href={`/market?trdar=${a.trdar_code}`}
+                          className="hover:text-brand hover:underline transition-colors"
+                          title="서비스 지도에서 열기"
+                        >
+                          {a.trdar_name}
+                        </Link>
+                      </td>
                       <td className="px-5 py-3 text-foreground-muted">{a.gu_name || "—"}</td>
                       <td className="px-5 py-3 text-foreground-muted">{a.dong_name || "—"}</td>
                       <td className="px-5 py-3 text-right tabular-nums">
@@ -121,7 +203,11 @@ export default function AreasPage() {
             </div>
             <div className="sm:hidden divide-y divide-border max-h-[32rem] overflow-y-auto">
               {rows.map((a) => (
-                <div key={a.trdar_code} className="px-4 py-3 flex items-center justify-between gap-3">
+                <Link
+                  key={a.trdar_code}
+                  href={`/market?trdar=${a.trdar_code}`}
+                  className="px-4 py-3 flex items-center justify-between gap-3 hover:bg-background/40 transition-colors"
+                >
                   <div className="min-w-0">
                     <p className="font-medium">{a.trdar_name}</p>
                     <p className="text-xs text-foreground-muted mt-0.5">
@@ -131,21 +217,12 @@ export default function AreasPage() {
                     </p>
                   </div>
                   <Badge row={a} />
-                </div>
+                </Link>
               ))}
             </div>
           </>
         )}
       </section>
-    </div>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl bg-surface border border-border p-4">
-      <p className="text-2xl font-bold tracking-tight">{value}</p>
-      <p className="text-xs text-foreground-muted mt-0.5">{label}</p>
     </div>
   );
 }
@@ -168,8 +245,4 @@ function Badge({ row }: { row: AdminAreaRow }) {
       {warn ? "주의" : "활성"}
     </span>
   );
-}
-
-function Empty({ msg }: { msg: string }) {
-  return <p className="p-8 text-center text-sm text-foreground-muted">{msg}</p>;
 }

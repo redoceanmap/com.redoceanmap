@@ -36,6 +36,7 @@ class RecommendationDirectoryGateway(RecommendationDirectoryPort):
         return [
             RecommendationInfo(
                 id=r.id,
+                trdar_code=r.trdar_code,
                 trdar_name=r.trdar_name,
                 district_name=r.district_name,
                 category=r.category,

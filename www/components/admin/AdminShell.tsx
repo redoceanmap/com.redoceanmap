@@ -1,17 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useUIStore } from "@/lib/uiStore";
+import { clearStoredToken } from "@/lib/tokenStorage";
 import {
   LayoutDashboard,
   Store,
   Users,
   Sparkles,
   Database,
-  Settings,
+  ScrollText,
   Search,
   Bell,
+  LogOut,
 } from "lucide-react";
 
 const nav = [
@@ -20,7 +22,7 @@ const nav = [
   { icon: Users, label: "회원 관리", href: "/admin/members" },
   { icon: Sparkles, label: "추천 기록", href: "/admin/recommendations" },
   { icon: Database, label: "데이터 소스", href: "/admin/data-sources" },
-  { icon: Settings, label: "설정", href: "/admin/settings" },
+  { icon: ScrollText, label: "감사 로그", href: "/admin/audit" },
 ];
 
 // 모바일 하단 탭 (주요 5개)
@@ -28,7 +30,14 @@ const mobileTabs = nav.slice(0, 5);
 
 export default function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const user = useUIStore((s) => s.user);
+  const logoutStore = useUIStore((s) => s.logout);
+  const logout = () => {
+    clearStoredToken();
+    logoutStore();
+    router.push("/");
+  };
   const isActive = (href: string) =>
     href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
 
@@ -60,6 +69,23 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           ))}
         </nav>
 
+        <div className="m-3 p-3 rounded-2xl border border-border bg-background/60 flex items-center gap-2.5">
+          <span className="grid place-items-center w-9 h-9 rounded-full bg-brand/10 text-brand text-sm font-semibold shrink-0">
+            {user?.name?.[0] ?? "?"}
+          </span>
+          <div className="min-w-0 flex-1 leading-tight">
+            <p className="text-sm font-medium truncate">{user?.name ?? "—"}</p>
+            <p className="text-xs text-foreground-muted truncate">{user?.email ?? ""}</p>
+          </div>
+          <button
+            type="button"
+            onClick={logout}
+            title="로그아웃"
+            className="grid place-items-center w-9 h-9 rounded-full text-foreground-muted hover:text-foreground hover:bg-black/5 transition-colors shrink-0"
+          >
+            <LogOut size={16} strokeWidth={1.9} />
+          </button>
+        </div>
       </aside>
 
       {/* 본문 컬럼 */}
@@ -98,6 +124,14 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
                 <p className="text-sm font-medium">{user?.name ?? "—"}</p>
                 <p className="text-xs text-foreground-muted">{user?.email ?? ""}</p>
               </div>
+              <button
+                type="button"
+                onClick={logout}
+                title="로그아웃"
+                className="lg:hidden grid place-items-center w-9 h-9 rounded-full text-foreground-muted hover:text-foreground hover:bg-black/5 transition-colors"
+              >
+                <LogOut size={16} strokeWidth={1.9} />
+              </button>
             </div>
           </div>
         </header>

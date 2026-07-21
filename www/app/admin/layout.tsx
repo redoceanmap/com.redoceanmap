@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import AdminGuard from "@/components/admin/AdminGuard";
 import AdminShell from "@/components/admin/AdminShell";
+import AdminToast from "@/components/admin/AdminToast";
 
 export const metadata: Metadata = {
   title: "redoceanmap — 어드민",
@@ -15,6 +16,7 @@ export default function AdminLayout({
   return (
     <AdminGuard>
       <AdminShell>{children}</AdminShell>
+      <AdminToast />
     </AdminGuard>
   );
 }
