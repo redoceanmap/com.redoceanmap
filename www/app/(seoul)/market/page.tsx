@@ -9,6 +9,7 @@ import WorkspaceShell from "@/components/workspace/WorkspaceShell";
 import ChatPanel from "@/components/chat/ChatPanel";
 import MapView, { type MapPin } from "@/components/seoul/MapView";
 import AreaStatsPanel from "@/components/market/AreaStatsPanel";
+import AreaDetailOverlay from "@/components/market/overlay/AreaDetailOverlay";
 
 const EMPTY_PROMPTS = [
   "성수동 카페 상권 어때요?",
@@ -21,14 +22,21 @@ function MarketWorkspace() {
   const params = useSearchParams();
   const trdar = params.get("trdar") ?? "";
   const c = params.get("c");
+  const overlayOpen = !!trdar && params.get("ov") !== "0";
 
   const recommendations = useChatStore((s) => s.recommendations);
   const conversationId = useChatStore((s) => s.conversationId);
   const messages = useChatStore((s) => s.messages);
 
+  // 새 상권 선택은 ov 파라미터를 버려 오버레이를 자동 재오픈한다
   const setTrdar = (next: string) => {
     const cid = conversationId ?? c;
     router.replace(`/market?trdar=${next}${cid ? `&c=${cid}` : ""}`, { scroll: false });
+  };
+
+  const closeOverlay = () => {
+    const cid = conversationId ?? c;
+    router.replace(`/market?trdar=${trdar}&ov=0${cid ? `&c=${cid}` : ""}`, { scroll: false });
   };
 
   // 채팅 응답에 추천 상권이 오면 첫 곳을 URL(?trdar)에 반영 — 마운트 시 기존 메시지는 건너뛴다
@@ -38,7 +46,9 @@ function MarketWorkspace() {
     if (!last || last.role !== "assistant" || handledRef.current === last.id) return;
     handledRef.current = last.id;
     if (last.recommendations && last.recommendations.length > 0) {
-      setTrdar(last.recommendations[0].id);
+      // 같은 상권 재추천이면 URL 불변 — 사용자가 닫은 오버레이를 다시 열지 않는다
+      const next = last.recommendations[0].id;
+      if (next !== trdar) setTrdar(next);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages]);
@@ -62,8 +72,9 @@ function MarketWorkspace() {
     <WorkspaceShell
       stageLabel="지도"
       stage={
-        <div className="flex-1 min-h-0 p-3">
+        <div className="relative flex-1 min-h-0 p-3">
           <MapView areas={pins} selectedId={trdar || null} onSelect={setTrdar} />
+          {overlayOpen && <AreaDetailOverlay trdarCode={trdar} onClose={closeOverlay} />}
         </div>
       }
       panel={<AreaStatsPanel trdarCode={trdar} />}

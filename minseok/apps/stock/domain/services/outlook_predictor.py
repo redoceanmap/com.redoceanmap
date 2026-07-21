@@ -4,6 +4,7 @@ from stock.domain.entities.analysis_config import AnalysisConfig
 from stock.domain.entities.outlook import Direction, Outlook
 from stock.domain.value_objects.indicators import Indicators
 from stock.domain.value_objects.sentiment_score import SentimentScore
+from stock.domain.value_objects.signal_breakdown import SignalContribution
 
 
 class OutlookPredictor:
@@ -15,6 +16,31 @@ class OutlookPredictor:
     volume_confirm이 설정되면 거래량(volume_ratio)이 그보다 작을 때 방향 신호를 관망으로 강등한다.
     """
 
+    def breakdown(
+        self,
+        indicators: Indicators,
+        sentiment: SentimentScore,
+        config: AnalysisConfig,
+    ) -> list[SignalContribution]:
+        """신호별 (원값, 가중치, 기여도) 분해 — 가중치 0인 신호도 원값은 노출한다."""
+        pairs = (
+            ("sentiment", sentiment.value, config.w_sentiment),
+            ("rsi", self._rsi_signal(indicators.rsi), config.w_rsi),
+            ("trend", self._trend_signal(indicators), config.w_trend),
+            ("bollinger", self._bb_signal(indicators.bb_percent_b), config.w_bb),
+            ("obv", self._obv_signal(indicators.obv_slope), config.w_obv),
+            ("momentum", self._momentum_signal(indicators.momentum_12_1), config.w_momentum),
+        )
+        return [
+            SignalContribution(key=key, signal=signal, weight=weight, contribution=signal * weight)
+            for key, signal, weight in pairs
+        ]
+
+    @staticmethod
+    def score(contributions: list[SignalContribution]) -> float:
+        """기여도 합산 → -1.0 ~ 1.0 클램프."""
+        return max(-1.0, min(1.0, sum(c.contribution for c in contributions)))
+
     def predict(
         self,
         indicators: Indicators,
@@ -22,17 +48,9 @@ class OutlookPredictor:
         config: AnalysisConfig,
     ) -> Outlook:
         if config.atr_veto is not None and indicators.atr_pct > config.atr_veto:
-            return Outlook(direction=Direction.NEUTRAL, confidence=0.0)
+            return Outlook(direction=Direction.NEUTRAL, confidence=0.0, neutral_reason="atr_veto")
 
-        score = (
-            config.w_sentiment * sentiment.value
-            + config.w_rsi * self._rsi_signal(indicators.rsi)
-            + config.w_trend * self._trend_signal(indicators)
-            + config.w_bb * self._bb_signal(indicators.bb_percent_b)
-            + config.w_obv * self._obv_signal(indicators.obv_slope)
-            + config.w_momentum * self._momentum_signal(indicators.momentum_12_1)
-        )
-        score = max(-1.0, min(1.0, score))
+        score = self.score(self.breakdown(indicators, sentiment, config))
         confidence = min(abs(score), 1.0)
         if score >= config.up_threshold:
             return self._confirmed(Direction.UP, confidence, indicators, config)
@@ -49,7 +67,9 @@ class OutlookPredictor:
     ) -> Outlook:
         # 거래량 확인 필터: 평소 대비 거래량이 임계 미만이면 방향 신호를 못 믿고 관망으로 강등
         if config.volume_confirm is not None and indicators.volume_ratio < config.volume_confirm:
-            return Outlook(direction=Direction.NEUTRAL, confidence=0.0)
+            return Outlook(
+                direction=Direction.NEUTRAL, confidence=0.0, neutral_reason="volume_confirm"
+            )
         return Outlook(direction=direction, confidence=confidence)
 
     @staticmethod

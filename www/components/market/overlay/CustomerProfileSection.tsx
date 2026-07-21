@@ -1,0 +1,78 @@
+"use client";
+
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import type { AreaDetail } from "@/lib/types";
+import { formatMoney } from "./format";
+
+const AGE_LABELS: [string, string][] = [
+  ["age10", "10대"], ["age20", "20대"], ["age30", "30대"],
+  ["age40", "40대"], ["age50", "50대"], ["age60Plus", "60+"],
+];
+
+export default function CustomerProfileSection({
+  salesMix,
+}: {
+  salesMix: NonNullable<AreaDetail["salesMix"]>;
+}) {
+  const { male, female } = salesMix.byGender;
+  const genderTotal = male + female;
+  const malePct = genderTotal > 0 ? Math.round((male / genderTotal) * 100) : null;
+  const ageData = AGE_LABELS.map(([key, label]) => ({
+    label,
+    value: salesMix.byAge[key] ?? 0,
+  }));
+
+  return (
+    <div className="flex flex-col gap-3">
+      {malePct !== null && (
+        <div>
+          <div className="flex justify-between text-xs text-foreground-muted mb-1">
+            <span>남성 {malePct}%</span>
+            <span>여성 {100 - malePct}%</span>
+          </div>
+          <div className="flex h-2 rounded-full overflow-hidden bg-border">
+            <div className="bg-[#2563EB]/70" style={{ width: `${malePct}%` }} />
+            <div className="bg-[#DC2626]/70" style={{ width: `${100 - malePct}%` }} />
+          </div>
+        </div>
+      )}
+      <div>
+        <p className="text-xs text-foreground-muted mb-1.5">연령대별 매출</p>
+        <div className="h-32">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={ageData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+              <CartesianGrid stroke="#EBE8DF" strokeDasharray="3 3" vertical={false} />
+              <XAxis
+                dataKey="label"
+                tick={{ fontSize: 10, fill: "#6B7280" }}
+                axisLine={{ stroke: "#EBE8DF" }}
+                tickLine={false}
+              />
+              <YAxis
+                tickFormatter={formatMoney}
+                tick={{ fontSize: 10, fill: "#6B7280" }}
+                axisLine={false}
+                tickLine={false}
+                width={44}
+              />
+              <Tooltip
+                formatter={(v) => [formatMoney(Number(v)), "매출"]}
+                contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #EBE8DF" }}
+                cursor={{ fill: "rgba(153, 27, 27, 0.06)" }}
+              />
+              <Bar dataKey="value" fill="#991B1B" radius={[3, 3, 0, 0]} maxBarSize={28} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </div>
+  );
+}

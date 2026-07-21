@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from stock.domain.entities.fundamental_snapshot import FundamentalSnapshot
 from stock.domain.entities.price_bar import PriceBar
+from stock.domain.value_objects.insight_vo import Insight
 
 
 @dataclass(frozen=True)
@@ -24,6 +25,7 @@ class PriceHistory:
     resolved_ticker: str  # DB에 실제 저장된 티커(예: 005930 → 005930.KS)
     timeframe: str
     bars: list[PriceBar]
+    live: bool = False  # True = 미수집 종목이라 yfinance 라이브 이력 폴백(저장 안 함)
 
 
 @dataclass(frozen=True)
@@ -57,3 +59,4 @@ class FundamentalsView:
 
     symbol: str
     snapshots: list[FundamentalSnapshot]
+    insights: list[Insight] = field(default_factory=list)  # 규칙 기반 해석(dart 우선 병합)

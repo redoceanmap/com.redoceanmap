@@ -67,3 +67,39 @@ async def test_과매도_밴드하단이면_참고_신호가_켜진다():
     # 참고 신호는 본 판정(기본 config + 감성)을 오염시키지 않는다.
     assert result.direction in {"UP", "DOWN", "NEUTRAL"}
     assert result.sentiment == 0.7
+
+
+class _StubDemand:
+    def __init__(self, fail=False):
+        self.fail = fail
+        self.recorded: list[str] = []
+
+    async def record(self, ticker):
+        if self.fail:
+            raise RuntimeError("DB down")
+        self.recorded.append(ticker)
+
+
+async def test_분석_시_수요를_기록한다():
+    demand = _StubDemand()
+    interactor = StockInteractor(
+        market_data=_StubMarketData(),
+        sentiment=_StubSentiment(),
+        predictor=OutlookPredictor(),
+        config=AnalysisConfig.default(),
+        demand=demand,
+    )
+    await interactor.analyze(Symbol("AAPL"))
+    assert demand.recorded == ["AAPL"]
+
+
+async def test_수요_기록_실패는_분석에_영향_없다():
+    interactor = StockInteractor(
+        market_data=_StubMarketData(),
+        sentiment=_StubSentiment(),
+        predictor=OutlookPredictor(),
+        config=AnalysisConfig.default(),
+        demand=_StubDemand(fail=True),
+    )
+    result = await interactor.analyze(Symbol("AAPL"))
+    assert result.price == 225.0  # 기록 실패에도 분석은 정상 반환

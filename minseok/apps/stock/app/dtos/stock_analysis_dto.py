@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+from stock.domain.value_objects.insight_vo import Insight
+from stock.domain.value_objects.signal_breakdown import SignalContribution
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,3 +31,9 @@ class StockAnalysis:
     obv_slope: float = 0.0            # OBV 20일 정규화 기울기 (수급 방향)
     momentum_12_1: float = 0.0        # 12-1 모멘텀 (이력 부족 시 0.0)
     reference_up_signal: bool = False  # 백테스트 검증(인샘플+홀드아웃) 통과한 RSI+BB ±0.35 UP 참고 신호 — 확률 아님
+    score: float = 0.0                 # 가중 합산 종합 점수 (-1~1)
+    up_threshold: float = 0.3          # 방향 판정 기준 — 프론트 게이지 눈금용
+    down_threshold: float = -0.3
+    neutral_reason: str | None = None  # NEUTRAL 사유: atr_veto | volume_confirm | None
+    signals: list[SignalContribution] = field(default_factory=list)  # 신호별 기여도 분해
+    insights: list[Insight] = field(default_factory=list)            # 규칙 기반 해석 문장

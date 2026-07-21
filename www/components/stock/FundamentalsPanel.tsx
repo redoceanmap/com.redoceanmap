@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchFundamentals } from "@/lib/api";
 import type { FundamentalSnapshot } from "@/lib/types";
+import InsightList from "@/components/common/InsightList";
 
 const SOURCE_LABEL: Record<string, string> = { yfinance: "야후", dart: "DART" };
 
@@ -56,6 +57,11 @@ export default function FundamentalsPanel({ symbol }: { symbol: string }) {
 
   return (
     <div className="p-4">
+      {data?.insights && data.insights.length > 0 && (
+        <div className="mb-3 bg-surface border border-border rounded-lg px-3 py-2.5">
+          <InsightList insights={data.insights} />
+        </div>
+      )}
       <table className="w-full text-sm">
         <thead>
           <tr className="text-[11px] text-foreground-muted">

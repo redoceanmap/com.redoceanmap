@@ -5,12 +5,19 @@ import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
-import { ApiError, fetchPriceHistory, fetchStockAnalysis } from "@/lib/api";
+import {
+  ApiError,
+  fetchPriceHistory,
+  fetchStockAnalysis,
+  fetchStockForecast,
+  fetchStockQuote,
+} from "@/lib/api";
 import { useChatStore } from "@/lib/store";
 import WorkspaceShell from "@/components/workspace/WorkspaceShell";
 import ChatPanel from "@/components/chat/ChatPanel";
 import SymbolHeader from "@/components/stock/SymbolHeader";
 import StockPanel from "@/components/stock/StockPanel";
+import ProbabilityCard from "@/components/stock/ProbabilityCard";
 
 // lightweight-charts는 SSR 불가 — 클라이언트에서만 로드
 const CandleChart = dynamic(() => import("@/components/stock/CandleChart"), {
@@ -65,6 +72,27 @@ function StockWorkspace() {
     queryFn: () => fetchPriceHistory(symbol, timeframe),
     enabled: !!symbol,
     retry: false,
+    // 탭 포커스마다 재조회 방지 — 라이브 폴백 종목은 요청마다 yfinance 2y 다운로드라 낭비가 큼.
+    // 봉은 일 단위 갱신이고 실시간성은 quote 폴링이 담당한다.
+    staleTime: 5 * 60_000,
+  });
+  // 확률·예측 밴드 — 저장 일봉 기반이라 미수집 종목은 404(카드·밴드 미표시로 열화)
+  const forecastQ = useQuery({
+    queryKey: ["forecast", symbol],
+    queryFn: () => fetchStockForecast(symbol),
+    enabled: !!symbol,
+    retry: false,
+    staleTime: 10 * 60_000, // 백엔드가 일 단위 캐시 — 재조회 부담 최소화
+  });
+  // 준실시간 현재가(지연 시세) — 탭 활성 시에만 30초 폴링.
+  // 에러(미지원 심볼·일시 네트워크 오류)는 5분 간격 저속 재시도 — 영구 중단하면
+  // 일시 오류 한 번에 그 심볼의 시세 갱신이 리마운트까지 멈춘다.
+  const quoteQ = useQuery({
+    queryKey: ["quote", symbol],
+    queryFn: () => fetchStockQuote(symbol),
+    enabled: !!symbol,
+    retry: false,
+    refetchInterval: (query) => (query.state.status === "error" ? 300_000 : 30_000),
   });
 
   const pricesNotCollected = pricesQ.error instanceof ApiError && pricesQ.error.status === 404;
@@ -78,16 +106,18 @@ function StockWorkspace() {
         resolvedTicker={pricesQ.data?.resolvedTicker}
         analyze={analyzeQ.data}
         isLoading={analyzeQ.isLoading}
+        quotePrice={quoteQ.data?.price}
       />
+      {forecastQ.data && <ProbabilityCard forecast={forecastQ.data} />}
       {pricesQ.isLoading && <div className="flex-1 m-4 skeleton rounded-xl" />}
       {pricesNotCollected && (
         <div className="flex-1 grid place-items-center px-6 text-center">
           <div>
-            <p className="text-sm font-medium">이 종목은 시세 수집 대상이 아니에요</p>
+            <p className="text-sm font-medium">이 종목의 시세를 찾지 못했어요</p>
             <p className="mt-1.5 text-xs text-foreground-muted leading-relaxed">
-              차트는 워치리스트 종목만 제공됩니다.
+              종목 코드나 티커를 확인해주세요.
               <br />
-              우측 지표·분석은 실시간 조회라 정상 동작해요.
+              (미수집 종목도 라이브 조회로 차트가 제공됩니다 — 이 안내는 조회 자체가 실패한 경우예요)
             </p>
           </div>
         </div>
@@ -97,6 +127,8 @@ function StockWorkspace() {
           bars={pricesQ.data.bars}
           support={analyzeQ.data?.support}
           resistance={analyzeQ.data?.resistance}
+          forecast={timeframe === "1d" ? forecastQ.data : null}
+          quotePrice={timeframe === "1d" ? quoteQ.data?.price : null}
         />
       )}
       <div className="shrink-0 flex items-center gap-1 px-4 py-2 border-t border-border">
@@ -117,6 +149,11 @@ function StockWorkspace() {
         ))}
         {timeframe === "5m" && (
           <span className="ml-2 text-[11px] text-foreground-muted">최근 60일 보유</span>
+        )}
+        {pricesQ.data?.live && (
+          <span className="ml-2 px-2 py-0.5 rounded-full border border-border bg-surface text-[10px] text-foreground-muted">
+            라이브 조회 · 수집 대상 아님
+          </span>
         )}
       </div>
     </>

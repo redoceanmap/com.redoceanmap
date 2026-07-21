@@ -3,6 +3,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from stock.adapter.inbound.api.schemas.stock_history_schema import (
+    FundamentalInsightSchema,
     FundamentalSnapshotSchema,
     FundamentalsResponse,
     PriceBarSchema,
@@ -38,6 +39,7 @@ async def get_price_history(
         symbol=history.symbol,
         resolvedTicker=history.resolved_ticker,
         timeframe=history.timeframe,
+        live=history.live,
         bars=[
             PriceBarSchema(
                 ts=b.ts, open=b.open, high=b.high, low=b.low, close=b.close, volume=b.volume
@@ -79,5 +81,9 @@ async def get_fundamentals(
                 eps=s.eps, bps=s.bps,
             )
             for s in view.snapshots
+        ],
+        insights=[
+            FundamentalInsightSchema(key=i.key, tone=i.tone, text=i.text)
+            for i in view.insights
         ],
     )

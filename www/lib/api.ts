@@ -1,5 +1,6 @@
 import { authHeader } from "./tokenStorage";
 import type {
+  AreaDetail,
   AreaScoreDetail,
   AreaStatsDetail,
   ConversationMessage,
@@ -9,7 +10,9 @@ import type {
   PriceHistory,
   RecommendationItem,
   StockAnalyzeResult,
+  StockForecast,
   StockNewsItem,
+  StockQuote,
 } from "./types";
 
 // 모든 GET 조회는 next.config rewrites(/api/backend/* → FastAPI)를 경유한다.
@@ -54,6 +57,12 @@ export const fetchStockNews = (symbol: string, limit = 20): Promise<StockNewsIte
 export const fetchFundamentals = (symbol: string): Promise<Fundamentals> =>
   getJson(`/stock/${encodeURIComponent(symbol)}/fundamentals`);
 
+export const fetchStockForecast = (symbol: string): Promise<StockForecast> =>
+  getJson(`/stock/${encodeURIComponent(symbol)}/forecast`);
+
+export const fetchStockQuote = (symbol: string): Promise<StockQuote> =>
+  getJson(`/stock/${encodeURIComponent(symbol)}/quote`);
+
 export const fetchAreaStats = (trdarCode: string | number): Promise<AreaStatsDetail> =>
   getJson(`/market/trdar/${trdarCode}/stats`);
 
@@ -62,6 +71,9 @@ export const fetchAreaScore = (trdarCode: string | number): Promise<AreaScoreDet
 
 export const fetchAreaInfo = (trdarCode: string | number): Promise<MarketArea> =>
   getJson(`/market/trdar/${trdarCode}/area`);
+
+export const fetchAreaDetail = (trdarCode: string | number): Promise<AreaDetail> =>
+  getJson(`/market/trdar/${trdarCode}/detail`);
 
 export const fetchConversations = (limit = 30): Promise<ConversationSummary[]> =>
   getJson(`/chat/conversations?limit=${limit}`);

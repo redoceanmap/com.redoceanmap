@@ -95,3 +95,65 @@ async def test_펀더멘털은_소스별_스냅샷을_전달한다():
         FundamentalsQuery(symbol="005930")
     )
     assert view.snapshots == [snap]
+
+
+from stock.app.use_cases import stock_history_interactor as _module
+
+
+@pytest.fixture(autouse=True)
+def _clear_live_cache():
+    _module._LIVE_BARS_CACHE.clear()
+    yield
+    _module._LIVE_BARS_CACHE.clear()
+
+
+class _StubMarketData:
+    def __init__(self, bars=None):
+        self.bars = bars or []
+        self.calls = 0
+
+    async def daily_bars(self, symbol):
+        self.calls += 1
+        return self.bars
+
+
+async def test_미수집_일봉은_라이브_폴백으로_응답한다():
+    live_bar = _bar(ticker="RKLB")
+    history = await StockHistoryInteractor(
+        history=_StubRepo(), market_data=_StubMarketData(bars=[live_bar]),
+    ).price_history(PriceHistoryQuery(symbol="RKLB"))
+    assert history.live is True
+    assert history.resolved_ticker == "RKLB"
+    assert history.bars == [live_bar]
+
+
+async def test_수집_봉이_있으면_폴백을_쓰지_않는다():
+    stored = _bar()
+    history = await StockHistoryInteractor(
+        history=_StubRepo(bars=[stored]),
+        market_data=_StubMarketData(bars=[_bar(ticker="WRONG")]),
+    ).price_history(PriceHistoryQuery(symbol="005930"))
+    assert history.live is False
+    assert history.bars == [stored]
+
+
+async def test_5분봉은_폴백_없이_404_계열_예외():
+    with pytest.raises(MarketDataUnavailableError):
+        await StockHistoryInteractor(
+            history=_StubRepo(), market_data=_StubMarketData(bars=[_bar()]),
+        ).price_history(PriceHistoryQuery(symbol="RKLB", timeframe="5m"))
+
+
+async def test_라이브도_비면_404_계열_예외():
+    with pytest.raises(MarketDataUnavailableError):
+        await StockHistoryInteractor(
+            history=_StubRepo(), market_data=_StubMarketData(bars=[]),
+        ).price_history(PriceHistoryQuery(symbol="XXXXXX"))
+
+
+async def test_라이브_폴백은_TTL_안에서_벤더를_다시_부르지_않는다():
+    market = _StubMarketData(bars=[_bar(ticker="RKLB")])
+    interactor = StockHistoryInteractor(history=_StubRepo(), market_data=market)
+    await interactor.price_history(PriceHistoryQuery(symbol="RKLB"))
+    await interactor.price_history(PriceHistoryQuery(symbol="RKLB"))
+    assert market.calls == 1  # 서버 캐시(10분 TTL) — 요청마다 2y 다운로드 방지

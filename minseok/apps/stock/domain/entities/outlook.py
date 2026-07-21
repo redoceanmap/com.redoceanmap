@@ -16,3 +16,4 @@ class Outlook:
 
     direction: Direction
     confidence: float  # 0.0 ~ 1.0
+    neutral_reason: str | None = None  # NEUTRAL 사유: "atr_veto" | "volume_confirm" | None(신호 미달)

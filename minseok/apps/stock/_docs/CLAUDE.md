@@ -20,6 +20,18 @@
 - **수집 뉴스(DB)**: n8n이 허브 `/automation/news`로 적재(허브 `NewsStoragePort`를
   `NewsStorageGateway`가 구현, `news_articles` 테이블·url 유니크). 분석 시 DB 뉴스를
   벤더(yfinance) 뉴스보다 우선 병합 — 한국 종목 뉴스 공백 해소. n8n은 허브만 안다.
+- **워치리스트 3계층** (`scripts/news_watchlist.txt`, 뉴스·시세·펀더멘털 수집기 공유):
+  ① 코어 68(한국 2 고정 — 추가 금지 2026-07-21 확정 + 빅테크·테크 28 + 업종 다양성 38,
+  GME 포함, 수동 관리), ② `auto:screened` 10 — `scripts/screen_us_undervalued.py`(주 1회 cron)가
+  yfinance 무료 스크리너로 미국 저평가 대형주를 PER+PBR 랭킹해 자동 교체(히스테리시스:
+  기존 편입은 상위 20위 이내면 유지, 한국 기업 ADR 제외), ③ `auto:demand` ≤5 — 분석 질문
+  수요(`stock_demand` 테이블, `StockInteractor`가 기록) 상위를 같은 스크립트가 편입,
+  14일 질문 없으면 퇴출. 허브 `StockDemandPort`(`GET /automation/stock-demand`)가 조회 창구.
+  기관등급(yfinance)은 429 방지를 위해 `collect_news.py --analyst`로 분리(일 1회 cron).
+- **미수집 종목 라이브 폴백**: `stock_history`(1d)·`stock_forecast`는 DB에 봉이 없으면
+  `MarketDataPort.daily_bars`(yfinance 2y)로 즉석 계산하고 응답에 `live: true`를 표기 —
+  임의 티커도 첫 질문부터 차트·확률이 뜬다(저장 안 함, 5m는 폴백 없음). quote는 서버 측
+  심볼당 20초 공유 캐시로 다중 사용자 폴링에도 벤더 호출을 상한한다.
 - **뉴스 의미 검색(RAG)**: 적재 시 제목을 bge-m3(1024차원, 오케스트레이터 `embed_many` 경유)로
   임베딩(`news_articles.embedding`, 실패 시 NULL — 수집 우선·다음 주기 자연 재시도).
   허브 `NewsSearchPort`를 `NewsSearchGateway`가 구현 — pgvector 코사인 + 티커 하이브리드 필터 +
@@ -63,9 +75,21 @@
 - **수집 데이터 조회(프론트 자료 패널)**: `stock_history` 조회 전용 슬라이스 —
   `GET /stock/{symbol}/prices?timeframe=1d|5m&limit=`(OHLCV, ts 오름차순, 미보유 심볼 404),
   `GET /stock/{symbol}/news?limit=`(뉴스+라벨 조인, 발행일 내림차순),
-  `GET /stock/{symbol}/fundamentals`(소스별 최신 스냅샷). 분석(yfinance 라이브)과 달리
-  DB 축적분만 읽는다. 거래소 접미 매칭(005930 ↔ 005930.KS)은 PG 리포지토리가 맡고,
+  `GET /stock/{symbol}/fundamentals`(소스별 최신 스냅샷 + `fundamental_narrator` 규칙 해석 —
+  PER/PBR/ROE, dart 우선 병합, debt_to_equity는 단위 혼재로 해석 제외). 분석(yfinance 라이브)과
+  달리 DB 축적분만 읽는다. 거래소 접미 매칭(005930 ↔ 005930.KS)은 PG 리포지토리가 맡고,
   실제 저장 티커는 `resolvedTicker`로 노출한다.
+- **확률·예측 밴드(`stock_forecast` 슬라이스)**: `GET /stock/{symbol}/forecast?horizon=5` —
+  저장 일봉 전체에 `Backtester.distribution()`(워크포워드, 감성 중립)을 돌려 **지금과 같은
+  방향 신호가 났던 과거 평가일들의 상승 비율(확률)과 실현 수익률 분위수(25/50/75%)**를 반환.
+  표본수·Wilson 95% 구간·기준선(평소 상승률)·`ready`(n≥100 + 하한>기준선) 동반, 같은 신호
+  표본 30 미만이면 ATR 콘 폴백(`band.source: "atr"`). 인메모리 캐시(티커·horizon별, 마지막 봉
+  ts 기준)로 일 1회만 재계산. **확률 노출 정책**: 실측 통계 + 표본·신뢰구간·기준선·"과거
+  통계" 고지 병기 형태만 허용 — score 환산 등 근거 없는 확률 숫자 단독 노출 금지(기존 "확률
+  제시 보류"의 해소 형태). chat 답변의 확률 단정 금지는 그대로 유지(페이지 전용).
+- **현재가 폴링(`stock_quote` 슬라이스)**: `GET /stock/{symbol}/quote` — `MarketDataPort.quote()`
+  (yfinance fast_info, 이력 미조회)로 지연 시세 현재가만 경량 반환(`delayed: true`). 프론트
+  30초 폴링용. 진짜 실시간은 KIS 등 벤더 어댑터 교체 경로(계약 동일)로 후속.
 
 ## 레이어
 

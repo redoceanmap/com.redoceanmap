@@ -58,6 +58,13 @@ export type StockAnalysis = {
 
 // ── POST /stock/analyze (직접 호출 — snake_case DTO) ──
 
+export type SignalContribution = {
+  key: "sentiment" | "rsi" | "trend" | "bollinger" | "obv" | "momentum";
+  signal: number; // -1 ~ 1 원신호
+  weight: number;
+  contribution: number; // signal × weight
+};
+
 export type StockAnalyzeResult = {
   symbol: string;
   price: number;
@@ -77,6 +84,49 @@ export type StockAnalyzeResult = {
   obv_slope: number;
   momentum_12_1: number;
   reference_up_signal: boolean;
+  // 신규 필드 — 구버전 응답 호환을 위해 옵셔널
+  score?: number; // 가중 합산 종합 점수 (-1~1)
+  up_threshold?: number;
+  down_threshold?: number;
+  neutral_reason?: "atr_veto" | "volume_confirm" | null;
+  signals?: SignalContribution[];
+  insights?: Insight[];
+};
+
+// ── GET /stock/{symbol}/forecast ──
+
+export type StockForecast = {
+  symbol: string;
+  resolved_ticker: string;
+  as_of: string;
+  base_price: number;
+  horizon_days: number;
+  signal_direction: "UP" | "DOWN" | "NEUTRAL"; // 지표 신호 기준(감성 미반영)
+  probability: {
+    up_rate: number;
+    sample_size: number;
+    hits: number;
+    ci_low: number; // Wilson 95%
+    ci_high: number;
+    baseline_up_rate: number;
+    ready: boolean; // n≥100 + 하한 > 기준선
+  } | null;
+  band: {
+    source: "quantile" | "atr";
+    q25_pct: number; // horizon일 뒤 수익률 (-0.011 = -1.1%)
+    median_pct: number;
+    q75_pct: number;
+  } | null;
+  insights: Insight[];
+  live?: boolean; // true = 미수집 종목 — yfinance 라이브 이력 기반 계산
+};
+
+// ── GET /stock/{symbol}/quote ──
+
+export type StockQuote = {
+  symbol: string;
+  price: number;
+  delayed: boolean; // true = 지연 시세(yfinance 무료)
 };
 
 // ── GET /stock/{symbol}/prices ──
@@ -95,6 +145,7 @@ export type PriceHistory = {
   resolvedTicker: string;
   timeframe: "1d" | "5m";
   bars: PriceBar[]; // ts 오름차순
+  live?: boolean; // true = 미수집 종목 — yfinance 라이브 이력 폴백
 };
 
 // ── GET /stock/{symbol}/news ──
@@ -128,6 +179,7 @@ export type FundamentalSnapshot = {
 export type Fundamentals = {
   symbol: string;
   snapshots: FundamentalSnapshot[];
+  insights?: Insight[]; // 규칙 기반 해석(dart 우선 병합)
 };
 
 // ── GET /market/trdar/{code}/stats ──
@@ -191,6 +243,52 @@ export type AreaScoreDetail = {
     totalFloatingPop: number | null;
     floatingQoq: number | null;
   }[];
+};
+
+// ── GET /market/trdar/{code}/detail ──
+
+export type Insight = {
+  key: string;
+  tone: "positive" | "neutral" | "warning";
+  text: string;
+};
+
+export type AgeBandRow = { band: string; male: number; female: number };
+
+export type AreaDetail = {
+  trdarCode: number;
+  trdarName: string;
+  districtName: string;
+  serviceCode: string | null;
+  serviceName: string | null;
+  salesMix: {
+    yearQuarter: number;
+    weekdayAmount: number;
+    weekendAmount: number;
+    byDay: Record<string, number>; // mon..sun
+    byTime: Record<string, number>; // t00_06..t21_24
+    byGender: { male: number; female: number };
+    byAge: Record<string, number>; // age10..age60Plus
+    monthlyCount: number;
+  } | null;
+  demand: {
+    resident: { yearQuarter: number; total: number; byAge: AgeBandRow[] } | null;
+    working: { yearQuarter: number; total: number; byAge: AgeBandRow[] } | null;
+    households: { total: number; apartment: number } | null;
+    apartment: {
+      yearQuarter: number;
+      complexCount: number;
+      avgPrice: number; // 원
+      avgArea: number; // ㎡
+    } | null;
+  } | null;
+  spending: {
+    yearQuarter: number;
+    monthlyAvgIncome: number | null; // 원
+    totalExpenditure: number | null; // 원
+    byCategory: { key: string; label: string; amount: number }[]; // 금액 내림차순
+  } | null;
+  insights: Insight[];
 };
 
 // ── 채팅 응답: market_news 뉴스 근거 카드 ──

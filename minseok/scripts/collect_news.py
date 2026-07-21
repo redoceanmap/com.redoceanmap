@@ -9,15 +9,19 @@ n8n 뉴스 워크플로를 대체하는 독립 스크립트(발자국: ingest_se
   3. yfinance upgrades_downgrades — 기관 투자의견·목표가 상/하향 이벤트(최근 7일)
 
 실행:
-    python scripts/collect_news.py            # 수집 + 허브 POST
+    python scripts/collect_news.py            # RSS 2종 수집 + 허브 POST
+    python scripts/collect_news.py --analyst  # 기관 등급·목표가(yfinance)까지 포함
     python scripts/collect_news.py --dry-run  # 수집 결과 출력만 (허브 불요)
 
-백엔드 PC cron 예시(30분 주기):
-    */30 * * * * cd /path/to/minseok && ../venv/bin/python scripts/collect_news.py >> ~/collect_news.log 2>&1
+백엔드 PC cron 예시 — 기관등급은 일 1회로 분리(워치리스트 수십 종 × 30분이면
+yfinance 429 위험이라 RSS만 고빈도로 돈다). flock으로 네트워크 저하 시 중첩 실행을 막는다:
+    */30 * * * * flock -n /tmp/collect_news.lock -c 'cd /path/to/minseok && ../venv/bin/python scripts/collect_news.py' >> ~/collect_news.log 2>&1
+    10 7 * * *   flock -n /tmp/collect_news.lock -c 'cd /path/to/minseok && ../venv/bin/python scripts/collect_news.py --analyst' >> ~/collect_news.log 2>&1
 """
 
 import os
 import sys
+import time
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -43,6 +47,7 @@ RSS_KR = "https://news.google.com/rss/search?q={q}&hl=ko&gl=KR&ceid=KR:ko"
 RSS_EN = "https://news.google.com/rss/search?q={q}&hl=en-US&gl=US&ceid=US:en"
 MAX_PER_QUERY = 20
 ANALYST_WINDOW_DAYS = 7
+REQUEST_DELAY_SECONDS = 0.5  # 종목 간 딜레이 — 단일 IP 무딜레이 버스트는 Google 소프트밴 위험
 
 ACTION_KR = {"up": "상향", "down": "하향", "main": "유지", "reit": "재확인", "init": "신규 커버"}
 
@@ -131,14 +136,16 @@ def post_to_hub(items: list[dict]) -> dict:
 
 def main() -> None:
     dry_run = "--dry-run" in sys.argv
-    print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] 수집 시작", flush=True)  # cron 로그 일자별 추적용
+    with_analyst = "--analyst" in sys.argv  # yfinance 호출 절감 — 일 1회 cron에서만 켠다
+    mode = "RSS+기관등급" if with_analyst else "RSS만 (기관등급은 --analyst 실행에서)"
+    print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] 수집 시작 — {mode}", flush=True)  # cron 로그 추적용
     total_fetched = total_saved = 0
     for name, ticker, en_query in load_watchlist():
         items: list[dict] = []
         sources = [("한글뉴스", lambda: fetch_google_rss(RSS_KR, name, ticker))]
         if en_query:
             sources.append(("영문뉴스", lambda: fetch_google_rss(RSS_EN, en_query, ticker)))
-        if ticker:
+        if ticker and with_analyst:
             sources.append(("기관등급", lambda: fetch_analyst_actions(name, ticker)))
         counts = []
         for label, fetch in sources:
@@ -149,6 +156,7 @@ def main() -> None:
             except Exception as e:
                 counts.append(f"{label} 실패({e})")
         total_fetched += len(items)
+        time.sleep(REQUEST_DELAY_SECONDS)
         line = f"{name}: " + " · ".join(counts)
         if dry_run:
             print(line)

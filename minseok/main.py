@@ -45,6 +45,7 @@ from hub.adapter.inbound.api.v1.news_label_ingest_router import news_label_inges
 from hub.adapter.inbound.api.v1.postmaster_router import postmaster_router
 from hub.adapter.inbound.api.v1.price_bar_ingest_router import price_bar_ingest_router
 from hub.adapter.inbound.api.v1.signal_scan_router import signal_scan_router
+from hub.adapter.inbound.api.v1.stock_demand_router import stock_demand_router
 from hub.dependencies.fundamental_ingest_provider import get_fundamental_storage_port
 from hub.dependencies.mail_ingest_provider import get_mail_storage_port
 from hub.dependencies.market_news_ingest_provider import get_market_news_storage_port
@@ -64,24 +65,35 @@ from hub.dependencies.member_directory_provider import get_member_directory_port
 from hub.dependencies.news_search_provider import get_news_search_port
 from hub.dependencies.recommendation_directory_provider import get_recommendation_directory_port
 from hub.dependencies.recommendation_record_provider import get_recommendation_record_port
-from hub.dependencies.stock_analysis_provider import get_stock_analysis_port
+from hub.dependencies.stock_analysis_provider import (
+    get_stock_analysis_port,
+    get_stock_analysis_port_batch,
+)
+from hub.dependencies.stock_demand_provider import get_stock_demand_port
 from market.dependencies.commercial_data_provider import get_commercial_data_gateway
 from market.dependencies.market_news_provider import (
     get_market_news_search_gateway,
     get_market_news_storage_gateway,
 )
+from market.adapter.inbound.api.v1.area_detail_router import area_detail_router
 from market.adapter.inbound.api.v1.area_router import area_router
 from market.adapter.inbound.api.v1.area_score_router import area_score_router
 from market.adapter.inbound.api.v1.area_stats_router import area_stats_router
 from market.adapter.inbound.api.v1.cartographer_router import cartographer_router
 from stock.adapter.inbound.api.v1.analyst_router import analyst_router
+from stock.adapter.inbound.api.v1.stock_forecast_router import stock_forecast_router
 from stock.adapter.inbound.api.v1.stock_history_router import stock_history_router
+from stock.adapter.inbound.api.v1.stock_quote_router import stock_quote_router
 from stock.adapter.inbound.api.v1.stock_router import stock_router
 from stock.dependencies.fundamental_provider import get_fundamental_storage_gateway
 from stock.dependencies.news_label_provider import get_news_label_storage_gateway
 from stock.dependencies.news_provider import get_news_search_gateway, get_news_storage_gateway
 from stock.dependencies.price_bar_provider import get_price_bar_storage_gateway
-from stock.dependencies.stock_provider import get_stock_analysis_gateway
+from stock.dependencies.stock_demand_provider import get_stock_demand_gateway
+from stock.dependencies.stock_provider import (
+    get_stock_analysis_gateway,
+    get_stock_analysis_gateway_batch,
+)
 from recommendation.adapter.inbound.api.v1.curator_router import curator_router
 from recommendation.adapter.inbound.api.v1.recommendation_router import recommendation_router
 from recommendation.dependencies.recommendation_provider import (
@@ -130,6 +142,7 @@ app.include_router(social_router)  # 공개 — 소셜 로그인(google·kakao·
 app.include_router(news_ingest_router)
 app.include_router(market_news_ingest_router)
 app.include_router(price_bar_ingest_router)
+app.include_router(stock_demand_router)
 app.include_router(news_label_ingest_router)
 app.include_router(fundamental_ingest_router)
 app.include_router(mail_ingest_router)
@@ -137,12 +150,15 @@ app.include_router(signal_scan_router)
 app.include_router(dispatcher_router)
 app.include_router(chat_router, dependencies=_authenticated)
 app.include_router(concierge_router, dependencies=_authenticated)
+app.include_router(area_detail_router, dependencies=_authenticated)
 app.include_router(area_router, dependencies=_authenticated)
 app.include_router(area_score_router, dependencies=_authenticated)
 app.include_router(area_stats_router, dependencies=_authenticated)
 app.include_router(cartographer_router, dependencies=_authenticated)
 app.include_router(stock_router, dependencies=_authenticated)
 app.include_router(stock_history_router, dependencies=_authenticated)
+app.include_router(stock_forecast_router, dependencies=_authenticated)
+app.include_router(stock_quote_router, dependencies=_authenticated)
 app.include_router(analyst_router, dependencies=_authenticated)
 app.include_router(recommendation_router, dependencies=_authenticated)
 app.include_router(curator_router, dependencies=_authenticated)
@@ -172,6 +188,7 @@ app.include_router(semantic_router, dependencies=_authenticated)  # 허브 — �
 app.dependency_overrides[get_commercial_data_port] = get_commercial_data_gateway
 app.dependency_overrides[get_recommendation_record_port] = get_recommendation_record_gateway
 app.dependency_overrides[get_stock_analysis_port] = get_stock_analysis_gateway
+app.dependency_overrides[get_stock_analysis_port_batch] = get_stock_analysis_gateway_batch
 app.dependency_overrides[get_news_storage_port] = get_news_storage_gateway
 app.dependency_overrides[get_price_bar_storage_port] = get_price_bar_storage_gateway
 app.dependency_overrides[get_news_label_storage_port] = get_news_label_storage_gateway
@@ -184,6 +201,7 @@ app.dependency_overrides[get_member_directory_port] = get_member_directory_gatew
 app.dependency_overrides[get_grade_policy_port] = get_grade_policy_gateway
 app.dependency_overrides[get_recommendation_directory_port] = get_recommendation_directory_gateway
 app.dependency_overrides[get_mail_storage_port] = get_mail_storage_gateway
+app.dependency_overrides[get_stock_demand_port] = get_stock_demand_gateway
 
 
 # API 문서 — 루트 접속 시 바로 브라우저 로그인창(HTTP Basic)이 뜨는 /docs로 보낸다.

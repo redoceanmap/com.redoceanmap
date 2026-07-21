@@ -1,11 +1,12 @@
 # 뉴스 수집 대상 — 한 줄에 하나: 한글명|티커|영문쿼리(선택, 기본 "{티커} stock")
 # 한글명은 한글 Google News 검색어, 티커는 영문 뉴스·기관 등급/목표가(yfinance) 조회에 쓴다.
+# 3계층: 코어(수동) + auto:screened(저평가 자동) + auto:demand(질문 수요 자동)
 
-# 한국 (2)
+# 한국 (2) — 고정, 추가하지 않음 (2026-07-21 확정)
 삼성전자|005930.KS|Samsung Electronics stock
 SK하이닉스|000660.KS|SK Hynix stock
 
-# 해외 빅테크 (20)
+# 해외 빅테크·테크 (28)
 애플|AAPL
 마이크로소프트|MSFT
 엔비디아|NVDA
@@ -26,3 +27,57 @@ AMD|AMD
 어도비|ADBE
 팔란티어|PLTR
 ARM홀딩스|ARM
+아이온큐|IONQ|IonQ stock
+슈퍼마이크로|SMCI|Super Micro Computer stock
+마이크로스트래티지|MSTR|MicroStrategy stock
+크라우드스트라이크|CRWD|CrowdStrike stock
+서비스나우|NOW|ServiceNow stock
+쇼피파이|SHOP|Shopify stock
+스노우플레이크|SNOW|Snowflake stock
+델|DELL|Dell stock
+
+# 해외 업종 다양성 코어 (38) — 학습 코퍼스의 빅테크 편향 완화. 수동 관리
+게임스탑|GME|GameStop stock
+버크셔해서웨이|BRK-B|Berkshire Hathaway stock
+JP모건|JPM|JPMorgan stock
+골드만삭스|GS|Goldman Sachs stock
+비자|V|Visa stock
+마스터카드|MA|Mastercard stock
+일라이릴리|LLY|Eli Lilly stock
+유나이티드헬스|UNH|UnitedHealth stock
+존슨앤드존슨|JNJ|Johnson and Johnson stock
+화이자|PFE|Pfizer stock
+월마트|WMT|Walmart stock
+코스트코|COST|Costco stock
+코카콜라|KO|Coca-Cola stock
+P&G|PG|Procter Gamble stock
+맥도날드|MCD|McDonald's stock
+나이키|NKE|Nike stock
+디즈니|DIS|Disney stock
+엑슨모빌|XOM|Exxon Mobil stock
+셰브론|CVX|Chevron stock
+캐터필러|CAT|Caterpillar stock
+보잉|BA|Boeing stock
+GE에어로스페이스|GE|GE Aerospace stock
+코인베이스|COIN|Coinbase stock
+우버|UBER|Uber stock
+에어비앤비|ABNB|Airbnb stock
+스타벅스|SBUX|Starbucks stock
+홈디포|HD|Home Depot stock
+펩시코|PEP|PepsiCo stock
+애브비|ABBV|AbbVie stock
+머크|MRK|Merck stock
+뱅크오브아메리카|BAC|Bank of America stock
+아메리칸익스프레스|AXP|American Express stock
+페이팔|PYPL|PayPal stock
+버라이즌|VZ|Verizon stock
+록히드마틴|LMT|Lockheed Martin stock
+포드|F|Ford stock
+로빈후드|HOOD|Robinhood stock
+스포티파이|SPOT|Spotify stock
+
+# === auto:screened — screen_us_undervalued.py가 주 1회 갱신. 직접 수정 금지 ===
+# === /auto:screened ===
+
+# === auto:demand — 질문 수요 편입(상한 5), screen_us_undervalued.py가 갱신. 직접 수정 금지 ===
+# === /auto:demand ===

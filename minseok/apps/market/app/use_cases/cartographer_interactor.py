@@ -20,5 +20,5 @@ class CartographerInteractor(CartographerUseCase):
         return CartographerResponse(
             id=query.id,
             name=query.name,
-            introduction="서울 상권 실데이터(3NF: 차원 5 + 팩트 8)를 조회합니다. GET /market/areas 상권 목록(자치구 필터), GET /market/trdar/{code}/area 개별 상권 정보를 제공합니다. 데이터는 서울시 공공데이터 65만 행 기반입니다.",
+            introduction="서울 상권 실데이터(3NF: 차원 5 + 팩트 8)를 조회합니다. GET /market/areas 상권 목록(자치구 필터), GET /market/trdar/{code}/area 개별 상권 정보, GET /market/trdar/{code}/detail 최신 분기 구조 분해(요일·시간대·성별·연령대 매출, 상주·직장인구, 소비, 아파트)와 규칙 기반 해석 문장을 제공합니다. 데이터는 서울시 공공데이터 65만 행 기반입니다.",
         )

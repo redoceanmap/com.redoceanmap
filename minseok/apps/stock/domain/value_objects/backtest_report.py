@@ -19,6 +19,17 @@ def wilson_lower_bound(hits: int, n: int, z: float = WILSON_Z) -> float:
     return center - margin
 
 
+def wilson_bounds(hits: int, n: int, z: float = WILSON_Z) -> tuple[float, float]:
+    """Wilson score 신뢰구간 (하한, 상한) — 확률 표시에 구간을 병기하기 위한 대칭 계산."""
+    if n == 0:
+        return 0.0, 1.0
+    p = hits / n
+    denom = 1.0 + z * z / n
+    center = (p + z * z / (2 * n)) / denom
+    margin = z * ((p * (1 - p) / n + z * z / (4 * n * n)) ** 0.5) / denom
+    return center - margin, center + margin
+
+
 @dataclass(frozen=True, slots=True)
 class BacktestReport:
     """방향 전망 백테스트 결과. 과거 뉴스는 없으므로 지표 신호만 채점한 값이다."""

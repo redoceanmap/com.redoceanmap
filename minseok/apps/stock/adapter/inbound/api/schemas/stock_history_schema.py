@@ -19,6 +19,7 @@ class PriceHistoryResponse(BaseModel):
     resolvedTicker: str  # DB에 실제 저장된 티커(예: 005930.KS)
     timeframe: str
     bars: list[PriceBarSchema]  # ts 오름차순
+    live: bool = False  # true = 미수집 종목 — yfinance 라이브 이력 폴백
 
 
 class StockNewsItemSchema(BaseModel):
@@ -45,6 +46,13 @@ class FundamentalSnapshotSchema(BaseModel):
     bps: float | None
 
 
+class FundamentalInsightSchema(BaseModel):
+    key: str
+    tone: str  # positive | neutral | warning
+    text: str
+
+
 class FundamentalsResponse(BaseModel):
     symbol: str
     snapshots: list[FundamentalSnapshotSchema]  # 소스별 최신 각 1건
+    insights: list[FundamentalInsightSchema]    # 규칙 기반 해석(dart 우선 병합)

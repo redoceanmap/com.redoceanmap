@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import UTC
 from typing import Any
 
 import yfinance as yf
 
 from stock.app.exceptions import MarketDataUnavailableError
 from stock.app.ports.output.market_data_port import MarketDataPort
+from stock.domain.entities.price_bar import PriceBar
 from stock.domain.services.indicator_calculator import IndicatorCalculator
 from stock.domain.value_objects.indicators import Indicators
 from stock.domain.value_objects.market_values import Price, Symbol
@@ -44,6 +46,28 @@ class YFinanceMarketDataAdapter(MarketDataPort):
         _, history = await self._history(symbol)
         return Price(value=float(history["Close"].iloc[-1]))
 
+    async def quote(self, symbol: Symbol) -> Price:
+        return Price(value=await asyncio.to_thread(self._fetch_quote, symbol.code))
+
+    @staticmethod
+    def _fetch_quote(code: str) -> float:
+        # 30초 폴링 용도 — 간헐 네트워크 오류가 500으로 새지 않게 후보·폴백을 끝까지 시도한다
+        for ticker in yahoo_candidates(code):
+            t = yf.Ticker(ticker)
+            try:
+                last = t.fast_info["last_price"]  # 메타 조회 — 이력 다운로드 없음
+                if last:
+                    return float(last)
+            except Exception:
+                pass
+            try:
+                history = t.history(period="1d", auto_adjust=True).dropna(subset=["Close"])
+                if not history.empty:
+                    return float(history["Close"].iloc[-1])
+            except Exception:
+                logger.warning("[yfinance] quote 폴백 실패: %s", ticker, exc_info=True)
+        raise MarketDataUnavailableError(f"시세 데이터를 찾지 못했습니다: {code}")
+
     async def indicators(self, symbol: Symbol) -> Indicators:
         _, history = await self._history(symbol)
         try:
@@ -55,6 +79,21 @@ class YFinanceMarketDataAdapter(MarketDataPort):
             )
         except ValueError as e:
             raise MarketDataUnavailableError(f"{symbol.code}: {e}")
+
+    async def daily_bars(self, symbol: Symbol) -> list[PriceBar]:
+        ticker, history = await self._history(symbol)
+        bars = []
+        for ts, row in history.iterrows():
+            ts = ts.to_pydatetime()
+            if ts.tzinfo is None:  # 야후 일봉은 대체로 tz-aware지만 방어
+                ts = ts.replace(tzinfo=UTC)
+            bars.append(PriceBar(
+                ticker=ticker, timeframe="1d", ts=ts,
+                open=float(row["Open"]), high=float(row["High"]),
+                low=float(row["Low"]), close=float(row["Close"]),
+                volume=int(row["Volume"]),
+            ))
+        return bars
 
     async def recent_headlines(self, symbol: Symbol) -> list[str]:
         ticker, _ = await self._history(symbol)
@@ -77,7 +116,7 @@ class YFinanceMarketDataAdapter(MarketDataPort):
             history = yf.Ticker(ticker).history(period=HISTORY_PERIOD, auto_adjust=True)
             # 야후가 간헐적으로 미완성 행(NaN)을 끼워 보낸다 — 한 행만 섞여도
             # RSI 등 지표 전체가 NaN이 되어 검증에 걸리므로 여기서 걸러낸다.
-            history = history.dropna(subset=["Close", "Low", "High", "Volume"])
+            history = history.dropna(subset=["Open", "Close", "Low", "High", "Volume"])
             if not history.empty:
                 logger.info("[yfinance] %s → %s (%d행)", code, ticker, len(history))
                 return ticker, history

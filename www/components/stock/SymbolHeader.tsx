@@ -14,9 +14,10 @@ type SymbolHeaderProps = {
   resolvedTicker?: string;
   analyze?: StockAnalyzeResult;
   isLoading: boolean;
+  quotePrice?: number | null; // 30초 폴링 현재가(지연 시세) — 있으면 분석 시점 가격보다 우선
 };
 
-export default function SymbolHeader({ symbol, resolvedTicker, analyze, isLoading }: SymbolHeaderProps) {
+export default function SymbolHeader({ symbol, resolvedTicker, analyze, isLoading, quotePrice }: SymbolHeaderProps) {
   const meta = analyze ? (DIRECTION_META[analyze.direction] ?? DIRECTION_META.NEUTRAL) : null;
   const DirectionIcon = meta?.icon;
 
@@ -30,8 +31,11 @@ export default function SymbolHeader({ symbol, resolvedTicker, analyze, isLoadin
       {analyze && meta && DirectionIcon && (
         <>
           <span className="text-lg font-bold">
-            {analyze.price.toLocaleString("ko-KR", { maximumFractionDigits: 2 })}
+            {(quotePrice ?? analyze.price).toLocaleString("ko-KR", { maximumFractionDigits: 2 })}
           </span>
+          {quotePrice != null && (
+            <span className="text-[10px] text-foreground-muted">지연 시세 · 30초 갱신</span>
+          )}
           <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-medium ${meta.className}`}>
             <DirectionIcon size={13} strokeWidth={2} />
             {meta.label} · 확신도 {Math.round(analyze.confidence * 100)}%

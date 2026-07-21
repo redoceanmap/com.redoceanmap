@@ -13,6 +13,7 @@ async def test_야후_NaN_행은_걸러지고_지표가_계산된다(monkeypatch
     # 야후가 마지막 행을 미완성(NaN)으로 보내는 실사례 재현 — 필터 없으면 RSI가 NaN이 된다
     n = 60
     frame = pd.DataFrame({
+        "Open": [100.0 + i * 0.5 for i in range(n)] + [float("nan")],
         "Close": [100.0 + i * 0.5 for i in range(n)] + [float("nan")],
         "Low": [99.0 + i * 0.5 for i in range(n)] + [float("nan")],
         "High": [101.0 + i * 0.5 for i in range(n)] + [float("nan")],

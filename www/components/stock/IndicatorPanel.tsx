@@ -1,6 +1,8 @@
 "use client";
 
 import type { StockAnalyzeResult } from "@/lib/types";
+import InsightList from "@/components/common/InsightList";
+import SignalBreakdown from "./SignalBreakdown";
 
 const fmt = (v: number, digits = 2) =>
   v.toLocaleString("ko-KR", { maximumFractionDigits: digits });
@@ -30,7 +32,15 @@ export default function IndicatorPanel({ analyze }: { analyze?: StockAnalyzeResu
   ];
 
   return (
-    <div className="p-4">
+    <div className="p-4 flex flex-col gap-3">
+      <SignalBreakdown analyze={analyze} />
+
+      {analyze.insights && analyze.insights.length > 0 && (
+        <div className="bg-surface border border-border rounded-lg px-3 py-2.5">
+          <InsightList insights={analyze.insights} />
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-2">
         {stats.map(([label, value]) => (
           <div key={label} className="bg-surface border border-border rounded-lg px-3 py-2.5">
@@ -40,7 +50,7 @@ export default function IndicatorPanel({ analyze }: { analyze?: StockAnalyzeResu
         ))}
       </div>
 
-      <div className="mt-3 bg-surface border border-border rounded-lg px-3 py-2.5">
+      <div className="bg-surface border border-border rounded-lg px-3 py-2.5">
         <div className="text-[11px] text-foreground-muted">뉴스 감성</div>
         <div className="text-sm font-semibold mt-0.5">
           {analyze.sentiment_label}{" "}
@@ -50,7 +60,7 @@ export default function IndicatorPanel({ analyze }: { analyze?: StockAnalyzeResu
         </div>
       </div>
 
-      <p className="mt-3 text-[11px] text-foreground-muted leading-relaxed">
+      <p className="text-[11px] text-foreground-muted leading-relaxed">
         지연 시세 기반 참고 지표입니다. 매매 지시가 아니며 투자 판단과 책임은 본인에게 있습니다.
       </p>
     </div>
