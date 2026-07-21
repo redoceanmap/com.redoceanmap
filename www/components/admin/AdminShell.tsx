@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useUIStore } from "@/lib/uiStore";
 import {
   LayoutDashboard,
   Store,
@@ -27,6 +28,7 @@ const mobileTabs = nav.slice(0, 5);
 
 export default function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const user = useUIStore((s) => s.user);
   const isActive = (href: string) =>
     href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
 
@@ -58,12 +60,6 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           ))}
         </nav>
 
-        <div className="m-3 p-4 rounded-2xl bg-brand/5 border border-brand/10">
-          <p className="text-sm font-semibold text-brand">데이터 파이프라인</p>
-          <p className="mt-1 text-xs text-foreground-muted leading-relaxed">
-            추정매출 85,732행 동기화 완료. 다음 갱신까지 6일.
-          </p>
-        </div>
       </aside>
 
       {/* 본문 컬럼 */}
@@ -96,11 +92,11 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
             </button>
             <div className="flex items-center gap-2.5">
               <span className="grid place-items-center w-9 h-9 rounded-full bg-brand/10 text-brand text-sm font-semibold">
-                장
+                {user?.name?.[0] ?? "?"}
               </span>
               <div className="hidden sm:block leading-tight">
-                <p className="text-sm font-medium">장민석</p>
-                <p className="text-xs text-foreground-muted">운영자</p>
+                <p className="text-sm font-medium">{user?.name ?? "—"}</p>
+                <p className="text-xs text-foreground-muted">{user?.email ?? ""}</p>
               </div>
             </div>
           </div>

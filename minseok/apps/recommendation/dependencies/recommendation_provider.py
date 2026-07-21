@@ -2,7 +2,11 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_db
+from hub.app.ports.output.recommendation_directory_port import RecommendationDirectoryPort
 from hub.app.ports.output.recommendation_record_port import RecommendationRecordPort
+from recommendation.adapter.outbound.gateways.recommendation_directory_gateway import (
+    RecommendationDirectoryGateway,
+)
 from recommendation.adapter.outbound.gateways.recommendation_record_gateway import RecommendationRecordGateway
 from recommendation.adapter.outbound.pg.recommendation_pg_repository import RecommendationPgRepository
 from recommendation.app.ports.input.recommendation_use_case import RecommendationUseCase
@@ -20,3 +24,10 @@ def get_recommendation_record_gateway(
 ) -> RecommendationRecordPort:
     """허브 RecommendationRecordPort의 recommendation 구현. main.py가 주입한다."""
     return RecommendationRecordGateway(use_case=use_case)
+
+
+def get_recommendation_directory_gateway(
+    db: AsyncSession = Depends(get_db),
+) -> RecommendationDirectoryPort:
+    """허브 RecommendationDirectoryPort의 recommendation 구현. main.py가 주입한다."""
+    return RecommendationDirectoryGateway(session=db)

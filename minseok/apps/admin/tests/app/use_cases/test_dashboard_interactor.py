@@ -1,0 +1,65 @@
+from admin.app.use_cases.dashboard_interactor import DashboardInteractor
+from hub.app.dtos.commercial_data_dto import DatasetStat
+from hub.app.dtos.member_directory_dto import MemberStats
+from hub.app.dtos.recommendation_directory_dto import (
+    CategoryCount,
+    MonthCount,
+    RecommendationStats,
+)
+
+
+class _StubMembers:
+    async def member_stats(self):
+        return MemberStats(total=42, new_this_month=3)
+
+
+class _StubRecommendations:
+    async def stats(self):
+        return RecommendationStats(
+            total=100,
+            today=5,
+            monthly=[MonthCount(month="2026-07", count=5)],
+            top_categories=[CategoryCount(category="카페", count=30)],
+        )
+
+    async def list_recent(self, limit):
+        assert limit == 5
+        return []
+
+
+class _StubCommercial:
+    async def get_dataset_stats(self):
+        return [
+            DatasetStat(key="trade_area", name="상권", row_count=1742, latest_label=None),
+            DatasetStat(key="estimated_sales", name="추정 매출", row_count=9000, latest_label="20251"),
+        ]
+
+
+async def test_대시보드는_허브_포트_3개를_합성한다():
+    interactor = DashboardInteractor(
+        members=_StubMembers(),
+        recommendations=_StubRecommendations(),
+        commercial=_StubCommercial(),
+    )
+    result = await interactor.summary()
+    assert result.member_total == 42
+    assert result.member_new_this_month == 3
+    assert result.area_count == 1742
+    assert result.latest_quarter == "20251"
+    assert result.recommendation_total == 100
+    assert result.recommendation_today == 5
+    assert result.monthly[0].month == "2026-07"
+    assert result.top_categories[0].category == "카페"
+
+
+async def test_데이터셋이_비어도_기본값으로_동작한다():
+    class _Empty:
+        async def get_dataset_stats(self):
+            return []
+
+    interactor = DashboardInteractor(
+        members=_StubMembers(), recommendations=_StubRecommendations(), commercial=_Empty()
+    )
+    result = await interactor.summary()
+    assert result.area_count == 0
+    assert result.latest_quarter is None

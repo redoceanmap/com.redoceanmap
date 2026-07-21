@@ -10,9 +10,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.responses import RedirectResponse
 
+from admin.adapter.inbound.api.v1.area_router import area_router as admin_area_router
+from admin.adapter.inbound.api.v1.dashboard_router import dashboard_router as admin_dashboard_router
+from admin.adapter.inbound.api.v1.data_source_router import data_source_router as admin_data_source_router
+from admin.adapter.inbound.api.v1.member_router import member_router as admin_member_router
+from admin.adapter.inbound.api.v1.recommendation_log_router import (
+    recommendation_log_router as admin_recommendation_log_router,
+)
+from admin.adapter.inbound.api.v1.steward_router import steward_router
 from auth.adapter.inbound.api.v1.auth_router import auth_router
 from auth.adapter.inbound.api.v1.gatekeeper_router import gatekeeper_router
 from auth.adapter.inbound.api.v1.social_router import social_router
+from auth.dependencies.member_directory_provider import get_member_directory_gateway
 from chat.adapter.inbound.api.v1.chat_router import chat_router
 from chat.adapter.inbound.api.v1.concierge_router import concierge_router
 from core.database import dispose_engine, init_engine
@@ -46,7 +55,9 @@ from mail.adapter.inbound.api.v1.postman_router import postman_router
 from mail.adapter.inbound.api.v1.watcher_router import watcher_router
 from mail.dependencies.watcher_provider import get_mail_storage_gateway
 from hub.dependencies.commercial_data_provider import get_commercial_data_port
+from hub.dependencies.member_directory_provider import get_member_directory_port
 from hub.dependencies.news_search_provider import get_news_search_port
+from hub.dependencies.recommendation_directory_provider import get_recommendation_directory_port
 from hub.dependencies.recommendation_record_provider import get_recommendation_record_port
 from hub.dependencies.stock_analysis_provider import get_stock_analysis_port
 from market.dependencies.commercial_data_provider import get_commercial_data_gateway
@@ -68,7 +79,10 @@ from stock.dependencies.price_bar_provider import get_price_bar_storage_gateway
 from stock.dependencies.stock_provider import get_stock_analysis_gateway
 from recommendation.adapter.inbound.api.v1.curator_router import curator_router
 from recommendation.adapter.inbound.api.v1.recommendation_router import recommendation_router
-from recommendation.dependencies.recommendation_provider import get_recommendation_record_gateway
+from recommendation.dependencies.recommendation_provider import (
+    get_recommendation_directory_gateway,
+    get_recommendation_record_gateway,
+)
 from hub.adapter.inbound.api.v1.vision_router import vision_router
 
 logger = logging.getLogger("uvicorn.error")
@@ -135,6 +149,13 @@ app.include_router(watcher_router, dependencies=_authenticated)
 app.include_router(judge_router, dependencies=_authenticated)
 app.include_router(vision_router, dependencies=_authenticated)
 app.include_router(face_recognition_router, dependencies=_authenticated)
+# 어드민 콘솔 — 인증은 전 엔드포인트 공통(안전망), 권한(RBAC)은 엔드포인트 단 require_permission
+app.include_router(steward_router, dependencies=_authenticated)
+app.include_router(admin_dashboard_router, dependencies=_authenticated)
+app.include_router(admin_area_router, dependencies=_authenticated)
+app.include_router(admin_member_router, dependencies=_authenticated)
+app.include_router(admin_recommendation_log_router, dependencies=_authenticated)
+app.include_router(admin_data_source_router, dependencies=_authenticated)
 app.include_router(gemini_router, dependencies=_authenticated)  # 허브 — 외부 Gemini 답변
 app.include_router(semantic_router, dependencies=_authenticated)  # 허브 — 시멘틱 게이트웨이(PoC)
 
@@ -151,6 +172,8 @@ app.dependency_overrides[get_news_search_port] = get_news_search_gateway
 app.dependency_overrides[get_market_news_storage_port] = get_market_news_storage_gateway
 app.dependency_overrides[get_market_news_search_port] = get_market_news_search_gateway
 app.dependency_overrides[get_email_composer] = lambda: EmailComposerN8nGateway()
+app.dependency_overrides[get_member_directory_port] = get_member_directory_gateway
+app.dependency_overrides[get_recommendation_directory_port] = get_recommendation_directory_gateway
 app.dependency_overrides[get_mail_storage_port] = get_mail_storage_gateway
 
 

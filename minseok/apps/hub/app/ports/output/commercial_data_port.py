@@ -3,9 +3,11 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 from hub.app.dtos.commercial_data_dto import (
+    AreaOverviewRow,
     AreaRawStat,
     AreaScoreInfo,
     AreaSummary,
+    DatasetStat,
     ServiceCode,
 )
 
@@ -37,4 +39,14 @@ class CommercialDataPort(ABC):
     @abstractmethod
     async def get_area_scores(self, trdar_codes: list[int]) -> dict[int, AreaScoreInfo]:
         """지정 상권들의 시도 벤치마크 대비 종합점수 — 산출 근거 팩트가 없는 상권은 제외."""
+        ...
+
+    @abstractmethod
+    async def get_area_overview(self) -> list[AreaOverviewRow]:
+        """어드민 상권 목록 — 전 상권의 최신 분기 점포수·폐업률·월매출 집계."""
+        ...
+
+    @abstractmethod
+    async def get_dataset_stats(self) -> list[DatasetStat]:
+        """어드민 데이터소스 현황 — market 데이터셋별 행수·최신 시점."""
         ...

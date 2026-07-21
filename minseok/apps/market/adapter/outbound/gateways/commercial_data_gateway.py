@@ -6,10 +6,12 @@ from sqlalchemy.orm import aliased
 
 from hub.app.dtos.commercial_data_dto import (
     AreaInfo,
+    AreaOverviewRow,
     AreaRawStat,
     AreaScoreComponent,
     AreaScoreInfo,
     AreaSummary,
+    DatasetStat,
     ServiceCode,
 )
 from market.adapter.outbound.pg.area_score_pg_repository import AreaScorePgRepository
@@ -22,6 +24,7 @@ from market.adapter.outbound.orm.commercial_change_benchmark_orm import (
 from market.adapter.outbound.orm.commercial_change_orm import CommercialChangeOrm
 from market.adapter.outbound.orm.estimated_sales_orm import EstimatedSalesOrm
 from market.adapter.outbound.orm.floating_population_orm import FloatingPopulationOrm
+from market.adapter.outbound.orm.market_news_article_orm import MarketNewsArticleOrm
 from market.adapter.outbound.orm.region_orm import RegionOrm
 from market.adapter.outbound.orm.service_category_orm import ServiceCategoryOrm
 from market.adapter.outbound.orm.store_orm import StoreOrm
@@ -105,6 +108,89 @@ class CommercialDataGateway(CommercialDataPort):
                 ),
             )
         return result
+
+    async def get_area_overview(self) -> list[AreaOverviewRow]:
+        dong = aliased(RegionOrm)
+        gu = aliased(RegionOrm)
+        area_rows = (await self._session.execute(
+            select(TradeAreaOrm.code, TradeAreaOrm.name, dong.name.label("dong_name"), gu.name.label("gu_name"))
+            .outerjoin(dong, TradeAreaOrm.region_code == dong.code)
+            .outerjoin(gu, dong.parent_code == gu.code)
+            .order_by(TradeAreaOrm.code)
+        )).all()
+
+        store_quarter = (
+            await self._session.execute(select(func.max(StoreOrm.year_quarter)))
+        ).scalar()
+        store_map: dict[int, tuple[int, float]] = {}
+        if store_quarter:
+            # closure_rate는 업종별 팩트의 단순평균 — 통계적 정밀도보다 목록 표시 용도
+            result = await self._session.execute(
+                select(
+                    StoreOrm.trdar_code,
+                    func.sum(StoreOrm.store_count).label("stores"),
+                    func.avg(StoreOrm.closure_rate).label("closure"),
+                )
+                .where(StoreOrm.year_quarter == store_quarter)
+                .group_by(StoreOrm.trdar_code)
+            )
+            store_map = {r.trdar_code: (r.stores, float(r.closure)) for r in result.all()}
+
+        sales_quarter = (
+            await self._session.execute(select(func.max(EstimatedSalesOrm.year_quarter)))
+        ).scalar()
+        sales_map: dict[int, int] = {}
+        if sales_quarter:
+            result = await self._session.execute(
+                select(
+                    EstimatedSalesOrm.trdar_code,
+                    func.sum(EstimatedSalesOrm.monthly_sales_amount).label("total"),
+                )
+                .where(EstimatedSalesOrm.year_quarter == sales_quarter)
+                .group_by(EstimatedSalesOrm.trdar_code)
+            )
+            sales_map = {r.trdar_code: r.total for r in result.all()}
+
+        return [
+            AreaOverviewRow(
+                trdar_code=r.code,
+                trdar_name=r.name,
+                gu_name=r.gu_name or "",
+                dong_name=r.dong_name or "",
+                store_count=store_map[r.code][0] if r.code in store_map else None,
+                closure_rate=store_map[r.code][1] if r.code in store_map else None,
+                monthly_sales=sales_map.get(r.code),
+            )
+            for r in area_rows
+        ]
+
+    async def get_dataset_stats(self) -> list[DatasetStat]:
+        area_count = (
+            await self._session.execute(select(func.count(TradeAreaOrm.code)))
+        ).scalar() or 0
+        stats: list[DatasetStat] = [
+            DatasetStat(key="trade_area", name="상권", row_count=area_count, latest_label=None)
+        ]
+        for key, name, orm in (
+            ("estimated_sales", "추정 매출", EstimatedSalesOrm),
+            ("store", "점포 현황", StoreOrm),
+            ("floating_population", "유동인구", FloatingPopulationOrm),
+        ):
+            row = (await self._session.execute(
+                select(func.count(orm.id), func.max(orm.year_quarter))
+            )).one()
+            stats.append(DatasetStat(
+                key=key, name=name, row_count=row[0],
+                latest_label=str(row[1]) if row[1] else None,
+            ))
+        news = (await self._session.execute(
+            select(func.count(MarketNewsArticleOrm.id), func.max(MarketNewsArticleOrm.published_at))
+        )).one()
+        stats.append(DatasetStat(
+            key="market_news", name="상권 뉴스", row_count=news[0],
+            latest_label=news[1].isoformat() if news[1] else None,
+        ))
+        return stats
 
     async def get_area_raw_stats(
         self, trdar_codes: list[int], service_code: str, quarter: int
