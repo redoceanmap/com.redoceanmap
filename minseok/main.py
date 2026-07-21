@@ -34,6 +34,7 @@ from hub.adapter.inbound.api.v1.email_request_router import email_request_router
 from hub.adapter.inbound.api.v1.face_recognition_router import face_recognition_router
 from hub.adapter.inbound.api.v1.fundamental_ingest_router import fundamental_ingest_router
 from hub.adapter.inbound.api.v1.gemini_router import gemini_router
+from hub.adapter.inbound.api.v1.image_classifier_router import image_classifier_router
 from hub.adapter.inbound.api.v1.semantic_router import semantic_router
 from hub.adapter.inbound.api.v1.mail_ingest_router import mail_ingest_router
 from hub.adapter.inbound.api.v1.market_news_ingest_router import market_news_ingest_router
@@ -150,6 +151,7 @@ app.include_router(watcher_router, dependencies=_authenticated)
 app.include_router(judge_router, dependencies=_authenticated)
 app.include_router(vision_router, dependencies=_authenticated)
 app.include_router(face_recognition_router, dependencies=_authenticated)
+app.include_router(image_classifier_router, dependencies=_authenticated)
 # 어드민 콘솔 — 인증은 전 엔드포인트 공통(안전망), 권한(RBAC)은 엔드포인트 단 require_permission
 app.include_router(steward_router, dependencies=_authenticated)
 app.include_router(admin_dashboard_router, dependencies=_authenticated)

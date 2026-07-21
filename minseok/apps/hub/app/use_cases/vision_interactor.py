@@ -27,7 +27,7 @@ class VisionInteractor(VisionUseCase):
         return VisionResponse(
             id=query.id,
             name=query.name,
-            introduction="이미지 비전 처리를 담당합니다. POST /vision/images로 이미지를 접수해 S3 버킷에 저장하며(분석 파이프라인은 준비 중), GET /vision/myself 자기소개를 제공합니다. 다른 스포크와의 협력은 허브를 경유합니다.",
+            introduction="이미지 비전 처리를 담당합니다. POST /vision/images로 이미지를 접수해 S3 버킷에 저장하며(분석 파이프라인은 준비 중), POST /vision/classifications로 ConvNeXt-Tiny 분류(신뢰도 게이팅 판정 동봉)를 제공하고, GET /vision/myself 자기소개를 제공합니다. 다른 스포크와의 협력은 허브를 경유합니다.",
         )
 
     async def analyze_image(self, command: VisionImageCommand) -> VisionImageResponse:

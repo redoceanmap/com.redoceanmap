@@ -32,6 +32,12 @@ N8N_OUTBOUND_TOKEN = os.getenv("N8N_OUTBOUND_TOKEN", "")
 VISION_S3_BUCKET = os.getenv("VISION_S3_BUCKET", "")
 AWS_REGION = os.getenv("AWS_REGION", "ap-northeast-2")
 
+# 비전 / ConvNeXt 이미지 분류 (hub — 신뢰도 게이팅 임계값).
+CONVNEXT_DEVICE = os.getenv("CONVNEXT_DEVICE", "auto")  # "auto" | "cuda" | "cpu"
+CONVNEXT_HIGH_CONFIDENCE = float(os.getenv("CONVNEXT_HIGH_CONFIDENCE", "0.85"))  # 이상이면 자동 확정
+CONVNEXT_LOW_CONFIDENCE = float(os.getenv("CONVNEXT_LOW_CONFIDENCE", "0.55"))  # 미만이면 사람 확인
+CONVNEXT_TOP_K = int(os.getenv("CONVNEXT_TOP_K", "5"))
+
 # Google Gemini API (허브 gemini 슬라이스 — 외부 LLM 답변). 비어 있으면 호출 시 계약 예외.
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")

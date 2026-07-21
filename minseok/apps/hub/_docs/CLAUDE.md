@@ -118,14 +118,14 @@ apps/hub/dependencies/stock_analysis_provider.py  # get_stock_analysis_port (Not
 |--------|------------------|
 | /automation/* | `news_ingest` · `market_news_ingest` · `price_bar_ingest` · `news_label_ingest` · `fundamental_ingest` · `mail_ingest` · `signal_scan` · `dispatcher`(/myself) — 웹훅 토큰 공용 의존성은 `v1/webhook_token.py` |
 | /email/* | `email_request` · `postmaster`(/myself) |
-| /vision/* | `vision`(/myself·/images) · `face_recognition`(/faces) |
+| /vision/* | `vision`(/myself·/images) · `face_recognition`(/faces) · `image_classifier`(/classifications) |
 
 ## 허브 소유 인프라 (adapter/outbound) — 예약
 
 `adapter/outbound/`는 **허브 자신이 소유하는 전역 인프라** 접속 전용이다(star_craft 파이프라인
 방향). 스포크 도메인 접속은 여기 두지 않는다 — 스포크 게이트웨이가 허브 포트를 구현한다.
 현재: 비전 어댑터(`s3_vision_storage_adapter` · `log_vision_record_adapter` ·
-`resource_adapters/yolo/`).
+`resource_adapters/yolo/` · `resource_adapters/convnext/`).
 예정: `graph/`(Neo4j — 온톨로지 엔티티·관계, compose에 서비스 준비됨) ·
 `vector/`(pgvector 재사용 또는 Qdrant — 전역 임베딩 검색).
 
