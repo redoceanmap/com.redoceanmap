@@ -86,6 +86,77 @@ export type AdminAuditEntry = {
   created_at: string;
 };
 
+export type AdminForecastKpi = {
+  total: number;
+  scored: number;
+  pending: number;
+  hit_rate: number | null;
+  up_hit_rate: number | null;
+  down_hit_rate: number | null;
+};
+
+export type AdminForecastGroupStat = {
+  scored: number;
+  hit_rate: number | null;
+  avg_realized_return_pct: number | null;
+};
+
+export type AdminForecastSignalStat = {
+  key: string;
+  n: number;
+  hits: number;
+  hit_rate: number | null;
+};
+
+export type AdminForecastSnapshot = {
+  ticker: string;
+  as_of: string;
+  horizon_days: number;
+  direction: string;
+  base_price: number;
+  score: number;
+  up_rate: number | null;
+  ready: boolean;
+  evaluated_at: string | null;
+  realized_return_pct: number | null;
+  hit: boolean | null;
+};
+
+export type AdminForecastReport = {
+  kpi: AdminForecastKpi;
+  by_horizon: (AdminForecastGroupStat & { horizon_days: number })[];
+  by_direction: (AdminForecastGroupStat & { direction: string })[];
+  by_signal: AdminForecastSignalStat[];
+  recent: AdminForecastSnapshot[];
+};
+
+export type AdminGradeOutcomeRow = {
+  grade: string;
+  n: number;
+  avg_rel_floating_qoq: number | null;
+  median_rel_floating_qoq: number | null;
+  positive_share: number | null;
+  avg_sales_qoq: number | null;
+  sales_n: number;
+};
+
+export type AdminComponentRow = {
+  key: string;
+  n: number;
+  spearman: number | null;
+  top_minus_bottom_quintile: number | null;
+};
+
+export type AdminMarketBacktestReport = {
+  ran_at: string;
+  params: Record<string, string | null>;
+  n_observations: number;
+  n_areas: number;
+  base_quarters: number[];
+  grade_outcomes: AdminGradeOutcomeRow[];
+  component_predictiveness: AdminComponentRow[];
+};
+
 /* ── 요청 헬퍼 — lib/api.ts의 getJson 패턴 + 쓰기 메서드 ── */
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -173,6 +244,19 @@ export const fetchAdminDataSources = (): Promise<{ datasets: AdminDatasetStat[] 
 
 export const fetchAdminAudit = (limit = 50): Promise<{ items: AdminAuditEntry[] }> =>
   request(`/admin/audit?limit=${limit}`);
+
+export const fetchAdminForecasts = (
+  horizon: number | null,
+  limit = 50,
+): Promise<AdminForecastReport> => {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (horizon != null) params.set("horizon", String(horizon));
+  return request(`/admin/forecasts?${params}`);
+};
+
+export const fetchAdminMarketBacktest = (): Promise<{
+  report: AdminMarketBacktestReport | null;
+}> => request("/admin/market-backtest");
 
 // CSV 내보내기용 — 서버 limit 상한(100)에 맞춰 offset 순회로 전량 수집
 export const fetchAllAdminMembers = async (search: string): Promise<AdminMember[]> => {

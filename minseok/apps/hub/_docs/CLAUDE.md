@@ -134,7 +134,7 @@ apps/hub/dependencies/stock_analysis_provider.py  # get_stock_analysis_port (Not
 
 | prefix | 라우터 (슬라이스) |
 |--------|------------------|
-| /automation/* | `news_ingest` · `market_news_ingest` · `price_bar_ingest` · `news_label_ingest` · `fundamental_ingest` · `mail_ingest` · `signal_scan` · `stock_demand`(수요 조회) · `dispatcher`(/myself) — 웹훅 토큰 공용 의존성은 `v1/webhook_token.py` |
+| /automation/* | `news_ingest` · `market_news_ingest` · `price_bar_ingest` · `news_label_ingest` · `fundamental_ingest` · `forecast_snapshot`(캡처·채점) · `mail_ingest` · `signal_scan` · `stock_demand`(수요 조회) · `dispatcher`(/myself) — 웹훅 토큰 공용 의존성은 `v1/webhook_token.py` |
 | /email/* | `email_request` · `postmaster`(/myself) |
 | /vision/* | `vision`(/myself·/images) · `face_recognition`(/faces) · `image_classifier`(/classifications) |
 
@@ -209,6 +209,7 @@ apps/hub/
 | 뉴스 라벨링 | cron(`scripts/label_news.py`, EXAONE 7.8B Ollama) → `GET /automation/news-labels/pending` → 라벨 → `POST /automation/news-labels` → NewsLabelIngestInteractor → `NewsLabelStoragePort` → stock 저장 |
 | 상권 뉴스 수집 | cron(`scripts/collect_market_news.py`, 매일 01:30, Google News RSS "지역 어간 × 상권") → `POST /automation/market-news` → MarketNewsIngestInteractor → `MarketNewsStoragePort` → market 저장(+bge-m3 임베딩) |
 | 펀더멘털 수집 | cron(`scripts/collect_fundamentals.py`, 주 1회, yfinance+DART) → `POST /automation/fundamentals` → FundamentalIngestInteractor → `FundamentalStoragePort` → stock 저장 |
+| 예측 스냅샷 | cron(`scripts/snapshot_forecasts.py`, 매일 07:30) → `POST /automation/forecast-snapshots`(캡처) + `POST /automation/forecast-snapshots/score`(채점) → ForecastSnapshotInteractor → `ForecastSnapshotPort` → stock 저장·채점 |
 
 - n8n 워크플로: [[minseok/apps/hub/_docs/n8n_news_collector_workflow.json]] ·
   [[minseok/apps/hub/_docs/n8n_stock_signal_alert_workflow.json]] — n8n UI에서 임포트,
@@ -273,6 +274,22 @@ stock(구현·영속: `price_bars` 테이블, (ticker, timeframe, ts) 유니크)
 `coverage()`가 (ticker, timeframe)별 보유 구간을 알려줘 수집기가 백필 깊이를 정한다 —
 뉴스↔주가 반응 라벨링용(5m 단기 반응 · 1d 익일/주간). `admin`의 data_source 인터랙터도
 `coverage()`를 소비해 데이터소스 화면의 주가 봉 적재 현황 카드를 만든다.
+
+## 소유 계약 — ForecastSnapshotPort
+
+예측 스냅샷 협력. 캡처 배치(`scripts/snapshot_forecasts.py`, 매일 07:30)·admin(소비)과
+stock(구현·영속: `forecast_snapshots` 테이블, (ticker, horizon_days, as_of) 유니크)을 잇는다.
+`capture(tickers, horizons)`(forecast+신호 분해 동결) · `score()`(horizon 도래분을 price_bars
+실현 수익률로 채점 — UP→상승, DOWN→비상승, NEUTRAL은 NULL) · `accuracy_report(horizon,
+recent_limit)`(적중률 요약+신호별 일치율+최근 목록 — admin analytics가 소비,
+PriceBarStoragePort.coverage()를 admin이 같이 소비하는 선례와 동일).
+
+## 소유 계약 — AreaBacktestReportPort
+
+상권 점수 백테스트 리포트 조회 협력(조회 전용 — 쓰기는 `scripts/backtest_area_score.py`가
+DB 직접, ingest 선례). admin(소비)과 market(구현·영속: `area_score_backtest_reports`,
+실행당 1행 payload JSONB — 스키마 정의처는 market `area_score_backtester`)을 잇는다.
+`latest()`가 최신 실행 리포트 1건을 반환(없으면 None).
 
 ## 규칙
 

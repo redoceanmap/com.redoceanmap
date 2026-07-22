@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.responses import RedirectResponse
 
+from admin.adapter.inbound.api.v1.analytics_router import analytics_router as admin_analytics_router
 from admin.adapter.inbound.api.v1.area_router import area_router as admin_area_router
 from admin.adapter.inbound.api.v1.audit_router import audit_router
 from admin.adapter.inbound.api.v1.dashboard_router import dashboard_router as admin_dashboard_router
@@ -34,6 +35,7 @@ from chat.adapter.outbound.gateways.email_composer_gateway import EmailComposerN
 from hub.adapter.inbound.api.v1.dispatcher_router import dispatcher_router
 from hub.adapter.inbound.api.v1.email_request_router import email_request_router
 from hub.adapter.inbound.api.v1.face_recognition_router import face_recognition_router
+from hub.adapter.inbound.api.v1.forecast_snapshot_router import forecast_snapshot_router
 from hub.adapter.inbound.api.v1.fundamental_ingest_router import fundamental_ingest_router
 from hub.adapter.inbound.api.v1.gemini_router import gemini_router
 from hub.adapter.inbound.api.v1.image_classifier_router import image_classifier_router
@@ -46,6 +48,8 @@ from hub.adapter.inbound.api.v1.postmaster_router import postmaster_router
 from hub.adapter.inbound.api.v1.price_bar_ingest_router import price_bar_ingest_router
 from hub.adapter.inbound.api.v1.signal_scan_router import signal_scan_router
 from hub.adapter.inbound.api.v1.stock_demand_router import stock_demand_router
+from hub.dependencies.area_backtest_report_provider import get_area_backtest_report_port
+from hub.dependencies.forecast_snapshot_provider import get_forecast_snapshot_port
 from hub.dependencies.fundamental_ingest_provider import get_fundamental_storage_port
 from hub.dependencies.mail_ingest_provider import get_mail_storage_port
 from hub.dependencies.market_news_ingest_provider import get_market_news_storage_port
@@ -70,6 +74,7 @@ from hub.dependencies.stock_analysis_provider import (
     get_stock_analysis_port_batch,
 )
 from hub.dependencies.stock_demand_provider import get_stock_demand_port
+from market.dependencies.area_backtest_report_provider import get_area_backtest_report_gateway
 from market.dependencies.commercial_data_provider import get_commercial_data_gateway
 from market.dependencies.market_news_provider import (
     get_market_news_search_gateway,
@@ -85,6 +90,7 @@ from stock.adapter.inbound.api.v1.stock_forecast_router import stock_forecast_ro
 from stock.adapter.inbound.api.v1.stock_history_router import stock_history_router
 from stock.adapter.inbound.api.v1.stock_quote_router import stock_quote_router
 from stock.adapter.inbound.api.v1.stock_router import stock_router
+from stock.dependencies.forecast_snapshot_provider import get_forecast_snapshot_gateway
 from stock.dependencies.fundamental_provider import get_fundamental_storage_gateway
 from stock.dependencies.news_label_provider import get_news_label_storage_gateway
 from stock.dependencies.news_provider import get_news_search_gateway, get_news_storage_gateway
@@ -145,6 +151,7 @@ app.include_router(price_bar_ingest_router)
 app.include_router(stock_demand_router)
 app.include_router(news_label_ingest_router)
 app.include_router(fundamental_ingest_router)
+app.include_router(forecast_snapshot_router)
 app.include_router(mail_ingest_router)
 app.include_router(signal_scan_router)
 app.include_router(dispatcher_router)
@@ -179,6 +186,7 @@ app.include_router(admin_member_router, dependencies=_authenticated)
 app.include_router(admin_grade_router, dependencies=_authenticated)
 app.include_router(admin_recommendation_log_router, dependencies=_authenticated)
 app.include_router(admin_data_source_router, dependencies=_authenticated)
+app.include_router(admin_analytics_router, dependencies=_authenticated)
 app.include_router(audit_router, dependencies=_authenticated)
 app.include_router(gemini_router, dependencies=_authenticated)  # 허브 — 외부 Gemini 답변
 app.include_router(semantic_router, dependencies=_authenticated)  # 허브 — 시멘틱 게이트웨이(PoC)
@@ -202,6 +210,8 @@ app.dependency_overrides[get_grade_policy_port] = get_grade_policy_gateway
 app.dependency_overrides[get_recommendation_directory_port] = get_recommendation_directory_gateway
 app.dependency_overrides[get_mail_storage_port] = get_mail_storage_gateway
 app.dependency_overrides[get_stock_demand_port] = get_stock_demand_gateway
+app.dependency_overrides[get_forecast_snapshot_port] = get_forecast_snapshot_gateway
+app.dependency_overrides[get_area_backtest_report_port] = get_area_backtest_report_gateway
 
 
 # API 문서 — 루트 접속 시 바로 브라우저 로그인창(HTTP Basic)이 뜨는 /docs로 보낸다.

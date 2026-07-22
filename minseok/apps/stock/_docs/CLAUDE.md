@@ -87,6 +87,15 @@
   ts 기준)로 일 1회만 재계산. **확률 노출 정책**: 실측 통계 + 표본·신뢰구간·기준선·"과거
   통계" 고지 병기 형태만 허용 — score 환산 등 근거 없는 확률 숫자 단독 노출 금지(기존 "확률
   제시 보류"의 해소 형태). chat 답변의 확률 단정 금지는 그대로 유지(페이지 전용).
+- **예측 스냅샷·사후 채점(`forecast_snapshot` 슬라이스)**: 일일 cron(`scripts/snapshot_forecasts.py`,
+  07:30, horizons 5·20)이 허브 `POST /automation/forecast-snapshots`(+`/score`)로 워치리스트
+  forecast(방향·확률·밴드)와 신호 분해(breakdown)를 `forecast_snapshots` 테이블에 동결하고
+  ((ticker, horizon_days, as_of) 유니크 — 재실행 멱등), horizon 도래분을 price_bars(1d)
+  실현 수익률로 채점한다(UP→상승, DOWN→비상승 적중, NEUTRAL은 hit NULL — Backtester 의미론).
+  캡처는 `StockForecastUseCase` 재사용 + market_data=None(라이브 폴백 차단, 미수집 종목 skip).
+  요약(`summary`)은 방향·호라이즌·신호별(원신호 부호↔실현 수익률 부호 일치율) 적중률을 집계 —
+  허브 `ForecastSnapshotPort`를 `ForecastSnapshotGateway`가 구현, admin `/admin/forecasts`가 소비.
+  가중치 재적합·캘리브레이션의 원료 데이터 축(백테스트가 못 주는 진짜 out-of-sample 성적).
 - **현재가 폴링(`stock_quote` 슬라이스)**: `GET /stock/{symbol}/quote` — `MarketDataPort.quote()`
   (yfinance fast_info, 이력 미조회)로 지연 시세 현재가만 경량 반환(`delayed: true`). 프론트
   30초 폴링용. 진짜 실시간은 KIS 등 벤더 어댑터 교체 경로(계약 동일)로 후속.

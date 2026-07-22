@@ -1,0 +1,97 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import datetime
+
+
+@dataclass(frozen=True)
+class CaptureCommand:
+    """스냅샷 캡처 입력 — 워치리스트 티커 목록 × 평가 구간들."""
+
+    tickers: list[str]
+    horizons: list[int] = field(default_factory=lambda: [5])
+
+
+@dataclass(frozen=True)
+class CaptureResult:
+    captured: int          # 신규 저장 건수(중복 제외)
+    skipped: list[str]     # 미수집·봉 부족으로 건너뛴 티커
+
+
+@dataclass(frozen=True)
+class ScoreResult:
+    scored: int    # 이번 실행에서 채점 완료된 건수
+    pending: int   # 아직 horizon 미도래로 남은 건수
+
+
+@dataclass(frozen=True)
+class SnapshotScoreUpdate:
+    """채점 결과 1건 — 리포지토리 apply_scores 입력."""
+
+    snapshot_id: int
+    evaluated_at: datetime
+    realized_price: float
+    realized_return_pct: float
+    hit: bool | None       # NEUTRAL은 None
+
+
+@dataclass(frozen=True)
+class SummaryKpi:
+    total: int
+    scored: int
+    pending: int
+    hit_rate: float | None       # UP/DOWN 채점분 전체 적중률(NEUTRAL 제외)
+    up_hit_rate: float | None
+    down_hit_rate: float | None
+
+
+@dataclass(frozen=True)
+class HorizonStat:
+    horizon_days: int
+    scored: int
+    hit_rate: float | None
+    avg_realized_return_pct: float | None
+
+
+@dataclass(frozen=True)
+class DirectionStat:
+    direction: str
+    scored: int
+    hit_rate: float | None       # NEUTRAL은 None
+    avg_realized_return_pct: float | None
+
+
+@dataclass(frozen=True)
+class SignalStat:
+    """신호별 방향 일치율 — signal 부호와 실현 수익률 부호의 일치(가중치 무관, 원신호 기준)."""
+
+    key: str
+    n: int         # signal != 0 인 채점 표본 수
+    hits: int
+    hit_rate: float | None
+
+
+@dataclass(frozen=True)
+class SnapshotRow:
+    """최근 스냅샷 목록 1행 — 어드민 테이블용."""
+
+    ticker: str
+    as_of: datetime
+    horizon_days: int
+    direction: str
+    base_price: float
+    score: float
+    up_rate: float | None
+    ready: bool
+    evaluated_at: datetime | None
+    realized_return_pct: float | None
+    hit: bool | None
+
+
+@dataclass(frozen=True)
+class SnapshotSummaryView:
+    kpi: SummaryKpi
+    by_horizon: list[HorizonStat]
+    by_direction: list[DirectionStat]
+    by_signal: list[SignalStat]
+    recent: list[SnapshotRow]

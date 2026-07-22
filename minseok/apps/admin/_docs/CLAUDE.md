@@ -13,9 +13,10 @@
 - `/admin/*` 엔드포인트 표면 소유. 인증(JWT)은 main.py 공통, 권한은 엔드포인트 단
   `require_permission("<code>")`(core/security — 매 요청 DB 조회라 역할 회수 즉시 반영).
 - 프론트 `/admin` 가드 판정: `GET /admin/me` — 호출자의 permission 코드 목록(빈 배열 = 비관리자).
-- 권한 코드 7종: `dashboard:read` · `areas:read` · `members:read` · `members:write` ·
-  `recommendations:read` · `datasources:read` · `audit:read`. RBAC 테이블(roles 등 4종)은 **auth 소유**,
-  시드는 alembic `f0a1b2c3d4e5`(6종) + `a1b2c3d4e5f6`(audit:read), 최초 부여는 `scripts/grant_admin.py <email>`.
+- 권한 코드 8종: `dashboard:read` · `areas:read` · `members:read` · `members:write` ·
+  `recommendations:read` · `datasources:read` · `audit:read` · `analytics:read`. RBAC 테이블(roles 등 4종)은 **auth 소유**,
+  시드는 alembic `f0a1b2c3d4e5`(6종) + `a1b2c3d4e5f6`(audit:read) + `c1d2e3f4a5b6`(analytics:read),
+  최초 부여는 `scripts/grant_admin.py <email>`.
 - **감사 로그**: 역할 부여/회수·정지/해제/세션 폐기/탈퇴 등 변경 행위를 `AuditLogPort`(PG,
   `admin_audit_logs`)에 기록한다. steward record 포트(로그 출력, 관찰성)와 구분 —
   매 요청성 관찰은 DB에 남기지 않는다.
@@ -42,6 +43,7 @@
 | recommendation_log | GET /admin/recommendations | RecommendationDirectoryPort |
 | data_source | GET /admin/data-sources | CommercialData (get_dataset_stats) + RecommendationDirectory + PriceBarStorage (coverage) |
 | audit | GET /admin/audit | 자체 AuditLogPort (member 슬라이스가 write, audit 슬라이스가 열람) |
+| analytics | GET /admin/forecasts · GET /admin/market-backtest — 예측 스냅샷 채점 현황(적중률·신호별 일치율·최근 목록) + 상권 점수 백테스트 최신 리포트. 권한 analytics:read 공용 | ForecastSnapshotPort (accuracy_report) + AreaBacktestReportPort (latest) |
 
 인터랙터는 허브 포트를 생성자 주입받고, 프로바이더는 허브 스텁 프로바이더를 `Depends`로 받는다
 (합성 루트 main.py의 `dependency_overrides`가 스포크 게이트웨이로 치환 — 계약 상세는 hub CLAUDE).

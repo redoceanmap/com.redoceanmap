@@ -1,0 +1,240 @@
+from datetime import UTC, datetime, timedelta
+
+import pytest
+
+from stock.app.dtos.forecast_snapshot_dto import CaptureCommand
+from stock.app.dtos.stock_forecast_dto import BandInfo, ProbabilityInfo, StockForecastView
+from stock.app.exceptions import MarketDataUnavailableError
+from stock.app.use_cases.forecast_snapshot_interactor import ForecastSnapshotInteractor
+from stock.domain.entities.forecast_snapshot import ForecastSnapshot
+from stock.domain.entities.price_bar import PriceBar
+from stock.domain.value_objects.signal_breakdown import SignalContribution
+
+AS_OF = datetime(2026, 7, 1, tzinfo=UTC)
+
+
+def _bars(n: int, ticker: str = "TEST.KS") -> list[PriceBar]:
+    start = datetime(2024, 1, 1, tzinfo=UTC)
+    out = []
+    price = 100.0
+    for i in range(n):
+        price *= 1.01
+        out.append(PriceBar(
+            ticker=ticker, timeframe="1d", ts=start + timedelta(days=i),
+            open=price * 0.995, high=price * 1.005, low=price * 0.99,
+            close=price, volume=1000,
+        ))
+    return out
+
+
+def _view(symbol: str, horizon: int, direction: str = "UP", with_prob: bool = True) -> StockForecastView:
+    return StockForecastView(
+        symbol=symbol, resolved_ticker=f"{symbol}.KS", as_of=AS_OF,
+        base_price=100.0, horizon_days=horizon, signal_direction=direction,
+        probability=ProbabilityInfo(
+            up_rate=0.6, sample_size=120, hits=72, ci_low=0.51, ci_high=0.68,
+            baseline_up_rate=0.5, ready=True,
+        ) if with_prob else None,
+        band=BandInfo(source="quantile", q25_pct=-0.01, median_pct=0.005, q75_pct=0.02),
+        insights=[],
+    )
+
+
+def _snapshot(
+    snapshot_id: int, ticker: str = "TEST.KS", direction: str = "UP", horizon: int = 5,
+    as_of: datetime = AS_OF, base_price: float = 100.0, signals: tuple = (),
+    evaluated: bool = False, realized_return_pct: float | None = None, hit: bool | None = None,
+) -> ForecastSnapshot:
+    return ForecastSnapshot(
+        id=snapshot_id, ticker=ticker, as_of=as_of, horizon_days=horizon,
+        direction=direction, base_price=base_price, score=0.4, signals=signals,
+        evaluated_at=datetime(2026, 7, 10, tzinfo=UTC) if evaluated else None,
+        realized_return_pct=realized_return_pct, hit=hit,
+    )
+
+
+class _StubForecaster:
+    def __init__(self, views: dict[tuple[str, int], StockForecastView]):
+        self.views = views
+        self.calls: list[tuple[str, int]] = []
+
+    async def forecast(self, query):
+        self.calls.append((query.symbol, query.horizon))
+        key = (query.symbol, query.horizon)
+        if key not in self.views:
+            raise MarketDataUnavailableError(query.symbol)
+        return self.views[key]
+
+
+class _StubHistory:
+    def __init__(self, bars_by_symbol: dict[str, list[PriceBar]]):
+        self.bars_by_symbol = bars_by_symbol
+        self.loads = 0
+
+    async def find_latest_daily_bar(self, symbol):
+        bars = self.bars_by_symbol.get(symbol, [])
+        return bars[-1] if bars else None
+
+    async def find_all_daily_bars(self, symbol):
+        self.loads += 1
+        return self.bars_by_symbol.get(symbol, [])
+
+
+class _StubRepo:
+    def __init__(self, pending: list[ForecastSnapshot] | None = None,
+                 scored: list[ForecastSnapshot] | None = None):
+        self.saved: list[ForecastSnapshot] = []
+        self.pending = pending or []
+        self.scored = scored or []
+        self.applied = []
+
+    async def save_many(self, snapshots):
+        self.saved.extend(snapshots)
+        return len(snapshots)
+
+    async def find_pending(self):
+        return self.pending
+
+    async def apply_scores(self, updates):
+        self.applied.extend(updates)
+        return len(updates)
+
+    async def find_scored(self, horizon, limit):
+        return [s for s in self.scored if horizon is None or s.horizon_days == horizon][:limit]
+
+    async def find_recent(self, horizon, limit):
+        return ([s for s in self.pending + self.scored
+                 if horizon is None or s.horizon_days == horizon][:limit])
+
+    async def counts(self, horizon):
+        both = self.pending + self.scored
+        pool = [s for s in both if horizon is None or s.horizon_days == horizon]
+        return len(pool), len([s for s in pool if s.evaluated_at is not None])
+
+
+def _interactor(forecaster, history, repo) -> ForecastSnapshotInteractor:
+    return ForecastSnapshotInteractor(forecaster=forecaster, history=history, snapshots=repo)
+
+
+async def test_capture_maps_view_and_breakdown():
+    bars = _bars(60)
+    forecaster = _StubForecaster({("TEST", 5): _view("TEST", 5), ("TEST", 20): _view("TEST", 20)})
+    repo = _StubRepo()
+    result = await _interactor(forecaster, _StubHistory({"TEST": bars}), repo).capture(
+        CaptureCommand(tickers=["test"], horizons=[5, 20])
+    )
+
+    assert result.captured == 2 and result.skipped == []
+    assert {s.horizon_days for s in repo.saved} == {5, 20}
+    snap = repo.saved[0]
+    assert snap.ticker == "TEST.KS"          # resolved_ticker 정본
+    assert snap.as_of == AS_OF
+    assert snap.up_rate == 0.6 and snap.ready is True
+    assert snap.band_source == "quantile"
+    # 신호 분해 6종 동결 + 합산 점수 일치
+    assert [c.key for c in snap.signals] == [
+        "sentiment", "rsi", "trend", "bollinger", "obv", "momentum",
+    ]
+    assert snap.score == pytest.approx(sum(c.contribution for c in snap.signals))
+
+
+async def test_capture_probability_none_and_breakdown_once_per_ticker():
+    bars = _bars(60)
+    forecaster = _StubForecaster({
+        ("TEST", 5): _view("TEST", 5, with_prob=False),
+        ("TEST", 20): _view("TEST", 20, with_prob=False),
+    })
+    history = _StubHistory({"TEST": bars})
+    repo = _StubRepo()
+    await _interactor(forecaster, history, repo).capture(
+        CaptureCommand(tickers=["TEST"], horizons=[5, 20])
+    )
+
+    assert history.loads == 1  # breakdown용 봉 로드는 티커당 1회
+    assert all(s.up_rate is None and s.ready is False for s in repo.saved)
+
+
+async def test_capture_skips_uncollected_ticker():
+    forecaster = _StubForecaster({("TEST", 5): _view("TEST", 5)})
+    repo = _StubRepo()
+    result = await _interactor(
+        forecaster, _StubHistory({"TEST": _bars(60)}), repo
+    ).capture(CaptureCommand(tickers=["TEST", "GHOST"], horizons=[5]))
+
+    assert result.captured == 1
+    assert result.skipped == ["GHOST"]
+
+
+async def test_score_up_down_neutral_and_pending():
+    signals = ()
+    # as_of 이후 5봉: 종가 100→96 (하락) — TEST.KS 봉
+    down_bars = _bars(60)
+    future = []
+    price = 96.0
+    for i in range(5):
+        future.append(PriceBar(
+            ticker="TEST.KS", timeframe="1d", ts=AS_OF + timedelta(days=i + 1),
+            open=price, high=price + 1, low=price - 1, close=price, volume=1000,
+        ))
+    bars = [b for b in down_bars if b.ts <= AS_OF] + future
+
+    pending = [
+        _snapshot(1, direction="UP", signals=signals),       # ret<0 → hit=False
+        _snapshot(2, direction="DOWN", signals=signals),     # ret<=0 → hit=True
+        _snapshot(3, direction="NEUTRAL", signals=signals),  # hit=None
+        _snapshot(4, direction="UP", horizon=20, signals=signals),  # 봉 부족 → 미채점
+    ]
+    repo = _StubRepo(pending=pending)
+    result = await _interactor(
+        _StubForecaster({}), _StubHistory({"TEST.KS": bars}), repo
+    ).score()
+
+    assert result.scored == 3 and result.pending == 1
+    by_id = {u.snapshot_id: u for u in repo.applied}
+    assert by_id[1].hit is False
+    assert by_id[2].hit is True
+    assert by_id[3].hit is None
+    assert 4 not in by_id
+    assert by_id[1].realized_price == pytest.approx(96.0)
+    assert by_id[1].realized_return_pct == pytest.approx(-0.04)
+
+
+async def test_summary_aggregates_and_signal_definition():
+    sig_up = SignalContribution(key="rsi", signal=0.5, weight=0.3, contribution=0.15)
+    sig_down = SignalContribution(key="bollinger", signal=-0.4, weight=0.0, contribution=0.0)
+    sig_zero = SignalContribution(key="obv", signal=0.0, weight=0.0, contribution=0.0)
+    scored = [
+        _snapshot(1, direction="UP", evaluated=True, realized_return_pct=0.03, hit=True,
+                  signals=(sig_up, sig_zero)),
+        _snapshot(2, direction="UP", evaluated=True, realized_return_pct=-0.02, hit=False,
+                  signals=(sig_up,)),
+        _snapshot(3, direction="NEUTRAL", evaluated=True, realized_return_pct=-0.01, hit=None,
+                  signals=(sig_down,)),
+    ]
+    repo = _StubRepo(scored=scored)
+    view = await _interactor(_StubForecaster({}), _StubHistory({}), repo).summary(
+        horizon=None, recent_limit=10
+    )
+
+    assert view.kpi.scored == 3 and view.kpi.pending == 0
+    assert view.kpi.hit_rate == pytest.approx(0.5)      # NEUTRAL 제외 1/2
+    assert view.kpi.up_hit_rate == pytest.approx(0.5)
+    assert view.kpi.down_hit_rate is None               # DOWN 표본 없음
+    # by_signal: rsi n=2(+0.03 적중·-0.02 실패), bollinger n=1(신호<0·ret<=0 적중), obv 제외
+    by_key = {s.key: s for s in view.by_signal}
+    assert by_key["rsi"].n == 2 and by_key["rsi"].hits == 1
+    assert by_key["bollinger"].n == 1 and by_key["bollinger"].hits == 1
+    assert "obv" not in by_key
+    directions = {d.direction: d for d in view.by_direction}
+    assert directions["NEUTRAL"].hit_rate is None
+    assert directions["NEUTRAL"].avg_realized_return_pct == pytest.approx(-0.01)
+
+
+async def test_summary_empty_returns_none_rates():
+    repo = _StubRepo()
+    view = await _interactor(_StubForecaster({}), _StubHistory({}), repo).summary(
+        horizon=5, recent_limit=10
+    )
+    assert view.kpi.total == 0
+    assert view.kpi.hit_rate is None
+    assert view.by_horizon == [] and view.by_signal == []

@@ -11,6 +11,8 @@ import {
   Layers,
   Sparkles,
   Database,
+  Target,
+  FlaskConical,
   ScrollText,
   Search,
   Bell,
@@ -24,6 +26,8 @@ const nav = [
   { icon: Layers, label: "등급 관리", href: "/admin/grades" },
   { icon: Sparkles, label: "추천 기록", href: "/admin/recommendations" },
   { icon: Database, label: "데이터 소스", href: "/admin/data-sources" },
+  { icon: Target, label: "예측 채점", href: "/admin/forecasts" },
+  { icon: FlaskConical, label: "상권 검증", href: "/admin/market-backtest" },
   { icon: ScrollText, label: "감사 로그", href: "/admin/audit" },
 ];
 
