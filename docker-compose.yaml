@@ -4,7 +4,7 @@ services:
       context: ./minseok
       dockerfile: Dockerfile
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - ./minseok:/app
     env_file:
@@ -29,7 +29,7 @@ services:
       context: ./minseok
       dockerfile: Dockerfile
     ports:
-      - "9000:9000"  # cloudflared(호스트)가 localhost:9000으로 접근 — backend(8000)와 동일 패턴
+      - "127.0.0.1:9000:9000"  # 루프백 잠금 — 외부 유입은 Cloudflare 터널 경유만
     volumes:
       - ./minseok:/app
     env_file:
@@ -50,7 +50,7 @@ services:
   n8n:
     image: docker.n8n.io/n8nio/n8n
     ports:
-      - "5678:5678"
+      - "127.0.0.1:5678:5678"
     volumes:
       - n8n_data:/home/node/.n8n
     environment:
@@ -61,7 +61,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     command: ["redis-server", "--appendonly", "yes"]
@@ -70,7 +70,7 @@ services:
     image: pgvector/pgvector:pg16
     ports:
       # redoceanmap이 메인 — 정식 포트 5432 사용 (ragwatson pgvector는 5433으로 이동).
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgvector_data:/var/lib/postgresql/data
     environment:
@@ -86,8 +86,8 @@ services:
   neo4j:
     image: neo4j:5
     ports:
-      - "7474:7474"
-      - "7687:7687"
+      - "127.0.0.1:7474:7474"
+      - "127.0.0.1:7687:7687"
     volumes:
       - neo4j_data:/data
     environment:

@@ -10,7 +10,11 @@ services:
       TZ: Asia/Seoul
     ports:
       # 호스트 5432(redoceanmap) 점유 → 5434 (market-database.md §2.1)
-      - "${DB_PORT:-5434}:5432"
+      # 이중 바인딩: 루프백(호스트 도구용) + 도커 브리지 게이트웨이(backend 컨테이너가
+      # host.docker.internal=172.17.0.1로 접근 — 네이티브 도커라 루프백엔 못 닿음).
+      # 0.0.0.0 금지 — LAN 노출 차단(bff-cloudflared-harness A.4).
+      - "127.0.0.1:${DB_PORT:-5434}:5432"
+      - "172.17.0.1:${DB_PORT:-5434}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
