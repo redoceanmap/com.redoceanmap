@@ -30,14 +30,20 @@ def _bars(n: int, ticker: str = "TEST.KS") -> list[PriceBar]:
 
 
 class _StubPort:
-    def __init__(self, bars):
+    def __init__(self, bars, index_bars: dict[str, list] | None = None):
         self.bars = bars
+        self.index_bars = index_bars or {}  # SPY/^VIX — 미수집(빈)이면 무레짐 폴백 경로
         self.full_loads = 0
 
     async def find_latest_daily_bar(self, symbol):
+        if symbol in ("SPY", "^VIX"):
+            series = self.index_bars.get(symbol, [])
+            return series[-1] if series else None
         return self.bars[-1] if self.bars else None
 
     async def find_all_daily_bars(self, symbol):
+        if symbol in ("SPY", "^VIX"):
+            return self.index_bars.get(symbol, [])
         self.full_loads += 1
         return self.bars
 
@@ -46,9 +52,11 @@ class _StubPort:
 def _clear_cache():
     stock_forecast_interactor._CACHE.clear()
     stock_forecast_interactor._LIVE_CACHE.clear()
+    stock_forecast_interactor._REGIME_CACHE = None
     yield
     stock_forecast_interactor._CACHE.clear()
     stock_forecast_interactor._LIVE_CACHE.clear()
+    stock_forecast_interactor._REGIME_CACHE = None
 
 
 async def test_미보유_심볼이면_예외():
@@ -177,3 +185,80 @@ async def test_라이브는_같은_날_재요청에_벤더를_다시_부르지_�
     second = await interactor.forecast(ForecastQuery(symbol="RKLB"))
     assert first is second
     assert market.calls == 1  # 일 단위 라이브 캐시 — 2y 다운로드는 하루 1회
+
+
+# ---- 레짐 조건화 · 어닝 veto ----
+
+def _spy_bars(end_ts: datetime, n: int, close: float = 100.0) -> list[PriceBar]:
+    """종목 마지막 봉과 같은 날 끝나는 지수 합성봉 — 상수 종가라 항상 BEAR(종가 == MA)."""
+    return [
+        PriceBar(
+            ticker="SPY", timeframe="1d", ts=end_ts - timedelta(days=n - 1 - i),
+            open=close, high=close + 1, low=close - 1, close=close, volume=0,
+        )
+        for i in range(n)
+    ]
+
+
+class _StubEarnings:
+    def __init__(self, dates):
+        self.dates = dates
+
+    async def earnings_dates(self, symbol):
+        return self.dates
+
+
+async def test_레짐_표본_충분하면_조건부_통계():
+    bars = _bars(120)
+    spy = _spy_bars(bars[-1].ts, 600)  # 평가 구간 전체에 MA200 형성 → 전 평가일 BEAR
+    view = await StockForecastInteractor(
+        history=_StubPort(bars, index_bars={"SPY": spy})
+    ).forecast(ForecastQuery(symbol="TEST"))
+    assert view.regime == "BEAR"
+    assert view.regime_conditional is True  # 전 평가일이 같은 레짐 — 표본 = 무조건부와 동일
+    assert any(i.key == "regime" for i in view.insights)
+
+
+async def test_레짐_표본_부족하면_무조건부_폴백():
+    bars = _bars(120)
+    # MA200이 마지막 5일에만 형성 — 현재 레짐은 있으나 조건부 표본 < 30
+    spy = _spy_bars(bars[-1].ts, 204)
+    view = await StockForecastInteractor(
+        history=_StubPort(bars, index_bars={"SPY": spy})
+    ).forecast(ForecastQuery(symbol="TEST"))
+    assert view.regime == "BEAR"
+    assert view.regime_conditional is False
+
+
+async def test_지수_미수집이면_무레짐():
+    view = await StockForecastInteractor(history=_StubPort(_bars(120))).forecast(
+        ForecastQuery(symbol="TEST")
+    )
+    assert view.regime is None and view.regime_conditional is False
+
+
+async def test_어닝_임박이면_관망_강등():
+    bars = _bars(120)
+    view = await StockForecastInteractor(
+        history=_StubPort(bars),
+        earnings=_StubEarnings([bars[-1].ts.date() + timedelta(days=1)]),  # 내일 발표 → ±2일 안
+    ).forecast(ForecastQuery(symbol="TEST"))
+    assert view.earnings_veto is True
+    assert view.signal_direction == "NEUTRAL"
+    assert any(i.key == "earnings" for i in view.insights)
+
+
+async def test_어닝_멀면_veto_없음():
+    bars = _bars(120)
+    view = await StockForecastInteractor(
+        history=_StubPort(bars),
+        earnings=_StubEarnings([bars[-1].ts.date() + timedelta(days=30)]),
+    ).forecast(ForecastQuery(symbol="TEST"))
+    assert view.earnings_veto is False
+
+
+async def test_어닝_포트_없으면_기존_동작():
+    view = await StockForecastInteractor(history=_StubPort(_bars(120))).forecast(
+        ForecastQuery(symbol="TEST")
+    )
+    assert view.earnings_veto is False

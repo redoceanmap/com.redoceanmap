@@ -37,3 +37,5 @@ class StockAnalysis:
     neutral_reason: str | None = None  # NEUTRAL 사유: atr_veto | volume_confirm | None
     signals: list[SignalContribution] = field(default_factory=list)  # 신호별 기여도 분해
     insights: list[Insight] = field(default_factory=list)            # 규칙 기반 해석 문장
+    sentiment_baseline: float | None = None  # 최근 30일 라벨 감성 평균(표본 5건 미만이면 None)
+    sentiment_surprise: float | None = None  # 당일 − 기준선 편차 — 신호에 실제 들어간 감성 값

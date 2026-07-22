@@ -98,3 +98,58 @@ def test_리포트_병합은_카운트_합산_기준선은_가중평균():
     assert m.up_signals == 40 and m.down_signals == 20
     assert m.up_hits == 24 and m.down_hits == 11
     assert abs(m.baseline_up_rate - (0.6 * 100 + 0.5 * 300) / 400) < 1e-9
+
+
+def test_distribution_레짐_분할_합계는_무조건부와_일치():
+    closes, lows, highs = _series(RISING)
+    # 평가 구간(51~94)을 반씩 다른 레짐으로 — 봉 배열과 같은 길이
+    regimes = ["BULL" if i < 70 else "BEAR" for i in range(len(closes))]
+    dist = Backtester(predictor=_FixedPredictor(Direction.UP)).distribution(
+        closes, lows, highs, horizon=5, regimes=regimes
+    )
+    total_by_regime = sum(r.evaluated for r in dist.by_regime.values())
+    assert total_by_regime == dist.evaluated
+    assert set(dist.by_regime) == {"BULL", "BEAR"}
+    # 레짐 슬라이스의 방향 표본 합 = 슬라이스 평가일 수
+    for stats in dist.by_regime.values():
+        assert sum(d.sample_size for d in stats.by_direction.values()) == stats.evaluated
+    # 상승장이라 조건부 기준선도 1.0
+    assert all(r.baseline_up_rate == 1.0 for r in dist.by_regime.values())
+
+
+def test_distribution_레짐_None은_무조건부에만_반영():
+    closes, lows, highs = _series(RISING)
+    regimes: list[str | None] = [None] * len(closes)
+    dist = Backtester(predictor=_FixedPredictor(Direction.UP)).distribution(
+        closes, lows, highs, horizon=5, regimes=regimes
+    )
+    assert dist.by_regime == {}
+    assert dist.evaluated == len(closes) - 5 - 51
+
+
+def test_distribution_excluded는_평가에서_빠지고_vetoed로_센다():
+    closes, lows, highs = _series(RISING)
+    excluded = [False] * len(closes)
+    excluded[60] = excluded[61] = True  # 평가 구간 내 2일 veto
+    dist = Backtester(predictor=_FixedPredictor(Direction.UP)).distribution(
+        closes, lows, highs, horizon=5, excluded=excluded
+    )
+    assert dist.vetoed == 2
+    assert dist.evaluated == len(closes) - 5 - 51 - 2
+    assert dist.by_direction["UP"].sample_size == dist.evaluated
+
+
+def test_distribution_무인자_하위호환():
+    closes, lows, highs = _series(RISING)
+    dist = Backtester(predictor=_FixedPredictor(Direction.UP)).distribution(
+        closes, lows, highs, horizon=5
+    )
+    assert dist.by_regime == {} and dist.vetoed == 0
+
+
+def test_distribution_길이_불일치는_ValueError():
+    closes, lows, highs = _series(RISING)
+    with pytest.raises(ValueError):
+        Backtester().distribution(closes, lows, highs, horizon=5, regimes=["BULL"])
+    with pytest.raises(ValueError):
+        Backtester().distribution(closes, lows, highs, horizon=5, excluded=[True])

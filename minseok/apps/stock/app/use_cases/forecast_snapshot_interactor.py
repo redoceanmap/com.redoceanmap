@@ -9,6 +9,7 @@ from stock.app.dtos.forecast_snapshot_dto import (
     CaptureResult,
     DirectionStat,
     HorizonStat,
+    RegimeStat,
     ScoreResult,
     SignalStat,
     SnapshotRow,
@@ -106,6 +107,9 @@ class ForecastSnapshotInteractor(ForecastSnapshotUseCase):
                 q25_pct=band.q25_pct if band else None,
                 median_pct=band.median_pct if band else None,
                 q75_pct=band.q75_pct if band else None,
+                regime=view.regime,
+                regime_conditional=view.regime_conditional,
+                earnings_veto=view.earnings_veto,
             ))
         return out
 
@@ -149,6 +153,7 @@ class ForecastSnapshotInteractor(ForecastSnapshotUseCase):
             kpi=self._kpi(total, scored_count, scored),
             by_horizon=self._by_horizon(scored),
             by_direction=self._by_direction(scored),
+            by_regime=self._by_regime(scored),
             by_signal=self._by_signal(scored),
             recent=[self._row(s) for s in recent],
         )
@@ -203,6 +208,18 @@ class ForecastSnapshotInteractor(ForecastSnapshotUseCase):
             for d, g in sorted(groups.items())
         ]
 
+    def _by_regime(self, scored: list[ForecastSnapshot]) -> list[RegimeStat]:
+        groups: dict[str, list[ForecastSnapshot]] = defaultdict(list)
+        for s in scored:
+            groups[s.regime or "NONE"].append(s)  # 지수 미수집 시기 캡처분은 NONE
+        return [
+            RegimeStat(
+                regime=r, scored=len(g),
+                hit_rate=self._hit_rate(g), avg_realized_return_pct=self._avg_return(g),
+            )
+            for r, g in sorted(groups.items())
+        ]
+
     @staticmethod
     def _by_signal(scored: list[ForecastSnapshot]) -> list[SignalStat]:
         # 신호 부호 ↔ 실현 수익률 부호 일치율. signal==0(무신호)은 표본 제외 —
@@ -229,4 +246,5 @@ class ForecastSnapshotInteractor(ForecastSnapshotUseCase):
             direction=s.direction, base_price=s.base_price, score=s.score,
             up_rate=s.up_rate, ready=s.ready, evaluated_at=s.evaluated_at,
             realized_return_pct=s.realized_return_pct, hit=s.hit,
+            regime=s.regime, earnings_veto=s.earnings_veto,
         )

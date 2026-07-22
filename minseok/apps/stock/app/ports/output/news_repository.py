@@ -35,3 +35,10 @@ class NewsRepositoryPort(ABC):
     ) -> list[NewsSearchRow]:
         """코사인 유사도 상위 뉴스를 라벨(감성·이벤트)과 함께 반환한다. ticker로 범위 제한 가능."""
         ...
+
+    @abstractmethod
+    async def sentiment_baseline(self, ticker: str, days: int = 30) -> tuple[float | None, int]:
+        """종목의 최근 N일 뉴스 라벨 감성 (평균, 표본 수) — 감성 서프라이즈의 기준선.
+
+        라벨(news_labels)이 없으면 (None, 0). 접미 매칭(005930 ↔ 005930.KS)은 구현 몫."""
+        ...

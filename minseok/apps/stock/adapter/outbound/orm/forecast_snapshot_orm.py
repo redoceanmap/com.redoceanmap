@@ -40,6 +40,9 @@ class ForecastSnapshotOrm(Base):
     realized_price: Mapped[float | None] = mapped_column(Float, nullable=True)
     realized_return_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     hit: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    regime: Mapped[str | None] = mapped_column(String(10), nullable=True)  # BULL | BEAR | HIGH_VOL
+    regime_conditional: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    earnings_veto: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

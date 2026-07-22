@@ -41,3 +41,6 @@ class StockForecastResponse(BaseModel):
     band: BandSchema | None
     insights: list[ForecastInsightSchema]
     live: bool = False  # true = 미수집 종목 — yfinance 라이브 이력 기반 계산
+    regime: str | None = None         # 현재 시장 레짐(BULL/BEAR/HIGH_VOL)
+    regime_conditional: bool = False  # true = 확률·밴드가 현재 레짐 조건부 통계
+    earnings_veto: bool = False       # true = 실적 발표 ±2일 관망 강등

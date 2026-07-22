@@ -62,6 +62,16 @@ class DirectionStat:
 
 
 @dataclass(frozen=True)
+class RegimeStat:
+    """캡처 시점 레짐별 채점 성적 — 레짐 미상(지수 미수집 시기)은 'NONE' 그룹."""
+
+    regime: str
+    scored: int
+    hit_rate: float | None
+    avg_realized_return_pct: float | None
+
+
+@dataclass(frozen=True)
 class SignalStat:
     """신호별 방향 일치율 — signal 부호와 실현 수익률 부호의 일치(가중치 무관, 원신호 기준)."""
 
@@ -86,6 +96,8 @@ class SnapshotRow:
     evaluated_at: datetime | None
     realized_return_pct: float | None
     hit: bool | None
+    regime: str | None = None
+    earnings_veto: bool = False
 
 
 @dataclass(frozen=True)
@@ -93,5 +105,6 @@ class SnapshotSummaryView:
     kpi: SummaryKpi
     by_horizon: list[HorizonStat]
     by_direction: list[DirectionStat]
+    by_regime: list[RegimeStat]
     by_signal: list[SignalStat]
     recent: list[SnapshotRow]

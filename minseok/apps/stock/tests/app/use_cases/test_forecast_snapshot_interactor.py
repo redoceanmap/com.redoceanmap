@@ -27,7 +27,8 @@ def _bars(n: int, ticker: str = "TEST.KS") -> list[PriceBar]:
     return out
 
 
-def _view(symbol: str, horizon: int, direction: str = "UP", with_prob: bool = True) -> StockForecastView:
+def _view(symbol: str, horizon: int, direction: str = "UP", with_prob: bool = True,
+          regime: str | None = None, earnings_veto: bool = False) -> StockForecastView:
     return StockForecastView(
         symbol=symbol, resolved_ticker=f"{symbol}.KS", as_of=AS_OF,
         base_price=100.0, horizon_days=horizon, signal_direction=direction,
@@ -37,6 +38,7 @@ def _view(symbol: str, horizon: int, direction: str = "UP", with_prob: bool = Tr
         ) if with_prob else None,
         band=BandInfo(source="quantile", q25_pct=-0.01, median_pct=0.005, q75_pct=0.02),
         insights=[],
+        regime=regime, regime_conditional=regime is not None, earnings_veto=earnings_veto,
     )
 
 
@@ -238,3 +240,32 @@ async def test_summary_empty_returns_none_rates():
     assert view.kpi.total == 0
     assert view.kpi.hit_rate is None
     assert view.by_horizon == [] and view.by_signal == []
+
+
+async def test_capture_freezes_regime_and_earnings_veto():
+    forecaster = _StubForecaster({
+        ("TEST", 5): _view("TEST", 5, regime="BEAR", earnings_veto=True),
+    })
+    repo = _StubRepo()
+    await _interactor(forecaster, _StubHistory({"TEST": _bars(60)}), repo).capture(
+        CaptureCommand(tickers=["TEST"], horizons=[5])
+    )
+    snap = repo.saved[0]
+    assert snap.regime == "BEAR"
+    assert snap.regime_conditional is True
+    assert snap.earnings_veto is True
+
+
+async def test_summary_by_regime_groups_null_as_none():
+    scored = [
+        _snapshot(1, direction="UP", evaluated=True, realized_return_pct=0.02, hit=True),
+        _snapshot(2, direction="UP", evaluated=True, realized_return_pct=-0.01, hit=False),
+    ]
+    object.__setattr__(scored[0], "regime", "BULL")  # frozen 우회 — 테스트 픽스처 편의
+    repo = _StubRepo(scored=scored)
+    view = await _interactor(_StubForecaster({}), _StubHistory({}), repo).summary(
+        horizon=None, recent_limit=10
+    )
+    regimes = {r.regime: r for r in view.by_regime}
+    assert regimes["BULL"].scored == 1 and regimes["BULL"].hit_rate == 1.0
+    assert regimes["NONE"].scored == 1 and regimes["NONE"].hit_rate == 0.0

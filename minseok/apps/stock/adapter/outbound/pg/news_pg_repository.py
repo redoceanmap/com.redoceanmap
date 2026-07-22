@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -86,6 +87,22 @@ class NewsPgRepository(NewsRepositoryPort):
         )
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
+
+    async def sentiment_baseline(self, ticker: str, days: int = 30) -> tuple[float | None, int]:
+        since = datetime.now(UTC) - timedelta(days=days)
+        avg, count = (await self._session.execute(
+            select(func.avg(NewsLabelOrm.sentiment), func.count(NewsLabelOrm.id))
+            .join(NewsArticleOrm, NewsLabelOrm.news_id == NewsArticleOrm.id)
+            .where(
+                or_(
+                    NewsArticleOrm.ticker == ticker,
+                    NewsArticleOrm.ticker.like(f"{ticker}.%"),  # 접미 매칭(005930 ↔ 005930.KS)
+                ),
+                NewsLabelOrm.labeler == DEFAULT_LABELER,
+                NewsArticleOrm.published_at >= since,
+            )
+        )).one()
+        return (float(avg) if avg is not None else None, int(count))
 
     async def unembedded(self, limit: int = 200) -> list[tuple[int, str]]:
         stmt = (

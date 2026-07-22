@@ -28,6 +28,13 @@ class DirectionStatSchema(BaseModel):
     avg_realized_return_pct: float | None
 
 
+class RegimeStatSchema(BaseModel):
+    regime: str  # BULL | BEAR | HIGH_VOL | NONE(지수 미수집 시기)
+    scored: int
+    hit_rate: float | None
+    avg_realized_return_pct: float | None
+
+
 class SignalStatSchema(BaseModel):
     key: str
     n: int
@@ -47,12 +54,15 @@ class SnapshotRowSchema(BaseModel):
     evaluated_at: datetime | None
     realized_return_pct: float | None
     hit: bool | None
+    regime: str | None = None
+    earnings_veto: bool = False
 
 
 class ForecastReportSchema(BaseModel):
     kpi: AccuracyKpiSchema
     by_horizon: list[HorizonStatSchema]
     by_direction: list[DirectionStatSchema]
+    by_regime: list[RegimeStatSchema]
     by_signal: list[SignalStatSchema]
     recent: list[SnapshotRowSchema]
 

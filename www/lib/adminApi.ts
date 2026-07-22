@@ -108,6 +108,13 @@ export type AdminForecastSignalStat = {
   hit_rate: number | null;
 };
 
+export type AdminForecastRegimeStat = {
+  regime: string; // BULL | BEAR | HIGH_VOL | NONE
+  scored: number;
+  hit_rate: number | null;
+  avg_realized_return_pct: number | null;
+};
+
 export type AdminForecastSnapshot = {
   ticker: string;
   as_of: string;
@@ -120,12 +127,15 @@ export type AdminForecastSnapshot = {
   evaluated_at: string | null;
   realized_return_pct: number | null;
   hit: boolean | null;
+  regime: string | null;
+  earnings_veto: boolean;
 };
 
 export type AdminForecastReport = {
   kpi: AdminForecastKpi;
   by_horizon: (AdminForecastGroupStat & { horizon_days: number })[];
   by_direction: (AdminForecastGroupStat & { direction: string })[];
+  by_regime: AdminForecastRegimeStat[];
   by_signal: AdminForecastSignalStat[];
   recent: AdminForecastSnapshot[];
 };

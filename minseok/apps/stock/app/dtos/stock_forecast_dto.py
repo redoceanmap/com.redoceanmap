@@ -49,3 +49,6 @@ class StockForecastView:
     band: BandInfo | None                # 분위수·ATR 모두 불가하면 None
     insights: list[Insight]
     live: bool = False       # True = 미수집 종목 — yfinance 라이브 이력 기반 계산
+    regime: str | None = None        # 현재 시장 레짐(BULL/BEAR/HIGH_VOL) — 지수 미수집이면 None
+    regime_conditional: bool = False  # True = 확률·밴드가 현재 레짐 조건부 통계
+    earnings_veto: bool = False       # True = 실적 발표 ±2일 — 방향을 관망으로 강등

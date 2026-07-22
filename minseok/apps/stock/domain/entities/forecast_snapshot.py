@@ -39,6 +39,9 @@ class ForecastSnapshot:
     realized_price: float | None = None
     realized_return_pct: float | None = None
     hit: bool | None = None
+    regime: str | None = None         # 캡처 시점 시장 레짐(BULL/BEAR/HIGH_VOL)
+    regime_conditional: bool = False  # 확률·밴드가 레짐 조건부 통계였는지
+    earnings_veto: bool = False       # 실적 ±2일 관망 강등 여부
     id: int | None = None
 
     def __post_init__(self) -> None:

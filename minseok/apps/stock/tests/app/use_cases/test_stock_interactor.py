@@ -1,3 +1,5 @@
+import pytest
+
 from stock.app.dtos.stock_analysis_dto import StockAnalysis
 from stock.app.use_cases.stock_interactor import StockInteractor
 from stock.domain.entities.analysis_config import AnalysisConfig
@@ -103,3 +105,64 @@ async def test_수요_기록_실패는_분석에_영향_없다():
     )
     result = await interactor.analyze(Symbol("AAPL"))
     assert result.price == 225.0  # 기록 실패에도 분석은 정상 반환
+
+
+class _StubNewsWithBaseline:
+    """감성 기준선 스텁 — recent_titles는 빈 리스트(벤더 헤드라인만 쓰게)."""
+
+    def __init__(self, avg, n):
+        self.avg = avg
+        self.n = n
+
+    async def recent_titles(self, query, ticker="", limit=5):
+        return []
+
+    async def sentiment_baseline(self, ticker, days=30):
+        return self.avg, self.n
+
+
+async def test_기준선_충분하면_서프라이즈가_신호에_들어간다():
+    # 당일 0.7, 30일 평균 0.6 → 서프라이즈 +0.1 — 상시 긍정 종목의 + 편향이 걸러진다
+    interactor = StockInteractor(
+        market_data=_StubMarketData(), sentiment=_StubSentiment(),
+        predictor=OutlookPredictor(), config=AnalysisConfig.default(),
+        news=_StubNewsWithBaseline(avg=0.6, n=12),
+    )
+    result = await interactor.analyze(Symbol("AAPL"))
+
+    assert result.sentiment == 0.7                       # 노출 값은 원시 당일값 유지
+    assert result.sentiment_baseline == 0.6
+    assert result.sentiment_surprise == pytest.approx(0.1)
+    sentiment_signal = next(c for c in result.signals if c.key == "sentiment")
+    assert sentiment_signal.signal == pytest.approx(0.1)  # 신호에는 편차가 들어간다
+    assert any(i.key == "sentiment_surprise" for i in result.insights)
+
+
+async def test_기준선_표본_부족이면_절대값_폴백():
+    interactor = StockInteractor(
+        market_data=_StubMarketData(), sentiment=_StubSentiment(),
+        predictor=OutlookPredictor(), config=AnalysisConfig.default(),
+        news=_StubNewsWithBaseline(avg=0.6, n=3),  # < MIN_BASELINE_SAMPLES(5)
+    )
+    result = await interactor.analyze(Symbol("AAPL"))
+
+    assert result.sentiment_baseline is None
+    assert result.sentiment_surprise is None
+    sentiment_signal = next(c for c in result.signals if c.key == "sentiment")
+    assert sentiment_signal.signal == pytest.approx(0.7)  # 기존 동작
+    assert not any(i.key == "sentiment_surprise" for i in result.insights)
+
+
+async def test_기준선_조회_실패는_절대값_폴백():
+    class _Broken(_StubNewsWithBaseline):
+        async def sentiment_baseline(self, ticker, days=30):
+            raise RuntimeError("DB down")
+
+    interactor = StockInteractor(
+        market_data=_StubMarketData(), sentiment=_StubSentiment(),
+        predictor=OutlookPredictor(), config=AnalysisConfig.default(),
+        news=_Broken(avg=None, n=0),
+    )
+    result = await interactor.analyze(Symbol("AAPL"))
+    assert result.sentiment_surprise is None
+    assert result.sentiment == 0.7

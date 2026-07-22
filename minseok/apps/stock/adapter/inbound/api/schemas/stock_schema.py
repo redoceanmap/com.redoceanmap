@@ -46,3 +46,5 @@ class StockAnalyzeResponse(BaseModel):
     neutral_reason: str | None         # atr_veto | volume_confirm | null
     signals: list[SignalContributionSchema]
     insights: list[InsightSchema]
+    sentiment_baseline: float | None = None  # 최근 30일 라벨 감성 평균(표본 부족 시 null)
+    sentiment_surprise: float | None = None  # 당일 − 기준선 — 신호에 실제 들어간 감성 값

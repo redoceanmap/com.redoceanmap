@@ -5,7 +5,11 @@ from stock.domain.entities.outlook import Direction
 from stock.domain.services.indicator_calculator import MA_LONG, IndicatorCalculator
 from stock.domain.services.outlook_predictor import OutlookPredictor
 from stock.domain.value_objects.backtest_report import BacktestReport
-from stock.domain.value_objects.forecast_distribution import DirectionStats, ForecastDistribution
+from stock.domain.value_objects.forecast_distribution import (
+    DirectionStats,
+    ForecastDistribution,
+    RegimeStats,
+)
 from stock.domain.value_objects.sentiment_score import SentimentScore
 
 DEFAULT_HORIZON_DAYS = 5
@@ -109,11 +113,18 @@ class Backtester:
         *,
         horizon: int = DEFAULT_HORIZON_DAYS,
         config: AnalysisConfig | None = None,
+        regimes: list[str | None] | None = None,
+        excluded: list[bool] | None = None,
     ) -> ForecastDistribution:
         """run()과 같은 워크포워드로 방향별 실현 수익률 분포를 수집한다.
 
         적중 카운트(BacktestReport)가 아니라 수익률 원분포(분위수)가 필요할 때 쓴다 —
         확률·예측 밴드의 재료. 감성은 중립 고정(지표 신호 기준).
+
+        regimes/excluded는 봉 배열과 같은 길이·정렬(호출부가 날짜→값 매핑을 끝내서 주입 —
+        도메인은 날짜를 모른다). excluded[t]=True인 평가일(어닝 ±2일 등)은 전 통계에서
+        제외하고 vetoed로 센다. regimes[t]가 있으면 무조건부와 별개로 레짐 슬라이스에도
+        누적한다(None은 무조건부에만 — 지수 데이터 미형성 구간).
         """
         cfg = config or AnalysisConfig.default()
         neutral = SentimentScore(value=0.0)
@@ -123,10 +134,20 @@ class Backtester:
             raise ValueError(
                 f"백테스트에는 최소 {start + horizon + 1}개 봉이 필요합니다 (현재 {len(closes)}개)."
             )
+        if regimes is not None and len(regimes) != len(closes):
+            raise ValueError(f"regimes 길이가 봉 수와 다릅니다: {len(regimes)} != {len(closes)}")
+        if excluded is not None and len(excluded) != len(closes):
+            raise ValueError(f"excluded 길이가 봉 수와 다릅니다: {len(excluded)} != {len(closes)}")
 
         returns: dict[str, list[float]] = {d.value: [] for d in Direction}
+        regime_returns: dict[str, dict[str, list[float]]] = {}
+        regime_baseline_up: dict[str, int] = {}
         baseline_up = 0
+        vetoed = 0
         for t in range(start, end):
+            if excluded is not None and excluded[t]:
+                vetoed += 1
+                continue
             indicators = self._calculator.compute(
                 closes[: t + 1],
                 lows[: t + 1],
@@ -137,23 +158,43 @@ class Backtester:
             baseline_up += 1 if ret > 0 else 0
             outlook = self._predictor.predict(indicators, neutral, cfg)
             returns[outlook.direction.value].append(ret)
+            regime = regimes[t] if regimes is not None else None
+            if regime is not None:
+                bucket = regime_returns.setdefault(regime, {d.value: [] for d in Direction})
+                bucket[outlook.direction.value].append(ret)
+                regime_baseline_up[regime] = regime_baseline_up.get(regime, 0) + (1 if ret > 0 else 0)
 
-        evaluated = end - start
+        evaluated = end - start - vetoed
+        if evaluated <= 0:
+            raise ValueError("전 평가일이 제외(veto)되어 분포를 만들 수 없습니다.")
         return ForecastDistribution(
             horizon_days=horizon,
             evaluated=evaluated,
             baseline_up_rate=baseline_up / evaluated,
-            by_direction={
-                direction: DirectionStats(
-                    sample_size=len(rets),
-                    hits=sum(1 for r in rets if r > 0),
-                    q25=_quantile(rets, 0.25),
-                    median=_quantile(rets, 0.5),
-                    q75=_quantile(rets, 0.75),
+            by_direction=_direction_stats(returns),
+            by_regime={
+                regime: RegimeStats(
+                    evaluated=(n := sum(len(rets) for rets in bucket.values())),
+                    baseline_up_rate=regime_baseline_up.get(regime, 0) / n,
+                    by_direction=_direction_stats(bucket),
                 )
-                for direction, rets in returns.items()
+                for regime, bucket in regime_returns.items()
             },
+            vetoed=vetoed,
         )
+
+
+def _direction_stats(returns: dict[str, list[float]]) -> dict[str, DirectionStats]:
+    return {
+        direction: DirectionStats(
+            sample_size=len(rets),
+            hits=sum(1 for r in rets if r > 0),
+            q25=_quantile(rets, 0.25),
+            median=_quantile(rets, 0.5),
+            q75=_quantile(rets, 0.75),
+        )
+        for direction, rets in returns.items()
+    }
 
 
 def _quantile(values: list[float], q: float) -> float | None:

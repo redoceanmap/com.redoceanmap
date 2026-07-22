@@ -9,7 +9,7 @@ def _report() -> ForecastAccuracyReport:
     return ForecastAccuracyReport(
         kpi=AccuracyKpi(total=10, scored=4, pending=6,
                         hit_rate=0.5, up_hit_rate=0.5, down_hit_rate=None),
-        by_horizon=[], by_direction=[], by_signal=[], recent=[],
+        by_horizon=[], by_direction=[], by_regime=[], by_signal=[], recent=[],
     )
 
 

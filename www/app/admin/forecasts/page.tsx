@@ -23,6 +23,13 @@ const SIGNAL_LABEL: Record<string, string> = {
 
 const DIRECTION_LABEL: Record<string, string> = { UP: "상승", DOWN: "하락", NEUTRAL: "관망" };
 
+const REGIME_LABEL: Record<string, string> = {
+  BULL: "강세장",
+  BEAR: "약세장",
+  HIGH_VOL: "고변동",
+  NONE: "미상",
+};
+
 const HORIZON_OPTIONS = [
   { value: null, label: "전체" },
   { value: 5, label: "5일" },
@@ -47,12 +54,14 @@ export default function ForecastsPage() {
   const exportCsv = (rows: AdminForecastSnapshot[]) =>
     downloadCsv(
       "forecast_snapshots.csv",
-      ["티커", "기준일", "호라이즌", "방향", "기준가", "점수", "과거상승비율", "채점일", "실현수익률", "적중"],
+      ["티커", "기준일", "호라이즌", "방향", "레짐", "어닝veto", "기준가", "점수", "과거상승비율", "채점일", "실현수익률", "적중"],
       rows.map((r) => [
         r.ticker,
         r.as_of.slice(0, 10),
         r.horizon_days,
         r.direction,
+        r.regime ?? "",
+        r.earnings_veto ? "O" : "",
         r.base_price,
         r.score.toFixed(3),
         r.up_rate == null ? "" : r.up_rate.toFixed(3),
@@ -128,6 +137,17 @@ export default function ForecastsPage() {
               ])}
               empty="신호 표본이 아직 없습니다."
             />
+            <StatTable
+              title="레짐별 (캡처 시점 시장 국면)"
+              headers={["레짐", "채점", "적중률", "평균 실현수익률"]}
+              rows={data.by_regime.map((r) => [
+                REGIME_LABEL[r.regime] ?? r.regime,
+                r.scored.toLocaleString(),
+                pct(r.hit_rate),
+                signedPct(r.avg_realized_return_pct),
+              ])}
+              empty="채점 완료된 스냅샷이 없습니다."
+            />
           </div>
 
           <section className="rounded-2xl bg-surface border border-border overflow-hidden">
@@ -154,6 +174,7 @@ export default function ForecastsPage() {
                         <th className="font-medium px-4 py-2.5">기준일</th>
                         <th className="font-medium px-4 py-2.5 text-right">호라이즌</th>
                         <th className="font-medium px-4 py-2.5">방향</th>
+                        <th className="font-medium px-4 py-2.5">레짐</th>
                         <th className="font-medium px-4 py-2.5 text-right">과거 상승비율</th>
                         <th className="font-medium px-4 py-2.5 text-right">실현 수익률</th>
                         <th className="font-medium px-5 py-2.5 text-right">적중</th>
@@ -168,7 +189,17 @@ export default function ForecastsPage() {
                           <td className="px-5 py-3 font-medium">{r.ticker}</td>
                           <td className="px-4 py-3 text-foreground-muted tabular-nums">{r.as_of.slice(0, 10)}</td>
                           <td className="px-4 py-3 text-right text-foreground-muted tabular-nums">{r.horizon_days}일</td>
-                          <td className="px-4 py-3"><DirectionBadge direction={r.direction} /></td>
+                          <td className="px-4 py-3">
+                            <DirectionBadge direction={r.direction} />
+                            {r.earnings_veto && (
+                              <span className="ml-1 inline-flex px-1.5 py-0.5 rounded-full text-[10px] bg-amber-50 text-amber-700">
+                                어닝
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-foreground-muted">
+                            {r.regime ? REGIME_LABEL[r.regime] ?? r.regime : "—"}
+                          </td>
                           <td className="px-4 py-3 text-right tabular-nums">
                             {r.up_rate == null ? "—" : `${(r.up_rate * 100).toFixed(1)}%`}
                             {r.ready && <span className="ml-1 text-[10px] text-emerald-600 font-medium">ready</span>}

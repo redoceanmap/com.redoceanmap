@@ -7,6 +7,7 @@ from stock.domain.value_objects.insight_vo import Insight
 QUANTILE_MIN_SAMPLES = 30  # 이 미만이면 분위수 밴드 대신 ATR 콘 폴백
 
 _DIRECTION_LABELS = {"UP": "상승", "DOWN": "하락", "NEUTRAL": "중립(관망)"}
+_REGIME_LABELS = {"BULL": "강세장", "BEAR": "약세장", "HIGH_VOL": "고변동성 국면"}
 
 
 def narrate(
@@ -15,9 +16,40 @@ def narrate(
     baseline_up_rate: float,
     horizon_days: int,
     ready: bool,
+    regime: str | None = None,
+    regime_conditional: bool = False,
+    earnings_veto: bool = False,
 ) -> list[Insight]:
     """확률·밴드의 근거를 초보자 문장으로 — 항상 '과거 통계' 한계를 병기한다."""
     insights: list[Insight] = []
+
+    if earnings_veto:
+        insights.append(Insight(
+            key="earnings", tone="warning",
+            text=(
+                "실적 발표 임박/직후(±2일)라 관망으로 강등했습니다 — "
+                "이 구간은 기술 지표보다 발표 내용이 주가를 지배합니다."
+            ),
+        ))
+
+    if regime is not None:
+        label = _REGIME_LABELS.get(regime, regime)
+        if regime_conditional:
+            insights.append(Insight(
+                key="regime", tone="neutral",
+                text=(
+                    f"현재 시장은 {label}(SPY 200일선·VIX 기준) — "
+                    "아래 통계는 같은 국면의 과거 신호만으로 계산했습니다."
+                ),
+            ))
+        else:
+            insights.append(Insight(
+                key="regime", tone="neutral",
+                text=(
+                    f"현재 시장은 {label}이지만 같은 국면의 표본이 부족해 "
+                    "전체 기간 통계를 사용했습니다."
+                ),
+            ))
 
     if stats.sample_size > 0:
         up_pct = round(stats.hits / stats.sample_size * 100)

@@ -87,6 +87,20 @@
   ts 기준)로 일 1회만 재계산. **확률 노출 정책**: 실측 통계 + 표본·신뢰구간·기준선·"과거
   통계" 고지 병기 형태만 허용 — score 환산 등 근거 없는 확률 숫자 단독 노출 금지(기존 "확률
   제시 보류"의 해소 형태). chat 답변의 확률 단정 금지는 그대로 유지(페이지 전용).
+- **레짐 조건화·어닝 veto(2026-07-22)**: forecast는 평가일마다 시장 레짐
+  (`regime_calendar.py` — VIX>25면 HIGH_VOL 우선, 아니면 SPY 종가 vs 200일선로 BULL/BEAR,
+  지수는 `collect_prices.py`의 INDEX_TICKERS로 1d만 수집)을 판정해 분포를 국면별로도 분할,
+  현재 레짐 표본이 30 이상이면 조건부 통계·조건부 기준선을 쓴다(미달 시 무조건부 폴백,
+  `regime_conditional` 표기). ready 게이트(n≥100+Wilson)는 선택된 슬라이스 위에서 불변.
+  **한국 종목에도 SPY/VIX 레짐을 적용**(단순화 — 워치리스트 66/68이 미국). 어닝 veto:
+  `EarningsCalendarPort`(yfinance `get_earnings_dates`, 일 1회 캐시, 실패 시 무-veto 열화)로
+  발표 ±2캘린더일이면 방향을 관망 강등(`earnings_veto`) + 백테스트 평가일에서도 제외
+  (벤더 제공 ~12분기 범위 내만). 오프라인 검증: `scripts/backtest_stock.py --regime --earnings-veto`.
+- **감성 서프라이즈(2026-07-22)**: analyze의 감성 신호는 당일 절대값이 아니라
+  **당일 LLM 값 − 최근 30일 라벨(news_labels) 평균** 편차로 투입한다(상시 긍정 종목의
+  + 편향 상쇄). 기준선 표본 5건 미만·조회 실패면 기존 절대값 폴백(라벨 축적 초기 자연 열화).
+  응답 `sentiment`는 원시값 유지, `sentiment_baseline`/`sentiment_surprise` 추가(additive —
+  허브 계약·chat 무변경). 기준선 조회는 `NewsRepositoryPort.sentiment_baseline`.
 - **예측 스냅샷·사후 채점(`forecast_snapshot` 슬라이스)**: 일일 cron(`scripts/snapshot_forecasts.py`,
   07:30, horizons 5·20)이 허브 `POST /automation/forecast-snapshots`(+`/score`)로 워치리스트
   forecast(방향·확률·밴드)와 신호 분해(breakdown)를 `forecast_snapshots` 테이블에 동결하고

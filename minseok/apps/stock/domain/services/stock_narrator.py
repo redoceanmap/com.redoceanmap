@@ -34,9 +34,19 @@ def narrate(
     indicators: Indicators,
     config: AnalysisConfig,
     reference_up_signal: bool,
+    sentiment_surprise: float | None = None,
 ) -> list[Insight]:
     """분석 결과 → 초보자용 해석 문장. 두드러진 지표만 골라 서술한다(전부 나열 금지)."""
     insights = [_summary(outlook, score, contributions, indicators, config)]
+
+    if sentiment_surprise is not None:
+        insights.append(Insight(
+            key="sentiment_surprise", tone="neutral",
+            text=(
+                "뉴스 감성 신호는 오늘 값 자체가 아니라 최근 30일 평균 대비 변화량으로 "
+                f"반영했습니다({sentiment_surprise:+.2f}) — 늘 낙관적인 종목의 상시 긍정을 걸러냅니다."
+            ),
+        ))
 
     if indicators.rsi <= RSI_OVERSOLD:
         insights.append(Insight(

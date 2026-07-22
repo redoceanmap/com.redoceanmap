@@ -47,6 +47,11 @@ TIMEFRAMES = [
     ("1d", timedelta(days=1), "1mo", "max"),
 ]
 
+# 시장 지수 — 레짐 판정용(SPY 200일선·VIX 수준). 워치리스트에 넣지 않는 이유:
+# collect_news가 같은 목록을 공유해 지수 이름으로 뉴스를 긁어 학습 코퍼스를 오염시킨다.
+# 일봉만 수집(5m은 레짐 판정에 불필요, 소급 60일 한도만 낭비).
+INDEX_TICKERS = ["SPY", "^VIX"]
+
 
 def fetch_coverage() -> dict[tuple[str, str], int]:
     """(ticker, timeframe) → 보유 봉 수. 백필 깊이 판단 근거."""
@@ -96,11 +101,12 @@ def main() -> None:
     print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] 수집 시작", flush=True)  # cron 로그 일자별 추적용
     coverage = {} if dry_run else fetch_coverage()
     total_fetched = total_saved = 0
-    for _, ticker, _ in load_watchlist():
-        if not ticker:
-            continue
+    # 워치리스트 종목(전 타임프레임) + 레짐용 지수(1d만)
+    targets = [(ticker, TIMEFRAMES) for _, ticker, _ in load_watchlist() if ticker]
+    targets += [(ticker, TIMEFRAMES[1:]) for ticker in INDEX_TICKERS]
+    for ticker, timeframes in targets:
         counts = []
-        for timeframe, duration, overlap_period, backfill_period in TIMEFRAMES:
+        for timeframe, duration, overlap_period, backfill_period in timeframes:
             period = overlap_period if (ticker, timeframe) in coverage else backfill_period
             try:  # 소스 단위 실패는 건너뛰고 계속 — cron 무인 실행 전제
                 items = fetch_bars(ticker, timeframe, duration, period)

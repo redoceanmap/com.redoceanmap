@@ -7,6 +7,7 @@ from hub.app.dtos.forecast_snapshot_dto import (
     ForecastCaptureOutcome,
     ForecastScoreOutcome,
     HorizonStat,
+    RegimeStat,
     SignalStat,
     SnapshotInfo,
 )
@@ -51,6 +52,13 @@ class ForecastSnapshotGateway(ForecastSnapshotPort):
                 )
                 for d in view.by_direction
             ],
+            by_regime=[
+                RegimeStat(
+                    regime=r.regime, scored=r.scored,
+                    hit_rate=r.hit_rate, avg_realized_return_pct=r.avg_realized_return_pct,
+                )
+                for r in view.by_regime
+            ],
             by_signal=[
                 SignalStat(key=s.key, n=s.n, hits=s.hits, hit_rate=s.hit_rate)
                 for s in view.by_signal
@@ -61,6 +69,7 @@ class ForecastSnapshotGateway(ForecastSnapshotPort):
                     direction=r.direction, base_price=r.base_price, score=r.score,
                     up_rate=r.up_rate, ready=r.ready, evaluated_at=r.evaluated_at,
                     realized_return_pct=r.realized_return_pct, hit=r.hit,
+                    regime=r.regime, earnings_veto=r.earnings_veto,
                 )
                 for r in view.recent
             ],

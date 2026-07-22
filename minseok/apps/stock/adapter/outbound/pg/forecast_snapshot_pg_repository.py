@@ -43,6 +43,9 @@ class ForecastSnapshotPgRepository(ForecastSnapshotRepositoryPort):
                     "q25_pct": s.q25_pct,
                     "median_pct": s.median_pct,
                     "q75_pct": s.q75_pct,
+                    "regime": s.regime,
+                    "regime_conditional": s.regime_conditional,
+                    "earnings_veto": s.earnings_veto,
                 }
                 for s in snapshots
             ])
@@ -123,4 +126,6 @@ class ForecastSnapshotPgRepository(ForecastSnapshotRepositoryPort):
             q25_pct=r.q25_pct, median_pct=r.median_pct, q75_pct=r.q75_pct,
             evaluated_at=r.evaluated_at, realized_price=r.realized_price,
             realized_return_pct=r.realized_return_pct, hit=r.hit,
+            regime=r.regime, regime_conditional=r.regime_conditional,
+            earnings_veto=r.earnings_veto,
         )
