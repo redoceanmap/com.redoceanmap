@@ -42,19 +42,21 @@ def clear_auth_cookies(response: Response) -> None:
 
 
 def set_oauth_state_cookies(response: Response, state: str, return_to: str) -> None:
-    # 호스트 전용(도메인 미지정) — start와 callback이 같은 오리진(auth)이라 공유 불필요
-    _set(response, STATE_COOKIE, state, SHORT_MAX_AGE, None)
-    _set(response, RETURN_TO_COOKIE, return_to, SHORT_MAX_AGE, None)
+    # 세션 쿠키와 같은 Domain 스코프 — start가 프록시 경로(apex 오리진 폴백)로 불려도
+    # 콜백(auth 오리진)이 state를 읽을 수 있어야 한다(host-only면 오리진이 갈려 검증 실패).
+    _set(response, STATE_COOKIE, state, SHORT_MAX_AGE, _DOMAIN)
+    _set(response, RETURN_TO_COOKIE, return_to, SHORT_MAX_AGE, _DOMAIN)
 
 
 def clear_oauth_state_cookies(response: Response) -> None:
-    response.delete_cookie(STATE_COOKIE, path="/")
-    response.delete_cookie(RETURN_TO_COOKIE, path="/")
+    response.delete_cookie(STATE_COOKIE, path="/", domain=_DOMAIN)
+    response.delete_cookie(RETURN_TO_COOKIE, path="/", domain=_DOMAIN)
 
 
 def set_consent_cookie(response: Response, consent_token: str) -> None:
-    _set(response, CONSENT_COOKIE, consent_token, SHORT_MAX_AGE, None)
+    # 동일 이유 — 콜백(auth 오리진)이 심고 동의 페이지가 프록시 경로로 읽을 수 있다
+    _set(response, CONSENT_COOKIE, consent_token, SHORT_MAX_AGE, _DOMAIN)
 
 
 def clear_consent_cookie(response: Response) -> None:
-    response.delete_cookie(CONSENT_COOKIE, path="/")
+    response.delete_cookie(CONSENT_COOKIE, path="/", domain=_DOMAIN)
