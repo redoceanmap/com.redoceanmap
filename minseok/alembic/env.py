@@ -29,21 +29,9 @@ import auth.adapter.outbound.orm.user_orm  # noqa: F401
 import auth.adapter.outbound.orm.refresh_token_orm  # noqa: F401
 import auth.adapter.outbound.orm.rbac_orm  # noqa: F401
 import admin.adapter.outbound.orm.audit_log_orm  # noqa: F401
-import market.adapter.outbound.orm.region_orm  # noqa: F401
-import market.adapter.outbound.orm.trade_area_division_orm  # noqa: F401
-import market.adapter.outbound.orm.service_category_orm  # noqa: F401
-import market.adapter.outbound.orm.change_indicator_orm  # noqa: F401
-import market.adapter.outbound.orm.trade_area_orm  # noqa: F401
-import market.adapter.outbound.orm.estimated_sales_orm  # noqa: F401
-import market.adapter.outbound.orm.store_orm  # noqa: F401
-import market.adapter.outbound.orm.floating_population_orm  # noqa: F401
-import market.adapter.outbound.orm.resident_population_orm  # noqa: F401
-import market.adapter.outbound.orm.consumption_orm  # noqa: F401
-import market.adapter.outbound.orm.working_population_orm  # noqa: F401
-import market.adapter.outbound.orm.apartment_orm  # noqa: F401
-import market.adapter.outbound.orm.commercial_change_orm  # noqa: F401
-import market.adapter.outbound.orm.commercial_change_benchmark_orm  # noqa: F401
-import market.adapter.outbound.orm.market_news_article_orm  # noqa: F401
+# market ORM은 등록하지 않는다 — market은 전용 DB(:5434, apps/market/alembic 독립 체인)로
+# 이전됨(루트 체인 market 부분 동결). 메인 DB에 남은 market 테이블 사본은 아래
+# include_name 필터로 오토젠에서 제외한다(사본 drop 후 필터도 함께 제거할 것).
 import chat.adapter.outbound.orm.conversation_orm  # noqa: F401
 import recommendation.adapter.outbound.orm.recommendation_orm  # noqa: F401
 import stock.adapter.outbound.orm.news_article_orm  # noqa: F401
@@ -54,6 +42,22 @@ import mail.adapter.outbound.orm.inbound_mail_orm  # noqa: F401
 
 target_metadata = Base.metadata
 
+# 메인 DB에 남아 있는 market 테이블 사본(이관 후 롤백 안전용 보존) — metadata에서 market이
+# 빠졌으므로 필터 없이 오토젠하면 전부 drop_table 후보로 잡힌다. 사본을 삭제하는 날 이
+# 집합과 include_name 배선도 함께 제거한다.
+_FROZEN_MARKET_TABLES = {
+    "region", "trade_area_division", "service_category", "change_indicator", "trade_area",
+    "estimated_sales", "store", "floating_population", "resident_population",
+    "working_population", "consumption", "apartment", "commercial_change",
+    "commercial_change_benchmark", "market_news_articles", "area_score_backtest_reports",
+}
+
+
+def _include_name(name, type_, parent_names) -> bool:
+    if type_ == "table":
+        return name not in _FROZEN_MARKET_TABLES
+    return True
+
 
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
@@ -62,6 +66,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_name=_include_name,
     )
 
     with context.begin_transaction():
@@ -77,7 +82,8 @@ def run_migrations_online() -> None:
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection, target_metadata=target_metadata,
+            include_name=_include_name,
         )
 
         with context.begin_transaction():

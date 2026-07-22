@@ -50,8 +50,10 @@ from market.adapter.outbound.csv.column_maps import (  # noqa: E402
     WORKING_POPULATION_COLUMN_MAP,
 )
 
+# market 전용 DB(:5434) 우선 — 미설정 환경은 메인 DB 폴백(런타임 전환과 동일 규칙)
 engine = create_engine(
-    os.environ["DATABASE_URL"].replace("postgresql://", "postgresql+psycopg://")
+    os.environ.get("MARKET_DATABASE_URL", os.environ["DATABASE_URL"])
+    .replace("postgresql://", "postgresql+psycopg://")
 )
 T = Base.metadata.tables
 

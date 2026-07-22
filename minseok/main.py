@@ -25,7 +25,7 @@ from auth.dependencies.grade_policy_provider import get_grade_policy_gateway
 from auth.dependencies.member_directory_provider import get_member_directory_gateway
 from chat.adapter.inbound.api.v1.chat_router import chat_router
 from chat.adapter.inbound.api.v1.concierge_router import concierge_router
-from core.database import dispose_engine, init_engine
+from core.database import dispose_engine, dispose_market_engine, init_engine, init_market_engine
 from core.redis import dispose_redis
 from core.security import get_current_user_id, verify_docs_credentials
 from chat.adapter.outbound.gateways.email_composer_gateway import EmailComposerN8nGateway
@@ -111,10 +111,12 @@ logger = logging.getLogger("uvicorn.error")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_engine()
+    init_market_engine()  # market 전용 DB(:5434) — 미설정 시 메인 폴백
     try:
         yield
     finally:
         await dispose_engine()
+        await dispose_market_engine()
         await dispose_redis()
 
 

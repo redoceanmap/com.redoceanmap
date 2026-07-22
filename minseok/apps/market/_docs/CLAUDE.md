@@ -14,6 +14,18 @@
 
 ---
 
+## 전용 DB (2026-07-22 런타임 전환 완료)
+
+market의 모든 테이블(3NF 14 + market_news_articles + area_score_backtest_reports)은
+**전용 DB(market-pgvector, pg17+pgvector, 호스트 :5434)**에 산다. 접근은 market 프로바이더가
+`core.database.get_market_db`(엔진은 `MARKET_DATABASE_URL`, 미설정 시 메인 폴백)로만 한다 —
+앱별 DB 불가침. 스키마 진실은 `apps/market/alembic` 독립 체인(7c5cfbd1c35f → 8d6efce2a41b),
+루트 체인의 market 리비전들은 이력 동결(루트 env.py에서 ORM 제거 + include_name 필터).
+컨테이너 접속: 실운영 backend는 `host.docker.internal:5434`(네트워크 분리, extra_hosts).
+백업: `scripts/backup_db.sh`의 market 블록(market-*.dump 7세대). 배치(ingest·backtest)도
+`MARKET_DATABASE_URL` 우선. 메인 DB(5432)에 남은 market 테이블 사본은 롤백 안전용 —
+삭제 시 루트 env.py 필터도 함께 제거할 것.
+
 ## 데이터 스키마 — 3NF
 
 발자국 ERD 컨벤션을 적용한 정규화 스키마. 상세 → [[minseok/apps/market/_docs/MARKET_ERD|MARKET_ERD]].

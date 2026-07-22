@@ -44,3 +44,23 @@ ls -1t "$BACKUP_DIR"/redoceanmap-*.dump 2>/dev/null | tail -n +$((KEEP + 1)) | w
 done
 
 echo "보관 중: $(ls -1 "$BACKUP_DIR"/redoceanmap-*.dump | wc -l)개"
+
+# ── market 전용 DB(market-pgvector, :5434) — 이관 후 상권 데이터의 유일본 ──
+# 파일명은 market-* — redoceanmap-* 글롭과 겹치면 메인 로테이션에 섞여 조기 삭제된다.
+MARKET_CONTAINER=market-pgvector
+MARKET_DUMP="$BACKUP_DIR/market-$STAMP.dump"
+
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] market 백업 시작 → $MARKET_DUMP"
+docker exec "$MARKET_CONTAINER" pg_dump -U market -Fc market > "$MARKET_DUMP"
+if ! docker exec -i "$MARKET_CONTAINER" pg_restore --list < "$MARKET_DUMP" > /dev/null; then
+    echo "[오류] market 덤프 무결성 검증 실패 — $MARKET_DUMP 삭제, 기존 세대 유지"
+    rm -f "$MARKET_DUMP"
+    exit 1
+fi
+echo "market 백업 완료: $MARKET_DUMP ($(du -h "$MARKET_DUMP" | cut -f1)), 검증 통과"
+
+ls -1t "$BACKUP_DIR"/market-*.dump 2>/dev/null | tail -n +$((KEEP + 1)) | while read -r old; do
+    echo "세대 초과 삭제: $old"
+    rm -f "$old"
+done
+echo "market 보관 중: $(ls -1 "$BACKUP_DIR"/market-*.dump | wc -l)개"

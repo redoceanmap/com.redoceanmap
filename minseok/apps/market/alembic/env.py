@@ -43,6 +43,8 @@ import market.adapter.outbound.orm.consumption_orm  # noqa: F401
 import market.adapter.outbound.orm.apartment_orm  # noqa: F401
 import market.adapter.outbound.orm.commercial_change_orm  # noqa: F401
 import market.adapter.outbound.orm.commercial_change_benchmark_orm  # noqa: F401
+import market.adapter.outbound.orm.market_news_article_orm  # noqa: F401
+import market.adapter.outbound.orm.area_backtest_report_orm  # noqa: F401
 
 target_metadata = Base.metadata
 

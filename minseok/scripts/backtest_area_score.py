@@ -39,8 +39,10 @@ from market.domain.services.area_score_backtester import (  # noqa: E402
 from market.domain.services.area_scorer import AreaScorer, prev_quarter  # noqa: E402
 from market.domain.value_objects.area_score_vo import MetricComparison  # noqa: E402
 
+# market 전용 DB(:5434) 우선 — 미설정 환경은 메인 DB 폴백(런타임 전환과 동일 규칙)
 engine = create_engine(
-    os.environ["DATABASE_URL"].replace("postgresql://", "postgresql+psycopg://")
+    os.environ.get("MARKET_DATABASE_URL", os.environ["DATABASE_URL"])
+    .replace("postgresql://", "postgresql+psycopg://")
 )
 
 # 팩트 → trade_area → 행정동 → 자치구 조인으로 서울 상권만 집계 (_sido_join과 동일 경로)

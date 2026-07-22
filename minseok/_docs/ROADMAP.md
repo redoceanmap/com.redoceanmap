@@ -34,7 +34,7 @@
 
 | 마일스톤 | 기간 | 핵심 |
 |---------|------|------|
-| **market 전용 DB 런타임 전환** — 사용자가 구축한 앱별 DB(5434, `apps/market/alembic` 독립 체인)를 서비스에 연결: ① core 앱별 세션 지원 → ② market 게이트웨이/조회 라우팅 → ③ 데이터 이관 → ④ 루트 체인 market 부분 동결. 완료 전까지 적재·ORM 변경은 메인 DB(5432) 기준(이중 진실 금지). **2026-07-14: 메인 DB 재적재 완료**(CSV 10종 확보 → `ingest_seoul_3nf.py`, 상권 1,650·팩트 60만+ 행) — chat 상권 경로 복구. 전용 DB(5434)는 여전히 빈 스키마 — ③ 데이터 이관은 이 마일스톤에서 수행 | 3-5일 | ①-M5 잔여(상권 근거 주입)의 선행 조건 |
+| ~~**market 전용 DB 런타임 전환**~~ ✅ **2026-07-22 완료** — ① core 앱별 세션(`MARKET_DATABASE_URL` 폴백형, `get_market_db`) ② market 프로바이더 8종 라우팅 ③ 데이터 이관(16테이블 60만+ 행, pg_dump --data-only --disable-triggers 원자 파이프 + pg_depend setval, 행수·임베딩 전수 대조) ④ 루트 체인 동결(env.py market ORM 제거 + include_name 필터 — 메인 사본 drop 시 필터도 제거). 독립 체인에 8d6efce2a41b(news·backtest 테이블) 추가, 백업에 market-*.dump 계층 추가. 메인 DB의 market 테이블 사본은 롤백 안전용으로 당분간 보존(후속: 사본 drop + 필터 제거) | 3-5일 | 완료 |
 
 ## Phase ③ 실사용자 서비스 (~20-30일, 수요 검증 가변)
 
