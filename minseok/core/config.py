@@ -1,3 +1,4 @@
+import base64
 import os
 from pathlib import Path
 
@@ -11,6 +12,22 @@ DATABASE_URL = os.environ["DATABASE_URL"].replace(
 
 # JWT 서명 비밀키 — 발급(auth 인터랙터)과 검증(core/security)이 공유한다.
 JWT_SECRET = os.environ["JWT_SECRET"]
+
+# JWT RS256 검증용 공개키 — 전 컨테이너 공용. 없으면 기동 실패가 맞다.
+# (멀티라인 PEM은 env로 다루기 어려워 base64 단일 라인으로 주입한다 — scripts/generate_jwt_keys.sh)
+JWT_PUBLIC_KEY = base64.b64decode(os.environ["JWT_PUBLIC_KEY_B64"]).decode()
+
+
+def jwt_private_key() -> str:
+    """RS256 발급용 개인키 — auth 컨테이너 전용.
+
+    반드시 호출 시점에 읽는다: backend 컨테이너는 이 env 없이도
+    모듈 import·기동이 되어야 한다(발급 불가는 env 부재로 강제).
+    """
+    raw = os.environ.get("JWT_PRIVATE_KEY_B64")
+    if raw is None:
+        raise RuntimeError("JWT_PRIVATE_KEY_B64 미설정 — 토큰 발급은 auth 컨테이너에서만 가능합니다.")
+    return base64.b64decode(raw).decode()
 
 # API 문서(/docs·/redoc·/openapi.json) 보호 — HTTP Basic. 미설정 시 문서 접근 전면 차단.
 DOCS_USER = os.getenv("DOCS_USER", "")
