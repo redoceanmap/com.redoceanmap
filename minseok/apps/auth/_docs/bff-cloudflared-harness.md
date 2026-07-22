@@ -25,7 +25,7 @@ Claude Code 작업 지시서 — ① cloudflared 도커 전환 + 포트 잠금, 
 
 1. 이전 지시서 규칙 승계: 헥사고날·스타 토폴로지·`.importlinter` 계약 준수, RS256 리터럴 하드코딩 유지,
    개인키 참조는 발급 코드에만, 키·secret 커밋 금지, roles를 JWT 클레임에 넣지 않음(매 요청 DB 조회 유지).
-2. **쿠키 스펙 고정:** `HttpOnly` + `SameSite=Lax` + `Secure`(prod) + `Path=/`. `Secure`는 ENV로 분기(개발 http 허용), 나머지는 리터럴. 토큰을 응답 본문으로 반환하는 코드는 전환 완료 시점에 0건이어야 한다.
+2. **쿠키 스펙 고정:** `HttpOnly` + `SameSite=Lax` + `Secure`(prod) + `Path=/` + `Domain`은 env `COOKIE_DOMAIN`(prod `.redoceanmap.com`, dev 미설정=host-only). `Secure`·`Domain`만 ENV 분기, 나머지는 리터럴. 토큰을 응답 본문으로 반환하는 코드는 전환 완료 시점에 0건이어야 한다.
 3. **access token을 localStorage/sessionStorage에 저장하는 코드를 남기지 않는다** — `tokenStorage.ts`는 삭제 대상.
 4. 포트 잠금 후 `docker-compose.yaml`에 `0.0.0.0` 바인딩(`"포트:포트"` 축약형 포함)이 한 줄도 없어야 한다.
 5. 전환 순서 준수: 각 단계에서 서비스 전체가 동작해야 한다. 특히 Part A의 무중단 절차(커넥터 병행)와
@@ -92,29 +92,36 @@ Claude Code 작업 지시서 — ① cloudflared 도커 전환 + 포트 잠금, 
 
 ## Part B — OAuth 패턴 A(BFF) 전환
 
-### B.0 설계 결정 (이대로 구현)
+### B.0 설계 결정 — 이중문: 인증 트래픽은 auth 서브도메인 직행 (사용자 결정 2026-07-22)
 
-콜백을 `auth.redoceanmap.com`이 아니라 **프론트 origin의 프록시 경로**로 받는다:
+브라우저↔인증 통신(로그인·가입·소셜 start/callback·리프레시·로그아웃)은 prod에서 **`auth.redoceanmap.com` 직행**으로 받는다. 프론트 Next 서버를 우회하는 별도의 문이다:
 
 ```
-[시작]  브라우저 → GET /api/backend/auth/social/{provider}/start?return_to=/market
-        (rewrites가 auth:9000으로 프록시) → auth가 state 생성·state 쿠키 설정 → 302 네이버/카카오/구글 인가 페이지
-[콜백]  프로바이더 → 브라우저 → GET https://redoceanmap.com/api/backend/auth/social/{provider}/callback?code&state
+[시작]  브라우저 → GET https://auth.redoceanmap.com/auth/social/{provider}/start?return_to=/market
+        (프론트 Next 서버 미경유 — 이중문) → auth가 state 생성·state 쿠키 설정 → 302 인가 페이지
+[콜백]  프로바이더 → 브라우저 → GET https://auth.redoceanmap.com/auth/social/{provider}/callback?code&state
         → auth가 state 쿠키 검증 → 코드 교환(기존 인터랙터 재사용) → JWT 발급
-        → Set-Cookie(access·refresh, httpOnly) → 302 return_to(프론트 페이지)
+        → Set-Cookie(access·refresh; HttpOnly; Domain=.redoceanmap.com) → 302 https://redoceanmap.com{return_to}
 ```
 
-근거: 쿠키가 처음부터 프론트 origin의 퍼스트파티라 서브도메인 쿠키/CORS 문제가 없고, dev(`localhost:3000` → 127.0.0.1:9000 프록시)와 prod가 완전 대칭이며, 프록시 분기(`/api/backend/auth/*` → 9000)를 그대로 활용한다.
-`auth.redoceanmap.com`은 콜백에 쓰지 않는다(서버 간·비브라우저 용도로만 유지).
+**목적(이중문의 실익):** 자격증명이 오가는 순간 — 비밀번호 POST·OAuth 인가 코드 — 이 프론트 서버를 경유하지 않는다(프론트 침해 시에도 로그인 자격증명 비노출). Cloudflare에서 `auth.` 호스트네임에만 별도 레이트리밋/WAF를 건다(§4-4).
 
-- redirect_uri는 서버가 env `AUTH_PUBLIC_BASE_URL`(prod `https://redoceanmap.com`, dev `http://localhost:3000`)로 조립한다. 프론트가 redirect_uri를 만들어 보내는 코드는 제거된다.
+**수용한 비용:**
+- 쿠키는 `Domain=.redoceanmap.com`(하위 도메인 공유) — 비즈니스 API가 프론트 프록시(`/api/backend/*` = apex origin)를 계속 쓰기 위한 전제. n8n 등 무관 서브도메인 유출은 §4-4의 Cookie 헤더 제거 룰로 완화.
+- `auth_main` CORS: `allow_origins=["https://redoceanmap.com"]`(+dev `http://localhost:3000`), `allow_credentials=True`.
+- dev(`localhost:3000`)는 서브도메인이 없으므로 **프록시 경로(`/api/backend/auth/*` → 127.0.0.1:9000)를 그대로 쓴다.** 분기는 env 상수 2개로만 한정한다:
+  - 백엔드 `AUTH_CALLBACK_BASE` — redirect_uri = `{AUTH_CALLBACK_BASE}/social/{provider}/callback`. prod `https://auth.redoceanmap.com/auth`, dev `http://localhost:3000/api/backend/auth`.
+  - 프론트 `NEXT_PUBLIC_AUTH_ORIGIN` — 설정 시 `authApi`의 base가 `{그 origin}/auth`, 미설정(dev) 시 `/api/backend/auth`. **base 상수 한 곳 외에 분기 코드를 퍼뜨리지 않는다.**
 - state는 서버 생성 → 단기(10분) httpOnly 쿠키 + 콜백 쿼리 비교. 기존 프론트 sessionStorage state 로직은 삭제.
-- `www.redoceanmap.com` 유입은 쿠키가 apex에 묶이므로, Cloudflare 리다이렉트 룰로 www→apex 표준화한다(§6). 코드에서 Domain 속성으로 풀지 않는다(단순성 우선).
+- `www.redoceanmap.com` 유입은 Cloudflare 리다이렉트 룰로 www→apex 표준화(§4-2) — return_to 복귀 도메인 통일.
+
+**한계(알고 수용):** 비즈니스 API는 여전히 프론트 프록시를 경유하므로 세션 쿠키는 매 요청 프론트를 지나간다. 이중문이 지키는 것은 세션 쿠키가 아니라 **로그인 순간의 자격증명**이다. 비즈니스 API까지 `api.` 직행으로 빼는 것은 범위 밖(§2) 후속 과제.
 
 ### B.1 auth 앱 — start/callback 엔드포인트
 
 - `social_router`에 `GET /auth/social/{provider}/start`, `GET /auth/social/{provider}/callback` 추가.
-- 인가 URL 조립(클라이언트 ID·authorize URL·scope·prompt 파라미터)은 현재 `www/lib/socialAuth.ts`에 있는 값을 서버로 이식한다. `KAKAO_CLIENT_ID` 등은 이미 `.env.auth`에 있다(§0의 이전 지시서 §5.3 완료 전제 — 없으면 질문).
+- `auth_main.py`에 CORS 설정(B.0 — apex origin + credentials). backend `main.py`의 CORS는 건드리지 않는다.
+- 인가 URL 조립(클라이언트 ID·authorize URL·scope·prompt 파라미터)은 현재 `www/lib/socialAuth.ts`에 있는 값을 서버로 이식한다. `KAKAO_CLIENT_ID` 등은 이미 `.env.auth`에 있다(§0의 이전 지시서 §5.3 완료 전제 — 없으면 질문). redirect_uri는 `AUTH_CALLBACK_BASE`로 조립(B.0) — 프론트가 redirect_uri를 만들어 보내는 코드는 제거된다.
 - 코드 교환·가입/로그인·동의 흐름은 **기존 `social_interactor`·`social_oauth_gateway`를 그대로 재사용**한다. 신규 로직은 어댑터 계층(라우터)의 state 쿠키·리다이렉트 처리로 한정한다. 슬라이스 1:1 컨벤션상 새 슬라이스를 만들지 않는다 — 기존 social 슬라이스의 확장이다.
 - 동의(consent)가 필요한 신규 소셜 가입: 콜백에서 동의 토큰을 발급받으면 쿠키를 심지 말고 `return_to` 대신 프론트 동의 페이지로 302 하되, 동의 토큰 전달 방식은 기존 프론트 동의 UI 구조를 읽고 결정한다(불명확하면 질문).
 
@@ -133,9 +140,9 @@ Claude Code 작업 지시서 — ① cloudflared 도커 전환 + 포트 잠금, 
 ### B.4 프론트 정리
 
 - 삭제: `www/lib/tokenStorage.ts`, `www/app/oauth/[provider]/`(콜백 페이지), `socialAuth.ts`의 state/redirect_uri/클라이언트 ID 로직, `NEXT_PUBLIC_*_CLIENT_ID` 참조 전부.
-- `startSocialLogin(provider)`는 `window.location.href = "/api/backend/auth/social/{provider}/start?return_to=" + encodeURIComponent(현재경로)` 한 줄로 축소.
-- `authApi.ts`: Authorization 헤더 제거. 같은 origin 프록시 호출이므로 fetch 기본값으로 쿠키가 동행한다. 로그인 상태 판정은 토큰 존재 여부 대신 `GET /auth/me` 성공 여부로.
-- 리프레시: 401 수신 시 `/api/backend/auth/refresh` 호출(쿠키 기반) 후 원 요청 재시도 — 기존 리프레시 흐름을 쿠키 기반으로만 바꾸고 구조는 유지.
+- `startSocialLogin(provider)`는 `window.location.href = AUTH_BASE + "/social/{provider}/start?return_to=" + encodeURIComponent(현재경로)` 한 줄로 축소(AUTH_BASE는 B.0의 단일 상수).
+- `authApi.ts`: Authorization 헤더 제거, base를 AUTH_BASE로 교체. prod의 auth 직행 호출은 cross-origin이므로 **auth 호출에는 `credentials: "include"`를 명시**한다(프록시 경유 비즈니스 호출은 same-origin이라 기본값으로 충분). 로그인 상태 판정은 토큰 존재 여부 대신 `GET {AUTH_BASE}/me` 성공 여부로.
+- 리프레시: 401 수신 시 `{AUTH_BASE}/refresh` 호출(쿠키 기반) 후 원 요청 재시도 — 기존 리프레시 흐름을 쿠키 기반으로만 바꾸고 구조는 유지.
 - `www/app/api/*` route 핸들러(chat·vision 등): Authorization 중계를 **Cookie 헤더 중계**로 교체(백엔드 검증부가 쿠키를 읽으므로).
 
 ### B.5 테스트
@@ -152,7 +159,7 @@ Claude Code 작업 지시서 — ① cloudflared 도커 전환 + 포트 잠금, 
 |---|---|
 | PKCE | confidential client(서버가 secret 보유)로 충분. 네이버는 PKCE 미지원 |
 | CSRF 토큰(double-submit) | SameSite=Lax가 기준선. 쿠키 인증 전환 후 실측 필요성이 생기면 후속 |
-| `auth.redoceanmap.com` 콜백 방식 | B.0 결정 — 프록시 경로 콜백으로 대체 |
+| 비즈니스 API `api.` 직행 전환(프록시 폐지) | 이중문 확장 후속 과제 — 이번엔 인증 트래픽만 직행 |
 | cloudflared 원격 관리형(대시보드) 마이그레이션 | 로컬 config 관리 유지(비가역 전환 거부, 2026-07-22) |
 | www 컨테이너화 | 이번 범위 아님. 호스트 프로세스 전제(A.2 host.docker.internal) |
 | 모바일 앱용 토큰 응답 병행 | 클라이언트가 웹뿐. 필요 시 후속 |
@@ -166,16 +173,20 @@ Claude Code 작업 지시서 — ① cloudflared 도커 전환 + 포트 잠금, 
 ## 4. 수동 작업 (사용자 — 완료 보고서에 그대로 출력)
 
 1. **콘솔 콜백 등록 (B 배포 전):** 네이버·카카오·구글 각각에 추가 —
-   `https://redoceanmap.com/api/backend/auth/social/{provider}/callback`, `http://localhost:3000/api/backend/auth/social/{provider}/callback`. 전환 검증 후 기존 `/oauth/{provider}` 3종 제거.
-2. **Cloudflare 리다이렉트 룰:** `www.redoceanmap.com/*` → `https://redoceanmap.com/$1` (301) — 쿠키 apex 통일.
-3. **env:** `.env.auth`에 `AUTH_PUBLIC_BASE_URL=https://redoceanmap.com` 추가(맥 개발 env는 `http://localhost:3000`). 프론트 배포 env에서 `NEXT_PUBLIC_GOOGLE/KAKAO/NAVER_CLIENT_ID` 제거.
-4. **Part A 검증 동행:** 맥에서 `nc -vz <백엔드PC IP> 5432` 실패 확인(포트 잠금 증빙).
+   `https://auth.redoceanmap.com/auth/social/{provider}/callback`, `http://localhost:3000/api/backend/auth/social/{provider}/callback`(dev). 전환 검증 후 기존 `/oauth/{provider}` 3종 제거.
+2. **Cloudflare 리다이렉트 룰:** `www.redoceanmap.com/*` → `https://redoceanmap.com/$1` (301) — return_to 복귀 도메인 통일.
+3. **env:** `.env.auth`에 `AUTH_CALLBACK_BASE=https://auth.redoceanmap.com/auth`, `COOKIE_DOMAIN=.redoceanmap.com` 추가(맥 개발 env는 `AUTH_CALLBACK_BASE=http://localhost:3000/api/backend/auth`, COOKIE_DOMAIN 미설정). 프론트 배포 env에 `NEXT_PUBLIC_AUTH_ORIGIN=https://auth.redoceanmap.com` 추가, `NEXT_PUBLIC_GOOGLE/KAKAO/NAVER_CLIENT_ID` 제거.
+4. **Cloudflare 보안 룰 — 이중문의 실익 확보:**
+   - `auth.redoceanmap.com`에 레이트리밋 룰(로그인·토큰 엔드포인트 브루트포스 방어, 무료 플랜 룰로 충분).
+   - `n8n.redoceanmap.com`에 Request Header Transform 룰로 `Cookie` 헤더 제거 — Domain 쿠키가 무관 서브도메인으로 새는 것 차단.
+5. **Part A 검증 동행:** 맥에서 `nc -vz <백엔드PC IP> 5432` 실패 확인(포트 잠금 증빙).
 
 ## 5. 완료 기준 (Acceptance Criteria)
 
 - [ ] 대시보드 커넥터가 컨테이너 cloudflared 1개, 전 호스트네임 외부 응답 정상, 호스트 cloudflared 서비스 제거됨.
 - [ ] compose에 `0.0.0.0` 바인딩 0건, LAN 타 기기에서 5432/6379/8000/9000 접속 불가, 맥 SSH 포워딩·외부 서비스는 정상.
-- [ ] 소셜 로그인 3사 전부: start → 프로바이더 → callback → httpOnly 쿠키 → 원래 페이지 복귀 동작.
+- [ ] 소셜 로그인 3사 전부: start → 프로바이더 → callback → httpOnly 쿠키(`Domain=.redoceanmap.com`) → 원래 페이지 복귀 동작.
+- [ ] prod에서 로그인·콜백 요청이 auth 직행(프론트 Next 서버 로그에 미출현) — 이중문 실증. CORS credentials 요청 정상.
 - [ ] 일반 로그인·리프레시·로그아웃 쿠키 기반 동작, 응답 본문에 토큰 0건.
 - [ ] `grep -rn "localStorage" www/lib www/app` 에서 토큰 관련 0건, `tokenStorage.ts` 부재.
 - [ ] 신규 쿠키/state 테스트 포함 `pytest` 전체 통과, `lint-imports` 통과.
