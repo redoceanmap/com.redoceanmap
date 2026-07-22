@@ -16,10 +16,8 @@ from jose import JWTError, jwt
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.config import DOCS_PASSWORD, DOCS_USER, JWT_SECRET
+from core.config import DOCS_PASSWORD, DOCS_USER, JWT_PUBLIC_KEY
 from core.database import get_db
-
-ALGORITHM = "HS256"
 
 _bearer = HTTPBearer(auto_error=False)
 _basic = HTTPBasic(auto_error=False)
@@ -42,7 +40,8 @@ async def get_current_user_id(
             headers={"WWW-Authenticate": "Bearer"},
         )
     try:
-        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[ALGORITHM])
+        # 허용 알고리즘은 RS256 리터럴 고정 — env·설정으로 빼지 않는다(알고리즘 혼동 공격 방지).
+        payload = jwt.decode(credentials.credentials, JWT_PUBLIC_KEY, algorithms=["RS256"])
         user_id = int(payload["sub"])
     except (JWTError, KeyError, ValueError):
         raise HTTPException(

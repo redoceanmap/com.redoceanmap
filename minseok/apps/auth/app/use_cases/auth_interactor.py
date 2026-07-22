@@ -10,9 +10,8 @@ from auth.app.ports.input.auth_use_case import AuthUseCase
 from auth.app.ports.output.grade_repository import GradeRepository
 from auth.app.ports.output.refresh_token_repository import RefreshTokenRepository
 from auth.app.ports.output.user_repository import UserRepository
-from core.config import JWT_SECRET
+from core.config import JWT_PUBLIC_KEY, jwt_private_key
 
-ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60  # 짧게 — 갱신은 리프레시 토큰 회전으로
 REFRESH_TOKEN_EXPIRE_DAYS = 14
 
@@ -37,11 +36,11 @@ class AuthInteractor(AuthUseCase):
 
     def _create_token(self, user_id: int) -> str:
         expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-        return jwt.encode({"sub": str(user_id), "exp": expire}, JWT_SECRET, algorithm=ALGORITHM)
+        return jwt.encode({"sub": str(user_id), "exp": expire}, jwt_private_key(), algorithm="RS256")
 
     def _decode_token(self, token: str) -> int | None:
         try:
-            payload = jwt.decode(token, JWT_SECRET, algorithms=[ALGORITHM])
+            payload = jwt.decode(token, JWT_PUBLIC_KEY, algorithms=["RS256"])
             return int(payload["sub"])
         except JWTError:
             return None

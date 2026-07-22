@@ -10,9 +10,6 @@ DATABASE_URL = os.environ["DATABASE_URL"].replace(
     "postgresql://", "postgresql+psycopg://"
 )
 
-# JWT 서명 비밀키 — 발급(auth 인터랙터)과 검증(core/security)이 공유한다.
-JWT_SECRET = os.environ["JWT_SECRET"]
-
 # JWT RS256 검증용 공개키 — 전 컨테이너 공용. 없으면 기동 실패가 맞다.
 # (멀티라인 PEM은 env로 다루기 어려워 base64 단일 라인으로 주입한다 — scripts/generate_jwt_keys.sh)
 JWT_PUBLIC_KEY = base64.b64decode(os.environ["JWT_PUBLIC_KEY_B64"]).decode()

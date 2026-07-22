@@ -13,11 +13,10 @@ from auth.app.ports.output.social_profile_port import SocialProfilePort
 from auth.app.ports.output.user_repository import UserRepository
 from auth.app.use_cases.auth_interactor import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
-    ALGORITHM,
     REFRESH_TOKEN_EXPIRE_DAYS,
 )
 from auth.domain.entities.user_entity import User
-from core.config import JWT_SECRET
+from core.config import JWT_PUBLIC_KEY, jwt_private_key
 
 # 동의 대기 토큰 수명 — 동의 화면에서 머무는 시간만 버티면 된다.
 CONSENT_TOKEN_EXPIRE_MINUTES = 10
@@ -43,7 +42,7 @@ class SocialInteractor(SocialUseCase):
 
     def _create_token(self, user_id: int) -> str:
         expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-        return jwt.encode({"sub": str(user_id), "exp": expire}, JWT_SECRET, algorithm=ALGORITHM)
+        return jwt.encode({"sub": str(user_id), "exp": expire}, jwt_private_key(), algorithm="RS256")
 
     def _create_consent_token(self, profile: SocialProfileDto) -> str:
         # 유저 생성 전 프로필을 서명해 보관 — DB·Redis 없이 동의 완료 API에서 복원한다.
@@ -56,13 +55,13 @@ class SocialInteractor(SocialUseCase):
                 "name": profile.name,
                 "exp": expire,
             },
-            JWT_SECRET,
-            algorithm=ALGORITHM,
+            jwt_private_key(),
+            algorithm="RS256",
         )
 
     def _decode_consent_token(self, token: str) -> SocialProfileDto:
         try:
-            payload = jwt.decode(token, JWT_SECRET, algorithms=[ALGORITHM])
+            payload = jwt.decode(token, JWT_PUBLIC_KEY, algorithms=["RS256"])
         except JWTError:
             raise ValueError("동의 절차가 만료되었습니다. 다시 로그인해 주세요.")
         if payload.get("purpose") != "social_consent":  # 액세스 토큰 등 다른 JWT 재사용 차단

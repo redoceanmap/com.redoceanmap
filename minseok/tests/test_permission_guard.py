@@ -5,7 +5,7 @@ from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from jose import jwt
 
-from core.config import JWT_SECRET
+from core.config import jwt_private_key
 from core.database import get_db
 from core.security import require_permission
 
@@ -52,7 +52,7 @@ client = TestClient(app)
 
 def _token(user_id: int = 7) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=60)
-    return jwt.encode({"sub": str(user_id), "exp": expire}, JWT_SECRET, algorithm="HS256")
+    return jwt.encode({"sub": str(user_id), "exp": expire}, jwt_private_key(), algorithm="RS256")
 
 
 def test_토큰_없이_접근하면_401():
