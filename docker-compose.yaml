@@ -24,6 +24,29 @@ services:
         condition: service_started
     command: sh -c "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
 
+  auth:
+    build:
+      context: ./minseok
+      dockerfile: Dockerfile
+    ports:
+      - "9000:9000"  # cloudflared(호스트)가 localhost:9000으로 접근 — backend(8000)와 동일 패턴
+    volumes:
+      - ./minseok:/app
+    env_file:
+      - .env       # 공용 (JWT_PUBLIC_KEY_B64 포함)
+      - .env.auth  # auth 전용 — JWT_PRIVATE_KEY_B64 (개인키는 이 컨테이너에만)
+    environment:
+      - ENV=development
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-redocean}:${POSTGRES_PASSWORD:-redocean}@pgvector:5432/${POSTGRES_DB:-redoceanmap}
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      pgvector:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    # 마이그레이션(alembic)은 backend 소유 — 이중 실행 경합 방지를 위해 여기서는 돌리지 않는다.
+    command: uvicorn auth_main:app --host 0.0.0.0 --port 9000 --reload
+
   n8n:
     image: docker.n8n.io/n8nio/n8n
     ports:

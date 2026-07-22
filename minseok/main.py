@@ -21,9 +21,6 @@ from admin.adapter.inbound.api.v1.recommendation_log_router import (
     recommendation_log_router as admin_recommendation_log_router,
 )
 from admin.adapter.inbound.api.v1.steward_router import steward_router
-from auth.adapter.inbound.api.v1.auth_router import auth_router
-from auth.adapter.inbound.api.v1.gatekeeper_router import gatekeeper_router
-from auth.adapter.inbound.api.v1.social_router import social_router
 from auth.dependencies.grade_policy_provider import get_grade_policy_gateway
 from auth.dependencies.member_directory_provider import get_member_directory_gateway
 from chat.adapter.inbound.api.v1.chat_router import chat_router
@@ -137,13 +134,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 인증 가드 — 공개 화이트리스트 방식: auth(자체 처리)·automation(웹훅 토큰)·/·/health만 공개,
+# 인증 가드 — 공개 화이트리스트 방식: automation(웹훅 토큰)·/·/health만 공개,
 # 나머지 라우터는 전부 JWT 필수(core/security — 스포크는 auth를 모른다).
+# /auth/* 라우터는 auth_main.py(인증 전용 컨테이너)로 분리 — 발급은 개인키를 가진 그쪽에서만.
 _authenticated = [Depends(get_current_user_id)]
 
-app.include_router(auth_router)  # 공개 — register/login/refresh, me는 자체 검증
-app.include_router(gatekeeper_router)  # 공개 — auth 자기소개 (기존 auth_router 소속과 동일 정책)
-app.include_router(social_router)  # 공개 — 소셜 로그인(google·kakao·naver), 코드 교환 후 자체 JWT 발급
 # 공개 — 외부 자동화 창구(/automation/*), X-Webhook-Token 자체 검증 (dispatcher는 자기소개라 토큰 없음)
 app.include_router(news_ingest_router)
 app.include_router(market_news_ingest_router)
