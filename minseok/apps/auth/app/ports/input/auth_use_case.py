@@ -23,6 +23,11 @@ class AuthUseCase(ABC):
     async def refresh(self, refresh_token: str) -> TokenDto: ...
 
     @abstractmethod
+    async def logout(self, refresh_token: str | None) -> None:
+        """저장된 리프레시 토큰 폐기 — 없거나 이미 회전됐어도 멱등."""
+        ...
+
+    @abstractmethod
     async def get_me(self, token: str) -> User | None: ...
 
     @abstractmethod

@@ -33,6 +33,17 @@ def jwt_private_key() -> str:
         raise RuntimeError("JWT_PRIVATE_KEY_B64 미설정 — 토큰 발급은 auth 컨테이너에서만 가능합니다.")
     return base64.b64decode(raw).decode()
 
+# 실행 환경 — 쿠키 Secure 속성 분기(bff-cloudflared-harness 규칙 2)에만 사용.
+ENV = os.getenv("ENV", "development")
+
+# BFF 쿠키 도메인 — prod `.redoceanmap.com`(auth 서브도메인 발급 쿠키를 apex와 공유),
+# dev 미설정 = host-only. Secure·Domain만 ENV 분기, 나머지 속성은 리터럴(규칙 2).
+COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN", "")
+
+# OAuth redirect_uri 조립 기준 — prod https://auth.redoceanmap.com/auth (이중문 직행),
+# dev http://localhost:3000/api/backend/auth (프록시 경로 — 서브도메인 없음).
+AUTH_CALLBACK_BASE = os.getenv("AUTH_CALLBACK_BASE", "http://localhost:3000/api/backend/auth")
+
 # API 문서(/docs·/redoc·/openapi.json) 보호 — HTTP Basic. 미설정 시 문서 접근 전면 차단.
 DOCS_USER = os.getenv("DOCS_USER", "")
 DOCS_PASSWORD = os.getenv("DOCS_PASSWORD", "")

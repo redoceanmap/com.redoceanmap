@@ -46,7 +46,14 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    # 이중문(B.0): prod 프론트(apex)가 auth 오리진으로 직행 호출(credentials: include) —
+    # 쿠키 동행을 위해 allow_credentials 필수. dev(localhost)는 프록시 경로라 same-origin.
+    allow_origins=[
+        "https://redoceanmap.com",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )

@@ -5,7 +5,7 @@
 """
 import secrets
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import (
     HTTPAuthorizationCredentials,
     HTTPBasic,
@@ -24,16 +24,21 @@ _basic = HTTPBasic(auto_error=False)
 
 
 async def get_current_user_id(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
     db: AsyncSession = Depends(get_db),
 ) -> int:
     """JWT 서명 검증 + 계정 상태 검사 — 정지/탈퇴는 기발급 토큰도 즉시 차단한다.
 
-    매 요청 users PK 조회 1회가 비용이지만, 정지가 액세스 토큰 수명(60분)만큼
-    지연되는 것을 막는다(운영 결정 2026-07-21). 원시 SQL인 이유는 core가
-    apps ORM을 import할 수 없어서다(스타 토폴로지).
+    토큰은 httpOnly 쿠키(access_token) 우선, Authorization: Bearer 폴백(B.3 —
+    테스트·도구·비브라우저 클라이언트용). 매 요청 users PK 조회 1회가 비용이지만,
+    정지가 액세스 토큰 수명(60분)만큼 지연되는 것을 막는다(운영 결정 2026-07-21).
+    원시 SQL인 이유는 core가 apps ORM을 import할 수 없어서다(스타 토폴로지).
     """
-    if credentials is None:
+    token = request.cookies.get("access_token") or (
+        credentials.credentials if credentials else None
+    )
+    if token is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="인증이 필요합니다.",
@@ -41,7 +46,7 @@ async def get_current_user_id(
         )
     try:
         # 허용 알고리즘은 RS256 리터럴 고정 — env·설정으로 빼지 않는다(알고리즘 혼동 공격 방지).
-        payload = jwt.decode(credentials.credentials, JWT_PUBLIC_KEY, algorithms=["RS256"])
+        payload = jwt.decode(token, JWT_PUBLIC_KEY, algorithms=["RS256"])
         user_id = int(payload["sub"])
     except (JWTError, KeyError, ValueError):
         raise HTTPException(

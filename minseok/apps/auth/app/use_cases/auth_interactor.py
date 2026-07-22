@@ -100,6 +100,14 @@ class AuthInteractor(AuthUseCase):
         user.ensure_active()  # 정지/탈퇴 계정은 재발급 거부
         return await self._issue_tokens(user)
 
+    async def logout(self, refresh_token: str | None) -> None:
+        """로그아웃 — 저장된 리프레시 토큰 폐기(멱등: 없거나 이미 회전됐어도 조용히 통과)."""
+        if not refresh_token:
+            return
+        stored = await self.refresh_repository.find_by_token(refresh_token)
+        if stored is not None:
+            await self.refresh_repository.delete(stored.token)
+
     async def get_me(self, token: str) -> User | None:
         user_id = self._decode_token(token)
         if user_id is None:

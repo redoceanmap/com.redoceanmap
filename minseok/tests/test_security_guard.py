@@ -138,3 +138,36 @@ def test_탈퇴한_계정은_401():
 
 def test_존재하지_않는_유저는_401():
     assert _get(row=None, token=_token()).status_code == 401
+
+
+# ---- BFF 쿠키 검증 (B.3) — 쿠키 우선, 헤더 폴백 ----
+
+def _get_with_cookie(row=ACTIVE, cookie: str | None = None):
+    app.dependency_overrides[get_db] = _override_db(row)
+    try:
+        cookies = {"access_token": cookie} if cookie else None
+        return client.get("/protected", cookies=cookies)
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_유효한_쿠키_토큰은_통과한다():
+    assert _get_with_cookie(cookie=_token()).status_code == 200
+
+
+def test_위조된_쿠키_토큰은_401():
+    assert _get_with_cookie(cookie="tampered.cookie.value").status_code == 401
+
+
+def test_쿠키가_헤더보다_우선한다():
+    # 쿠키가 무효면 유효 헤더가 있어도 401 — 우선순위 규칙의 명시적 고정
+    app.dependency_overrides[get_db] = _override_db(ACTIVE)
+    try:
+        res = client.get(
+            "/protected",
+            headers={"Authorization": f"Bearer {_token()}"},
+            cookies={"access_token": "garbage"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+    assert res.status_code == 401

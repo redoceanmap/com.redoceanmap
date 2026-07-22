@@ -107,6 +107,10 @@ class SocialInteractor(SocialUseCase):
         user.ensure_active()  # 정지/탈퇴 계정 거부
         return SocialLoginResultDto(status="ok", token=await self._issue_tokens(user))
 
+    def peek_consent(self, consent_token: str) -> SocialProfileDto:
+        """동의 페이지 표시용 프로필 열람 — 서명·purpose·만료 검증은 디코드가 수행한다."""
+        return self._decode_consent_token(consent_token)
+
     async def complete_consent(self, consent_token: str, marketing_agreed: bool) -> TokenDto:
         profile = self._decode_consent_token(consent_token)
         user = await self.repository.find_by_email(profile.email)

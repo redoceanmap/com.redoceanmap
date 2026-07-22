@@ -19,5 +19,6 @@ class SocialLoginResponse(BaseModel):
 
 
 class SocialConsentRequest(BaseModel):
-    consent_token: str  # /social/login이 발급한 동의 대기 토큰
+    # 구(패턴 B) 흐름은 본문으로, BFF 흐름은 httpOnly 쿠키로 전달 — 본문이 우선한다
+    consent_token: str | None = None  # /social/login이 발급한 동의 대기 토큰
     marketing_agreed: bool = False  # 선택 — 마케팅 정보 수신 동의
