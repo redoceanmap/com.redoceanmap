@@ -16,6 +16,7 @@ load_dotenv(Path(__file__).parents[1] / ".env.auth")
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 
 from auth.adapter.inbound.api.v1.auth_router import auth_router
 from auth.adapter.inbound.api.v1.gatekeeper_router import gatekeeper_router
@@ -53,6 +54,12 @@ app.add_middleware(
 app.include_router(auth_router)  # 공개 — register/login/refresh, me·tabs는 자체 검증
 app.include_router(social_router)  # 공개 — 소셜 로그인(google·kakao·naver), 코드 교환 후 자체 JWT 발급
 app.include_router(gatekeeper_router)  # 공개 — auth 자기소개
+
+
+@app.get("/", include_in_schema=False)
+def read_root():
+    # 루트 직접 접속(브라우저) 안내 — 날 404 대신 자기소개로 넘긴다 (main.py의 /→/docs와 동일 취지)
+    return RedirectResponse("/auth/myself")
 
 
 @app.get("/health")
