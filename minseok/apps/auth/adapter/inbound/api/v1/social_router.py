@@ -13,12 +13,8 @@ from auth.adapter.inbound.api.cookie import (
     set_consent_cookie,
     set_oauth_state_cookies,
 )
-from auth.adapter.inbound.api.schemas.auth_schema import TokenResponse
-from auth.adapter.inbound.api.schemas.social_schema import (
-    SocialConsentRequest,
-    SocialLoginRequest,
-    SocialLoginResponse,
-)
+from auth.adapter.inbound.api.schemas.auth_schema import SessionResponse
+from auth.adapter.inbound.api.schemas.social_schema import SocialConsentRequest
 from auth.app.ports.input.social_use_case import SocialUseCase
 from auth.dependencies.social_provider import get_social_use_case
 from core.config import (
@@ -155,47 +151,18 @@ async def consent_pending(
     return {"provider": profile.provider, "name": profile.name, "email": profile.email}
 
 
-@social_router.post("/social/login", response_model=SocialLoginResponse)
-async def social_login(
-    body: SocialLoginRequest,
-    response: Response,
-    use_case: SocialUseCase = Depends(get_social_use_case),
-):
-    """구(패턴 B) 코드 교환 — 프론트 전환(커밋 ④)까지 유지. 성공 시 쿠키도 함께 심는다."""
-    try:
-        result = await use_case.login(body.provider, body.code, body.redirect_uri)
-    except ValueError as e:
-        raise HTTPException(status_code=401, detail=str(e))
-    if result.status == "consent_required":
-        return SocialLoginResponse(
-            status="consent_required",
-            consent_token=result.consent_token,
-            name=result.profile.name,
-            email=result.profile.email,
-        )
-    set_auth_cookies(response, result.token.access_token, result.token.refresh_token)
-    return SocialLoginResponse(
-        status="ok",
-        access_token=result.token.access_token,
-        refresh_token=result.token.refresh_token,
-        name=result.token.name,
-        email=result.token.email,
-    )
-
-
-@social_router.post("/social/consent", response_model=TokenResponse)
+@social_router.post("/social/consent", response_model=SessionResponse)
 async def social_consent(
     body: SocialConsentRequest,
     response: Response,
     consent_token: str | None = Cookie(default=None),
     use_case: SocialUseCase = Depends(get_social_use_case),
 ):
-    """동의 완료 — 본문 토큰(구 흐름) 우선, 없으면 쿠키(BFF 흐름). 성공 시 세션 쿠키 발급."""
-    token = body.consent_token or consent_token
-    if not token:
-        raise HTTPException(status_code=401, detail="동의 토큰이 없습니다.")
+    """동의 완료 — 콜백이 심은 consent 쿠키 기반. 성공 시 세션 쿠키 발급(본문에 토큰 없음)."""
+    if not consent_token:
+        raise HTTPException(status_code=401, detail="동의 대기 상태가 아닙니다.")
     try:
-        result = await use_case.complete_consent(token, body.marketing_agreed)
+        result = await use_case.complete_consent(consent_token, body.marketing_agreed)
     except ValueError as e:
         raise HTTPException(status_code=401, detail=str(e))
     set_auth_cookies(response, result.access_token, result.refresh_token)

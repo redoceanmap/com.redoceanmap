@@ -1,8 +1,7 @@
 import { create } from "zustand";
 import type { Area, ConversationMessage, NewsCardItem, StockAnalysis } from "./types";
 import { fetchConversationMessages } from "./api";
-import { tryRefreshToken } from "./authApi";
-import { authHeader } from "./tokenStorage";
+import { tryRefreshSession } from "./authApi";
 import { useUIStore } from "./uiStore";
 
 export type { StockAnalysis } from "./types"; // 기존 임포트 호환 재수출
@@ -43,12 +42,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const request = () =>
         fetch("/api/chat", {
           method: "POST",
-          headers: { "Content-Type": "application/json", ...authHeader() },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ prompt, conversationId: get().conversationId }),
         });
       let res = await request();
       // 액세스 토큰 만료(60분) → 리프레시 회전 후 1회 재시도
-      if (res.status === 401 && (await tryRefreshToken())) {
+      if (res.status === 401 && (await tryRefreshSession())) {
         res = await request();
       }
       if (res.status === 401) {

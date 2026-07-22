@@ -1,4 +1,3 @@
-import { authHeader } from "./tokenStorage";
 import type {
   AreaDetail,
   AreaScoreDetail,
@@ -17,7 +16,7 @@ import type {
 
 // 모든 GET 조회는 next.config rewrites(/api/backend/* → FastAPI)를 경유한다.
 async function getJson<T>(path: string): Promise<T> {
-  const res = await fetch(`/api/backend${path}`, { headers: authHeader() });
+  const res = await fetch(`/api/backend${path}`);  // 세션은 httpOnly 쿠키 — 자동 동행
   if (!res.ok) {
     const detail = await res.json().catch(() => null);
     throw new ApiError(res.status, detail?.detail ?? "요청에 실패했습니다.");
@@ -35,7 +34,7 @@ export class ApiError extends Error {
 export const fetchStockAnalysis = async (symbol: string): Promise<StockAnalyzeResult> => {
   const res = await fetch(
     `/api/backend/stock/analyze?symbol=${encodeURIComponent(symbol)}`,
-    { method: "POST", headers: authHeader() },
+    { method: "POST" },
   );
   if (!res.ok) {
     const detail = await res.json().catch(() => null);

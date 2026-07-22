@@ -162,20 +162,24 @@ def test_consent_pending_reads_cookie():
     assert res.json()["email"] == "new@t.local"
 
 
-def test_consent_post_falls_back_to_cookie():
+def test_consent_post_uses_cookie_only():
     client, social, _ = _client()
+    res = client.post("/auth/social/consent", json={"marketing_agreed": True})
+    assert res.status_code == 401  # 쿠키 없으면 거부 — 본문 토큰 경로는 폐지됨
     client.cookies.set("consent_token", "CONSENT")
     res = client.post("/auth/social/consent", json={"marketing_agreed": True})
     assert res.status_code == 200
     assert social.consent_args == ("CONSENT", True)
+    assert "access_token" not in res.json()  # 본문 토큰 0건
     assert "access_token=AT" in _set_cookie_headers(res)
 
 
-def test_login_sets_cookies_and_keeps_body_until_cutover():
+def test_login_sets_cookies_and_body_has_no_tokens():
     client, _, _ = _client()
     res = client.post("/auth/login", json={"email": "t@t.local", "password": "pw"})
     assert res.status_code == 200
-    assert res.json()["access_token"] == "AT"  # 구 프론트 호환 — 커밋 ④에서 제거
+    body = res.json()
+    assert body == {"name": "테스트", "email": "t@t.local"}  # 본문 토큰 0건(규칙 2)
     assert "access_token=AT" in _set_cookie_headers(res)
 
 

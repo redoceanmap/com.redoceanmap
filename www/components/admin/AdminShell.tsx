@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useUIStore } from "@/lib/uiStore";
-import { clearStoredToken } from "@/lib/tokenStorage";
+import { apiLogout } from "@/lib/authApi";
 import {
   LayoutDashboard,
   Store,
@@ -40,7 +40,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const user = useUIStore((s) => s.user);
   const logoutStore = useUIStore((s) => s.logout);
   const logout = () => {
-    clearStoredToken();
+    void apiLogout();
     logoutStore();
     router.push("/");
   };

@@ -9,9 +9,8 @@ from auth.adapter.inbound.api.cookie import (
 )
 from auth.adapter.inbound.api.schemas.auth_schema import (
     LoginRequest,
-    RefreshRequest,
     RegisterRequest,
-    TokenResponse,
+    SessionResponse,
 )
 from auth.app.ports.input.auth_use_case import AuthUseCase
 from auth.dependencies.auth_provider import get_auth_use_case
@@ -27,7 +26,7 @@ def _token_from(
     return cookie_token or (credentials.credentials if credentials else None)
 
 
-@auth_router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@auth_router.post("/register", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
 async def register(
     body: RegisterRequest,
     response: Response,
@@ -47,7 +46,7 @@ async def register(
     return result
 
 
-@auth_router.post("/login", response_model=TokenResponse)
+@auth_router.post("/login", response_model=SessionResponse)
 async def login(
     body: LoginRequest,
     response: Response,
@@ -61,15 +60,14 @@ async def login(
     return result
 
 
-@auth_router.post("/refresh", response_model=TokenResponse)
+@auth_router.post("/refresh", response_model=SessionResponse)
 async def refresh(
     response: Response,
-    body: RefreshRequest | None = None,
     refresh_token: str | None = Cookie(default=None, alias=REFRESH_COOKIE),
     use_case: AuthUseCase = Depends(get_auth_use_case),
 ):
-    """리프레시 — 본문(구 흐름) 우선, 없으면 쿠키(BFF 흐름). 회전된 새 쌍을 쿠키로도 심는다."""
-    token = (body.refresh_token if body else None) or refresh_token
+    """리프레시(쿠키 전용) — 회전된 새 쌍을 Set-Cookie로 내린다."""
+    token = refresh_token
     if not token:
         raise HTTPException(status_code=401, detail="리프레시 토큰이 없습니다.")
     try:

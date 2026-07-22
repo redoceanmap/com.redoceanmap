@@ -14,12 +14,8 @@ class LoginRequest(BaseModel):
     password: str
 
 
-class RefreshRequest(BaseModel):
-    refresh_token: str
+class SessionResponse(BaseModel):
+    """인증 성공 응답 — 토큰은 본문이 아니라 httpOnly Set-Cookie로만 내려간다(BFF 규칙 2)."""
 
-
-class TokenResponse(BaseModel):
-    access_token: str
-    refresh_token: str
     name: str
     email: str

@@ -2,7 +2,6 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { apiTabs } from "./authApi";
-import { getStoredToken } from "./tokenStorage";
 import { useUIStore } from "./uiStore";
 
 export type TabKey = "history" | "market" | "stock" | "vision" | "automation";
@@ -16,7 +15,7 @@ export function useVisibleTabs(): Set<TabKey> | null {
   const user = useUIStore((s) => s.user);
   const { data, isError } = useQuery({
     queryKey: ["visible-tabs", user?.id ?? "anon"],
-    queryFn: () => apiTabs(getStoredToken()),
+    queryFn: () => apiTabs(),
   });
   if (isError) return new Set<TabKey>();
   if (!data) return null;

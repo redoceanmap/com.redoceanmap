@@ -7,7 +7,7 @@ import { Plus, MessageSquare, MapPin, CandlestickChart, Zap, ScanEye, type Lucid
 import Wordmark from "./Wordmark";
 import EmailModal from "./EmailModal";
 import { useUIStore } from "@/lib/uiStore";
-import { clearStoredToken } from "@/lib/tokenStorage";
+import { apiLogout } from "@/lib/authApi";
 import { useVisibleTabs, type TabKey } from "@/lib/useVisibleTabs";
 
 type NavItem = {
@@ -44,7 +44,7 @@ export default function TopNav() {
   const openAuth = useUIStore((s) => s.openAuth);
   const user = useUIStore((s) => s.user);
   const logoutStore = useUIStore((s) => s.logout);
-  const logout = () => { clearStoredToken(); logoutStore(); };
+  const logout = () => { void apiLogout(); logoutStore(); };
   const [emailOpen, setEmailOpen] = useState(false);
   const tabs = useVisibleTabs(); // null = 로딩 중 — 게이팅 탭 미표시(사라지는 플래시 방지)
 

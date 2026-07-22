@@ -1,40 +1,38 @@
-import {
-  getStoredRefreshToken,
-  setStoredRefreshToken,
-  setStoredToken,
-} from "./tokenStorage";
+// BFF 인증 클라이언트 — 토큰은 httpOnly 쿠키에만 산다(JS는 만질 수 없음).
+//
+// AUTH_BASE 단일 상수(bff-cloudflared B.0) 외에 분기 코드를 퍼뜨리지 않는다:
+// - prod: NEXT_PUBLIC_AUTH_ORIGIN(https://auth.redoceanmap.com) 설정 → 이중문 직행
+//   (cross-origin이므로 credentials: "include" 필수)
+// - dev/미설정: /api/backend/auth 프록시(same-origin) 폴백 — rewrites가 9000으로 전달
+const AUTH_ORIGIN = process.env.NEXT_PUBLIC_AUTH_ORIGIN;
+export const AUTH_BASE = AUTH_ORIGIN ? `${AUTH_ORIGIN}/auth` : "/api/backend/auth";
+const CREDENTIALS: RequestCredentials = AUTH_ORIGIN ? "include" : "same-origin";
 
-// 브라우저에서 실행되므로 same-origin /api/backend(next.config rewrites)로 프록시한다 —
-// NEXT_PUBLIC_API_URL은 컨테이너 내부 호스트명(backend:8000)일 수 있어 브라우저가 해석 못 한다.
-const API_BASE = "/api/backend";
+export type SessionUser = { name: string; email: string };
 
-export type AuthResponse = {
-  access_token: string;
-  refresh_token: string;
-  name: string;
-  email: string;
-};
-
-export async function apiRefresh(refreshToken: string): Promise<AuthResponse> {
-  const res = await fetch(`${API_BASE}/auth/refresh`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refresh_token: refreshToken }),
+async function authFetch(path: string, init?: RequestInit): Promise<Response> {
+  return fetch(`${AUTH_BASE}${path}`, {
+    credentials: CREDENTIALS,
+    ...init,
+    headers: {
+      ...(init?.body ? { "Content-Type": "application/json" } : {}),
+      ...init?.headers,
+    },
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.detail ?? "토큰 갱신에 실패했습니다.");
-  return data;
 }
 
-export async function apiLogin(email: string, password: string): Promise<AuthResponse> {
-  const res = await fetch(`${API_BASE}/auth/login`, {
+async function jsonOrThrow<T>(res: Response, fallback: string): Promise<T> {
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as { detail?: string }).detail ?? fallback);
+  return data as T;
+}
+
+export async function apiLogin(email: string, password: string): Promise<SessionUser> {
+  const res = await authFetch("/login", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.detail ?? "로그인에 실패했습니다.");
-  return data;
+  return jsonOrThrow<SessionUser>(res, "로그인에 실패했습니다.");
 }
 
 export async function apiRegister(
@@ -42,80 +40,58 @@ export async function apiRegister(
   password: string,
   name: string,
   marketingAgreed: boolean,
-): Promise<AuthResponse> {
-  const res = await fetch(`${API_BASE}/auth/register`, {
+): Promise<SessionUser> {
+  const res = await authFetch("/register", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     // terms_agreed: 필수 약관 체크를 통과해야만 제출되므로 항상 true
     body: JSON.stringify({ email, password, name, terms_agreed: true, marketing_agreed: marketingAgreed }),
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.detail ?? "회원가입에 실패했습니다.");
-  return data;
+  return jsonOrThrow<SessionUser>(res, "회원가입에 실패했습니다.");
 }
 
-/** 소셜 로그인 응답 — 기존 유저면 토큰, 신규 유저면 약관 동의 요구. */
-export type SocialLoginResponse =
-  | ({ status: "ok" } & AuthResponse)
-  | { status: "consent_required"; consent_token: string; name: string; email: string };
-
-export async function apiSocialLogin(
-  provider: string,
-  code: string,
-  redirectUri: string,
-): Promise<SocialLoginResponse> {
-  const res = await fetch(`${API_BASE}/auth/social/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ provider, code, redirect_uri: redirectUri }),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.detail ?? "소셜 로그인에 실패했습니다.");
-  return data;
-}
-
-/** 신규 소셜 유저의 약관 동의 완료 — 이 시점에 가입되고 토큰이 발급된다. */
-export async function apiSocialConsent(
-  consentToken: string,
-  marketingAgreed: boolean,
-): Promise<AuthResponse> {
-  const res = await fetch(`${API_BASE}/auth/social/consent`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ consent_token: consentToken, marketing_agreed: marketingAgreed }),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.detail ?? "약관 동의 처리에 실패했습니다.");
-  return data;
-}
-
-/** 리프레시 토큰 회전으로 액세스 토큰 재발급 — 성공 시 저장까지 마치고 true. */
-export async function tryRefreshToken(): Promise<boolean> {
-  const refresh = getStoredRefreshToken();
-  if (!refresh) return false;
+/** 쿠키 세션 갱신(리프레시 회전) — 성공 시 새 쿠키가 응답에 실려 온다. */
+export async function tryRefreshSession(): Promise<boolean> {
   try {
-    const renewed = await apiRefresh(refresh);
-    setStoredToken(renewed.access_token);
-    setStoredRefreshToken(renewed.refresh_token);
-    return true;
+    const res = await authFetch("/refresh", { method: "POST" });
+    return res.ok;
   } catch {
     return false;
   }
 }
 
-export async function apiMe(token: string): Promise<{ id: number; email: string; name: string }> {
-  const res = await fetch(`${API_BASE}/auth/me`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+export async function apiLogout(): Promise<void> {
+  try {
+    await authFetch("/logout", { method: "POST" });
+  } catch {
+    // 로그아웃은 베스트 에포트 — 쿠키 삭제가 실패해도 UI 상태는 정리된다
+  }
+}
+
+/** 로그인 상태 판정의 단일 소스 — 쿠키가 유효하면 사용자 정보를 준다. */
+export async function apiMe(): Promise<{ id: number; email: string; name: string }> {
+  const res = await authFetch("/me");
   if (!res.ok) throw new Error("인증이 만료되었습니다.");
   return res.json();
 }
 
-/** 보이는 탭 키 목록 — 등급(역할) 합집합. 비로그인(token null)은 기본 등급 구성. */
-export async function apiTabs(token: string | null): Promise<{ tabs: string[] }> {
-  const res = await fetch(`${API_BASE}/auth/tabs`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
+/** 보이는 탭 키 목록 — 등급(역할) 합집합. 비로그인은 기본 등급 구성. */
+export async function apiTabs(): Promise<{ tabs: string[] }> {
+  const res = await authFetch("/tabs");
   if (!res.ok) throw new Error("탭 구성을 불러오지 못했습니다.");
   return res.json();
+}
+
+/** 동의 대기 프로필 — 소셜 콜백이 심은 consent 쿠키 기준. 대기 상태 아니면 throw. */
+export async function apiConsentPending(): Promise<{ provider: string; name: string; email: string }> {
+  const res = await authFetch("/social/consent/pending");
+  return jsonOrThrow(res, "동의 대기 정보를 불러오지 못했습니다.");
+}
+
+/** 신규 소셜 유저의 약관 동의 완료 — consent 쿠키로 가입되고 세션 쿠키가 발급된다. */
+export async function apiSocialConsent(marketingAgreed: boolean): Promise<SessionUser> {
+  const res = await authFetch("/social/consent", {
+    method: "POST",
+    body: JSON.stringify({ marketing_agreed: marketingAgreed }),
+  });
+  return jsonOrThrow<SessionUser>(res, "약관 동의 처리에 실패했습니다.");
 }

@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { X, Send, CheckCircle2 } from "lucide-react";
-import { authHeader } from "@/lib/tokenStorage";
 
 // 브라우저 직접 호출 — same-origin /api/backend(rewrites) 경유 (authApi와 동일 이유)
 const API_BASE = "/api/backend";
@@ -44,7 +43,7 @@ export default function EmailModal({ open, onClose }: Props) {
     try {
       const res = await fetch(`${API_BASE}/email/request`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeader() },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ to, content }),
       });
       if (!res.ok) throw new Error("발송 요청 실패");

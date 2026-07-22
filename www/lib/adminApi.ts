@@ -1,5 +1,4 @@
 import { ApiError } from "./api";
-import { authHeader } from "./tokenStorage";
 
 /* ── 타입 (백엔드 admin 스키마 1:1) ── */
 
@@ -172,7 +171,7 @@ export type AdminMarketBacktestReport = {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api/backend${path}`, {
     ...init,
-    headers: { ...authHeader(), ...(init?.body ? { "Content-Type": "application/json" } : {}) },
+    headers: { ...(init?.body ? { "Content-Type": "application/json" } : {}) },  // 세션은 httpOnly 쿠키
   });
   if (!res.ok) {
     const detail = await res.json().catch(() => null);

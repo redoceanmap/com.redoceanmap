@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { X, ArrowLeft, Eye, EyeOff, Info } from "lucide-react";
 import { useUIStore, type AuthMode } from "@/lib/uiStore";
 import { apiLogin, apiRegister } from "@/lib/authApi";
-import { setStoredRefreshToken, setStoredToken } from "@/lib/tokenStorage";
 import { startSocialLogin, type SocialProvider } from "@/lib/socialAuth";
 
 function PinMark({ size = 32 }: { size?: number }) {
@@ -126,7 +125,6 @@ export default function AuthModal() {
   const setMode = useUIStore((s) => s.setAuthMode);
   const close = useUIStore((s) => s.closeAuth);
   const setUser = useUIStore((s) => s.setUser);
-  const setToken = useUIStore((s) => s.setToken);
 
   const [ui, setUI] = useState<{
     signupStep: "options" | "form";
@@ -155,10 +153,7 @@ export default function AuthModal() {
     const password = String(formData.get("password") ?? "");
     setUI((prev) => ({ ...prev, error: "", loading: true }));
     try {
-      const res = await apiLogin(email, password);
-      setStoredToken(res.access_token);
-      setStoredRefreshToken(res.refresh_token);
-      setToken(res.access_token);
+      const res = await apiLogin(email, password);  // 세션은 httpOnly 쿠키로 발급됨
       setUser({ id: 0, name: res.name, email: res.email });
       close();
     } catch (err) {
@@ -185,9 +180,6 @@ export default function AuthModal() {
     setUI((prev) => ({ ...prev, error: "", loading: true }));
     try {
       const res = await apiRegister(email, password, name, formData.get("marketing") === "on");
-      setStoredToken(res.access_token);
-      setStoredRefreshToken(res.refresh_token);
-      setToken(res.access_token);
       setUser({ id: 0, name: res.name, email: res.email });
       close();
     } catch (err) {

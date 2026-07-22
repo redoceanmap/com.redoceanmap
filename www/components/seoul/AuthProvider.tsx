@@ -2,43 +2,30 @@
 
 import { useEffect } from "react";
 import { useUIStore } from "@/lib/uiStore";
-import { apiMe, apiRefresh } from "@/lib/authApi";
-import {
-  clearStoredToken,
-  getStoredRefreshToken,
-  getStoredToken,
-  setStoredRefreshToken,
-  setStoredToken,
-} from "@/lib/tokenStorage";
+import { apiMe, tryRefreshSession } from "@/lib/authApi";
+
+// 구(localStorage 토큰) 시대의 잔존 키 — BFF 전환(httpOnly 쿠키) 후 1회 정리
+const LEGACY_KEYS = ["redocean-token", "redocean-refresh-token"];
 
 export default function AuthProvider() {
   const setUser = useUIStore((s) => s.setUser);
-  const setToken = useUIStore((s) => s.setToken);
 
   useEffect(() => {
-    const token = getStoredToken();
-    if (!token) return;
-    setToken(token);
-    apiMe(token)
+    for (const key of LEGACY_KEYS) localStorage.removeItem(key);
+
+    // 세션 복원 — 쿠키가 유효하면 me, 만료면 리프레시 회전 후 1회 재시도
+    apiMe()
       .then((user) => setUser(user))
       .catch(async () => {
-        // 액세스 토큰 만료 → 리프레시 회전으로 재발급 시도
-        const refresh = getStoredRefreshToken();
-        if (refresh) {
+        if (await tryRefreshSession()) {
           try {
-            const renewed = await apiRefresh(refresh);
-            setStoredToken(renewed.access_token);
-            setStoredRefreshToken(renewed.refresh_token);
-            setToken(renewed.access_token);
-            const user = await apiMe(renewed.access_token);
-            setUser(user);
+            setUser(await apiMe());
             return;
           } catch {
-            // 갱신 실패 — 아래에서 정리
+            // 아래에서 비로그인 확정
           }
         }
-        clearStoredToken();
-        setToken(null);
+        setUser(null);
       });
   }, []);
 
