@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+// 인증 전용 컨테이너(auth_main, /auth/*) — 발급은 분리 배포된 auth가 담당한다.
+const AUTH_BASE = process.env.NEXT_PUBLIC_AUTH_URL ?? "http://127.0.0.1:9000";
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
@@ -8,6 +10,11 @@ const nextConfig: NextConfig = {
   // (POST /api/chat은 에러 메시지 가공이 있어 기존 route.ts 유지)
   async rewrites() {
     return [
+      // 구체 규칙이 일반 규칙보다 앞 — /auth/*만 인증 컨테이너로 분기
+      {
+        source: "/api/backend/auth/:path*",
+        destination: `${AUTH_BASE}/auth/:path*`,
+      },
       {
         source: "/api/backend/:path*",
         destination: `${API_BASE}/:path*`,
