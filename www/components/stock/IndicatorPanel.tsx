@@ -1,6 +1,7 @@
 "use client";
 
-import type { StockAnalyzeResult } from "@/lib/types";
+import { ChevronDown } from "lucide-react";
+import type { SignalContribution, StockAnalyzeResult } from "@/lib/types";
 import { formatPrice } from "@/lib/currency";
 import InsightList from "@/components/common/InsightList";
 import SignalBreakdown from "./SignalBreakdown";
@@ -29,6 +30,8 @@ type Stat = {
   tone: Tone;
   // 0~1 상대 위치 — 상·하한이 정해진 지표에만 게이지를 그린다
   gauge?: { position: number; marks: number[] };
+  // 이 타일이 대응하는 신호 키. 가중치 0이면 판정에 안 쓰인 참고 지표라 기본은 접는다.
+  signal?: SignalContribution["key"];
 };
 
 const TONE_TEXT: Record<Tone, string> = {
@@ -51,6 +54,7 @@ function buildStats(a: StockAnalyzeResult, symbol: string): Stat[] {
   return [
     {
       label: "RSI(14)",
+      signal: "rsi",
       value: fmt(a.rsi, 1),
       hint: a.rsi <= RSI_OVERSOLD ? "과매도 — 반등 여지" : a.rsi >= RSI_OVERBOUGHT ? "과열 — 조정 주의" : "중립 구간",
       tone: a.rsi <= RSI_OVERSOLD ? "down" : a.rsi >= RSI_OVERBOUGHT ? "up" : "flat",
@@ -58,6 +62,7 @@ function buildStats(a: StockAnalyzeResult, symbol: string): Stat[] {
     },
     {
       label: "볼린저 %B",
+      signal: "bollinger",
       value: fmt(a.bb_percent_b),
       hint:
         a.bb_percent_b <= BB_LOW
@@ -83,12 +88,14 @@ function buildStats(a: StockAnalyzeResult, symbol: string): Stat[] {
     },
     {
       label: "OBV 기울기",
+      signal: "obv",
       value: fmt(a.obv_slope, 3),
       hint: a.obv_slope > 0 ? "자금 유입 우위" : a.obv_slope < 0 ? "자금 유출 우위" : "수급 중립",
       tone: a.obv_slope > 0 ? "up" : a.obv_slope < 0 ? "down" : "flat",
     },
     {
       label: "12-1 모멘텀",
+      signal: "momentum",
       // 상장·분할 1년 이내 종목은 기준 시점이 상장 초기라 수백~수천 %가 찍힌다(SNDK +5,364%).
       // 계산은 맞지만 "중장기 추세"로 읽을 수 없는 값이라 그대로 두지 않는다.
       value: Math.abs(a.momentum_12_1) >= MOMENTUM_ABSURD
@@ -119,6 +126,7 @@ function buildStats(a: StockAnalyzeResult, symbol: string): Stat[] {
     },
     {
       label: "20일 이평",
+      signal: "trend",
       value: price(a.ma20),
       hint:
         trendGap >= 0.02
@@ -149,12 +157,39 @@ function buildStats(a: StockAnalyzeResult, symbol: string): Stat[] {
   ];
 }
 
+function StatTile({ stat }: { stat: Stat }) {
+  return (
+    <div className="bg-surface border border-border rounded-lg px-3 py-2.5">
+      <div className="text-[11px] text-foreground-muted">{stat.label}</div>
+      <div className="text-sm font-semibold mt-0.5 tabular-nums">{stat.value}</div>
+      {stat.gauge && (
+        <div className="relative mt-1.5 h-1 rounded-full bg-border/70">
+          {stat.gauge.marks.map((mark) => (
+            <div
+              key={mark}
+              className="absolute inset-y-0 w-px bg-foreground-muted/50"
+              style={{ left: `${mark * 100}%` }}
+            />
+          ))}
+          <div
+            className={`absolute top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full ${TONE_BG[stat.tone]}`}
+            style={{ left: `calc(${stat.gauge.position * 100}% - 3px)` }}
+          />
+        </div>
+      )}
+      <div className={`mt-1 text-[10px] leading-tight ${TONE_TEXT[stat.tone]}`}>{stat.hint}</div>
+    </div>
+  );
+}
+
 export default function IndicatorPanel({
   analyze,
   symbol,
+  expert,
 }: {
   analyze?: StockAnalyzeResult;
   symbol: string;
+  expert: boolean;
 }) {
   if (!analyze) {
     return (
@@ -167,6 +202,13 @@ export default function IndicatorPanel({
   }
 
   const stats = buildStats(analyze, symbol);
+  // 판정에 실제로 들어간 지표(가중치 ≠ 0)와 참고용을 가른다 — 열 개를 같은 크기로 늘어놓으면
+  // 어느 것이 결론을 만들었는지 알 수 없다. 전문가 모드에서는 구분 없이 전부 편다.
+  const weighted = new Set(
+    (analyze.signals ?? []).filter((s) => s.weight !== 0).map((s) => s.key),
+  );
+  const used = expert ? stats : stats.filter((s) => s.signal && weighted.has(s.signal));
+  const reference = expert ? [] : stats.filter((s) => !used.includes(s));
 
   return (
     <div className="p-4 flex flex-col gap-3">
@@ -178,30 +220,32 @@ export default function IndicatorPanel({
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-2">
-        {stats.map((stat) => (
-          <div key={stat.label} className="bg-surface border border-border rounded-lg px-3 py-2.5">
-            <div className="text-[11px] text-foreground-muted">{stat.label}</div>
-            <div className="text-sm font-semibold mt-0.5 tabular-nums">{stat.value}</div>
-            {stat.gauge && (
-              <div className="relative mt-1.5 h-1 rounded-full bg-border/70">
-                {stat.gauge.marks.map((mark) => (
-                  <div
-                    key={mark}
-                    className="absolute inset-y-0 w-px bg-foreground-muted/50"
-                    style={{ left: `${mark * 100}%` }}
-                  />
-                ))}
-                <div
-                  className={`absolute top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full ${TONE_BG[stat.tone]}`}
-                  style={{ left: `calc(${stat.gauge.position * 100}% - 3px)` }}
-                />
-              </div>
-            )}
-            <div className={`mt-1 text-[10px] leading-tight ${TONE_TEXT[stat.tone]}`}>{stat.hint}</div>
+      {used.length > 0 && (
+        <div>
+          {!expert && (
+            <p className="mb-1.5 text-[11px] text-foreground-muted">이번 판정에 쓰인 지표</p>
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            {used.map((stat) => (
+              <StatTile key={stat.label} stat={stat} />
+            ))}
           </div>
-        ))}
-      </div>
+        </div>
+      )}
+
+      {reference.length > 0 && (
+        <details className="group">
+          <summary className="flex items-center gap-1 text-[11px] text-foreground-muted cursor-pointer list-none select-none">
+            <ChevronDown size={12} className="transition-transform group-open:rotate-180" />
+            판정에 반영되지 않은 참고 지표 {reference.length}개
+          </summary>
+          <div className="mt-1.5 grid grid-cols-2 gap-2">
+            {reference.map((stat) => (
+              <StatTile key={stat.label} stat={stat} />
+            ))}
+          </div>
+        </details>
+      )}
 
       <div className="bg-surface border border-border rounded-lg px-3 py-2.5">
         <div className="text-[11px] text-foreground-muted">뉴스 감성</div>

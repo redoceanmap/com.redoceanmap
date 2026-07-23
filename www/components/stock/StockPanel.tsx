@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useDensityStore } from "@/lib/uiStore";
 import type { StockAnalyzeResult } from "@/lib/types";
 import IndicatorPanel from "./IndicatorPanel";
 import NewsPanel from "./NewsPanel";
@@ -23,6 +24,7 @@ export default function StockPanel({
   analyze?: StockAnalyzeResult;
 }) {
   const [tab, setTab] = useState<Tab>("indicators");
+  const expert = useDensityStore((s) => s.expert);
 
   if (!symbol) {
     return <p className="p-4 text-sm text-foreground-muted">종목을 선택하면 자료가 표시됩니다.</p>;
@@ -47,7 +49,7 @@ export default function StockPanel({
           </button>
         ))}
       </nav>
-      {tab === "indicators" && <IndicatorPanel analyze={analyze} symbol={symbol} />}
+      {tab === "indicators" && <IndicatorPanel analyze={analyze} symbol={symbol} expert={expert} />}
       {tab === "news" && <NewsPanel symbol={symbol} />}
       {tab === "fundamentals" && <FundamentalsPanel symbol={symbol} />}
     </div>

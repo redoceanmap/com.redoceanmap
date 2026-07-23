@@ -13,11 +13,12 @@ import {
   fetchStockQuote,
 } from "@/lib/api";
 import { useChatStore } from "@/lib/store";
+import { useDensityStore } from "@/lib/uiStore";
 import WorkspaceShell from "@/components/workspace/WorkspaceShell";
 import ChatPanel from "@/components/chat/ChatPanel";
 import SymbolHeader from "@/components/stock/SymbolHeader";
 import StockPanel from "@/components/stock/StockPanel";
-import ProbabilityCard from "@/components/stock/ProbabilityCard";
+import StageSummary from "@/components/stock/StageSummary";
 import SymbolSummary from "@/components/stock/SymbolSummary";
 import MarketBoard from "@/components/stock/MarketBoard";
 
@@ -63,6 +64,9 @@ function StockWorkspace() {
     rangeDays: DEFAULT_RANGE["1d"],
   });
   const { timeframe, rangeDays } = view;
+
+  const expert = useDensityStore((s) => s.expert);
+  const toggleExpert = useDensityStore((s) => s.toggleExpert);
 
   const conversationId = useChatStore((s) => s.conversationId);
   const messages = useChatStore((s) => s.messages);
@@ -181,7 +185,14 @@ function StockWorkspace() {
         previousClose={previousClose}
       />
       {pinnedSummary && <SymbolSummary text={pinnedSummary} />}
-      {forecastQ.data && <ProbabilityCard forecast={forecastQ.data} />}
+      <StageSummary
+        symbol={pricesQ.data?.resolvedTicker ?? symbol}
+        price={quoteQ.data?.price}
+        analyze={analyzeQ.data}
+        forecast={forecastQ.data}
+        expert={expert}
+        onToggleExpert={toggleExpert}
+      />
       {pricesQ.isLoading && <div className="flex-1 m-4 skeleton rounded-xl" />}
       {pricesNotCollected && (
         <div className="flex-1 grid place-items-center px-6 text-center">

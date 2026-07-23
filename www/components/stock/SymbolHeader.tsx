@@ -1,14 +1,8 @@
 "use client";
 
-import { Minus, ShieldCheck, TrendingDown, TrendingUp } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import type { StockAnalyzeResult } from "@/lib/types";
 import { formatPrice } from "@/lib/currency";
-
-const DIRECTION_META = {
-  UP: { label: "상승 신호", icon: TrendingUp, className: "text-red-600 bg-red-50 border-red-200" },
-  DOWN: { label: "하락 신호", icon: TrendingDown, className: "text-blue-600 bg-blue-50 border-blue-200" },
-  NEUTRAL: { label: "중립", icon: Minus, className: "text-foreground-muted bg-surface border-border" },
-} as const;
 
 type SymbolHeaderProps = {
   symbol: string;
@@ -27,8 +21,6 @@ export default function SymbolHeader({
   quotePrice,
   previousClose,
 }: SymbolHeaderProps) {
-  const meta = analyze ? (DIRECTION_META[analyze.direction] ?? DIRECTION_META.NEUTRAL) : null;
-  const DirectionIcon = meta?.icon;
   const price = quotePrice ?? analyze?.price;
   const changePct =
     price != null && previousClose ? (price / previousClose - 1) * 100 : null;
@@ -40,7 +32,7 @@ export default function SymbolHeader({
         <span className="text-xs text-foreground-muted">{resolvedTicker}</span>
       )}
       {isLoading && <span className="skeleton h-5 w-28 rounded-md" />}
-      {analyze && meta && DirectionIcon && (
+      {analyze && (
         <>
           <span className="text-lg font-bold">
             {formatPrice(quotePrice ?? analyze.price, resolvedTicker ?? symbol)}
@@ -59,10 +51,8 @@ export default function SymbolHeader({
           {quotePrice != null && (
             <span className="text-[10px] text-foreground-muted">지연 시세 · 30초 갱신</span>
           )}
-          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-medium ${meta.className}`}>
-            <DirectionIcon size={13} strokeWidth={2} />
-            {meta.label} · 확신도 {Math.round(analyze.confidence * 100)}%
-          </span>
+          {/* 방향·확신도 배지는 StageSummary가 단독으로 말한다 — 여기 두면 확률 카드와
+              서로 반박하는 숫자가 한 화면에 둘이 된다(상승 36% vs 평소와 다르지 않음). */}
           {analyze.reference_up_signal && (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-amber-200 bg-amber-50 text-amber-700 text-xs font-medium">
               <ShieldCheck size={13} strokeWidth={2} />
