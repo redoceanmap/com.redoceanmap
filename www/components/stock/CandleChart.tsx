@@ -367,12 +367,12 @@ export default function CandleChart({
     const lineOptions = { lineWidth: 1, lineStyle: 2, axisLabelVisible: true } as const;
     if (support) {
       r.priceLines.push(
-        r.candles.createPriceLine({ price: support, color: DOWN, title: "지지", ...lineOptions }),
+        r.candles.createPriceLine({ price: support, color: DOWN, title: "60일 최저", ...lineOptions }),
       );
     }
     if (resistance) {
       r.priceLines.push(
-        r.candles.createPriceLine({ price: resistance, color: UP, title: "저항", ...lineOptions }),
+        r.candles.createPriceLine({ price: resistance, color: UP, title: "60일 최고", ...lineOptions }),
       );
     }
 

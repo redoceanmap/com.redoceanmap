@@ -62,7 +62,10 @@ function strength(analyze: StockAnalyzeResult) {
   return "강";
 }
 
-/** 지지 ─ 현재 ─ 저항 위치. 예측이 아니라 관측된 사실이라 그대로 보여줘도 정직하다. */
+/** 최근 60거래일 최저~최고 안에서 현재가 위치.
+ *  "지지/저항"으로 부르지 않는다 — 실제로는 60일 롤링 최저·최고 한 봉일 뿐이고,
+ *  그 봉이 창을 벗어나면 시장과 무관하게 값이 점프한다(SNDK 실측: 40거래일간 517→980,
+ *  2% 넘는 점프 11회). 예측이 아니라 관측된 구간이라는 뜻이 라벨에 드러나야 한다. */
 function PricePosition({ analyze, price, symbol }: { analyze: StockAnalyzeResult; price: number; symbol: string }) {
   const { support, resistance } = analyze;
   if (!(resistance > support)) return null;
@@ -71,8 +74,8 @@ function PricePosition({ analyze, price, symbol }: { analyze: StockAnalyzeResult
   return (
     <div>
       <div className="flex items-baseline justify-between text-[10px] text-foreground-muted">
-        <span>지지 {formatPrice(support, symbol)}</span>
-        <span>저항 {formatPrice(resistance, symbol)}</span>
+        <span>60일 최저 {formatPrice(support, symbol)}</span>
+        <span>60일 최고 {formatPrice(resistance, symbol)}</span>
       </div>
       <div className="relative mt-1 h-1.5 rounded-full bg-gradient-to-r from-blue-200 via-border to-red-200">
         <div

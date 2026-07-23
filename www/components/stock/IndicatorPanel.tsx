@@ -143,15 +143,15 @@ function buildStats(a: StockAnalyzeResult, symbol: string): Stat[] {
       tone: "flat",
     },
     {
-      label: "지지선",
+      label: "60일 최저",
       value: price(a.support),
-      hint: `현재가 대비 ${fmt((a.support / a.price - 1) * 100, 1)}%`,
+      hint: `현재가 대비 ${fmt((a.support / a.price - 1) * 100, 1)}% · 최저 봉이 창을 벗어나면 점프`,
       tone: "down",
     },
     {
-      label: "저항선",
+      label: "60일 최고",
       value: price(a.resistance),
-      hint: `현재가 대비 +${fmt((a.resistance / a.price - 1) * 100, 1)}%`,
+      hint: `현재가 대비 +${fmt((a.resistance / a.price - 1) * 100, 1)}% · 최고 봉이 창을 벗어나면 점프`,
       tone: "up",
     },
   ];
