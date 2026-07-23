@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "hermes": {
+      "type": "stdio",
+      "command": "${HOME}/.local/bin/hermes",
+      "args": [
+        "mcp",
+        "serve"
+      ],
+      "env": {}
+    }
+  }
+}
