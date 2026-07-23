@@ -9,6 +9,7 @@ import type {
   PriceHistory,
   RecommendationItem,
   StockAnalyzeResult,
+  StockBoard,
   StockForecast,
   StockNewsItem,
   StockQuote,
@@ -61,6 +62,10 @@ export const fetchStockForecast = (symbol: string): Promise<StockForecast> =>
 
 export const fetchStockQuote = (symbol: string): Promise<StockQuote> =>
   getJson(`/stock/${encodeURIComponent(symbol)}/quote`);
+
+// 워치리스트 신호 보드 — 종목별 analyze/forecast를 N번 부르지 않고 축적 스냅샷을 한 번에 읽는다
+export const fetchStockBoard = (horizon = 5, limit = 40): Promise<StockBoard> =>
+  getJson(`/stock/board?horizon=${horizon}&limit=${limit}`);
 
 export const fetchAreaStats = (trdarCode: string | number): Promise<AreaStatsDetail> =>
   getJson(`/market/trdar/${trdarCode}/stats`);

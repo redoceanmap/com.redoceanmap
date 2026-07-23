@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 
 from stock.domain.entities.price_bar import PriceBar
 from stock.domain.value_objects.indicators import Indicators
-from stock.domain.value_objects.market_values import Price, Symbol
+from stock.domain.value_objects.market_values import Price, Quote, Symbol
 
 
 class MarketDataPort(ABC):
@@ -14,8 +14,8 @@ class MarketDataPort(ABC):
     async def latest_price(self, symbol: Symbol) -> Price: ...
 
     @abstractmethod
-    async def quote(self, symbol: Symbol) -> Price:
-        """현재가만 경량 조회 — 폴링용. latest_price(전체 이력 동반)와 달리 이력을 받지 않는다."""
+    async def quote(self, symbol: Symbol) -> Quote:
+        """현재가·전일 종가만 경량 조회 — 폴링용. latest_price(전체 이력 동반)와 달리 이력을 받지 않는다."""
         ...
 
     @abstractmethod

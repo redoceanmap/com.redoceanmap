@@ -47,7 +47,7 @@ export default function StockPanel({
           </button>
         ))}
       </nav>
-      {tab === "indicators" && <IndicatorPanel analyze={analyze} />}
+      {tab === "indicators" && <IndicatorPanel analyze={analyze} symbol={symbol} />}
       {tab === "news" && <NewsPanel symbol={symbol} />}
       {tab === "fundamentals" && <FundamentalsPanel symbol={symbol} />}
     </div>

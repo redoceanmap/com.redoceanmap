@@ -113,6 +113,19 @@
 - **현재가 폴링(`stock_quote` 슬라이스)**: `GET /stock/{symbol}/quote` — `MarketDataPort.quote()`
   (yfinance fast_info, 이력 미조회)로 지연 시세 현재가만 경량 반환(`delayed: true`). 프론트
   30초 폴링용. 진짜 실시간은 KIS 등 벤더 어댑터 교체 경로(계약 동일)로 후속.
+  포트 반환은 `Quote`(현재가 + 전일 종가) — 응답에 `previous_close`/`change_pct`를 함께 준다.
+  봉을 함께 받지 않는 소비자(지수 스트립)도 등락률을 낼 수 있게 하기 위함이며, 벤더가 전일
+  종가를 못 주면 둘 다 null로 열화한다.
+- **신호 보드(`stock_board` 슬라이스)**: `GET /stock/board?horizon=5&limit=` — 워치리스트
+  종목의 **최신 예측 스냅샷을 한 번에** 훑는 진입 화면(빈 워크스페이스)용 조회 전용 슬라이스.
+  종목마다 analyze/forecast를 부르면 워치리스트 크기만큼 벤더 호출이 나므로 `forecast_snapshots`
+  (일일 cron이 동결)만 읽는다 — `DISTINCT ON (ticker)` 최신 스냅샷 + `price_bars`(1d) 최근 30봉을
+  윈도우 함수로 한 번에 받아 스파크라인·전일 대비를 만든다. 10일보다 오래된 스냅샷은 제외
+  (워치리스트에서 빠진 종목의 옛 판정이 최신인 척 남는 것 방지). 정렬은 순수 도메인
+  `board_ranker.sort_key` — **중립 후순위 → |score| 내림차순 → 티커순**으로, 매수 추천 순위가
+  아니라 "신호가 뚜렷한 순"이다. 표시용 한글명은 `SymbolDirectoryPort`(`AliasSymbolDirectory` —
+  `symbol_resolver`의 별칭 사전을 역인덱싱, 네트워크 조회 없음). 스냅샷이 없으면 404가 아니라
+  빈 `rows`(수집 전에도 화면이 떠야 한다).
 
 ## 레이어
 

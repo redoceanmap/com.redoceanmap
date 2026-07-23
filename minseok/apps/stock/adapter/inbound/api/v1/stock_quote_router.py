@@ -18,4 +18,10 @@ async def get_stock_quote(
         view = await use_case.quote(QuoteQuery(symbol=symbol))
     except MarketDataUnavailableError as e:
         raise HTTPException(status_code=404, detail=e.detail)
-    return StockQuoteResponse(symbol=view.symbol, price=view.price, delayed=view.delayed)
+    return StockQuoteResponse(
+        symbol=view.symbol,
+        price=view.price,
+        delayed=view.delayed,
+        previous_close=view.previous_close,
+        change_pct=view.change_pct,
+    )

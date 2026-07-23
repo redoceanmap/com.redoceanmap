@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from stock.app.ports.output.market_data_port import MarketDataPort
 from stock.domain.entities.price_bar import PriceBar
 from stock.domain.value_objects.indicators import Indicators
-from stock.domain.value_objects.market_values import Price, Symbol
+from stock.domain.value_objects.market_values import Price, Quote, Symbol
 
 
 class FakeMarketDataAdapter(MarketDataPort):
@@ -14,8 +14,8 @@ class FakeMarketDataAdapter(MarketDataPort):
     async def latest_price(self, symbol: Symbol) -> Price:
         return Price(value=225.0)
 
-    async def quote(self, symbol: Symbol) -> Price:
-        return Price(value=226.5)
+    async def quote(self, symbol: Symbol) -> Quote:
+        return Quote(price=Price(value=226.5), previous_close=Price(value=224.0))
 
     async def indicators(self, symbol: Symbol) -> Indicators:
         return Indicators(rsi=58.0, ma20=222.0, ma50=210.0, support=205.0, resistance=235.0)

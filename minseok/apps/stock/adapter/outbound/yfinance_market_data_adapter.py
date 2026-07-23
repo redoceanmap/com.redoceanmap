@@ -12,7 +12,7 @@ from stock.app.ports.output.market_data_port import MarketDataPort
 from stock.domain.entities.price_bar import PriceBar
 from stock.domain.services.indicator_calculator import IndicatorCalculator
 from stock.domain.value_objects.indicators import Indicators
-from stock.domain.value_objects.market_values import Price, Symbol
+from stock.domain.value_objects.market_values import Price, Quote, Symbol
 
 logger = logging.getLogger(__name__)
 
@@ -46,24 +46,38 @@ class YFinanceMarketDataAdapter(MarketDataPort):
         _, history = await self._history(symbol)
         return Price(value=float(history["Close"].iloc[-1]))
 
-    async def quote(self, symbol: Symbol) -> Price:
-        return Price(value=await asyncio.to_thread(self._fetch_quote, symbol.code))
+    async def quote(self, symbol: Symbol) -> Quote:
+        price, previous = await asyncio.to_thread(self._fetch_quote, symbol.code)
+        return Quote(
+            price=Price(value=price),
+            # 전일 종가는 벤더가 못 주거나 0/음수면 버린다 — 등락률 미표시로 열화
+            previous_close=Price(value=previous) if previous and previous > 0 else None,
+        )
 
     @staticmethod
-    def _fetch_quote(code: str) -> float:
+    def _fetch_quote(code: str) -> tuple[float, float | None]:
+        """(현재가, 전일 종가). 전일 종가는 얻지 못하면 None."""
         # 30초 폴링 용도 — 간헐 네트워크 오류가 500으로 새지 않게 후보·폴백을 끝까지 시도한다
         for ticker in yahoo_candidates(code):
             t = yf.Ticker(ticker)
             try:
-                last = t.fast_info["last_price"]  # 메타 조회 — 이력 다운로드 없음
+                info = t.fast_info  # 메타 조회 — 이력 다운로드 없음
+                last = info["last_price"]
                 if last:
-                    return float(last)
+                    try:
+                        previous = info["previous_close"]
+                    except Exception:
+                        previous = None
+                    return float(last), float(previous) if previous else None
             except Exception:
                 pass
             try:
-                history = t.history(period="1d", auto_adjust=True).dropna(subset=["Close"])
+                # 폴백은 2일치를 받아 마지막 두 종가로 전일 대비까지 채운다
+                history = t.history(period="5d", auto_adjust=True).dropna(subset=["Close"])
                 if not history.empty:
-                    return float(history["Close"].iloc[-1])
+                    closes = history["Close"]
+                    previous = float(closes.iloc[-2]) if len(closes) >= 2 else None
+                    return float(closes.iloc[-1]), previous
             except Exception:
                 logger.warning("[yfinance] quote 폴백 실패: %s", ticker, exc_info=True)
         raise MarketDataUnavailableError(f"시세 데이터를 찾지 못했습니다: {code}")

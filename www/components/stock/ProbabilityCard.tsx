@@ -10,6 +10,15 @@ export default function ProbabilityCard({ forecast }: { forecast: StockForecast 
   if (!p) return null;
   const upPct = Math.round(p.up_rate * 100);
   const basePct = Math.round(p.baseline_up_rate * 100);
+  // 확률 자체보다 "평소보다 나은가"가 정보다 — 55% vs 평소 55%는 정보량이 0인데
+  // 55%만 크게 띄우면 유의미한 신호로 오해된다. 기준선 대비 차이를 주인공으로 둔다.
+  const edge = upPct - basePct;
+  const edgeMeta =
+    edge >= 3
+      ? { text: `평소보다 +${edge}%p`, className: "text-red-600" }
+      : edge <= -3
+        ? { text: `평소보다 ${edge}%p`, className: "text-blue-600" }
+        : { text: "평소와 다르지 않음", className: "text-foreground-muted" };
 
   return (
     <div className="shrink-0 px-4 py-2.5 border-b border-border">
@@ -18,14 +27,12 @@ export default function ProbabilityCard({ forecast }: { forecast: StockForecast 
           <span className="text-[11px] text-foreground-muted">
             {forecast.horizon_days}일 뒤 상승 확률
           </span>
-          <span className={`text-xl font-bold ${upPct >= basePct ? "text-red-600" : "text-blue-600"}`}>
-            {upPct}%
-          </span>
+          <span className={`text-xl font-bold ${edgeMeta.className}`}>{edgeMeta.text}</span>
         </div>
         <span className="text-[11px] text-foreground-muted">
-          과거 같은 {DIRECTION_LABEL[forecast.signal_direction]} {p.sample_size}회 중 {p.hits}회 상승
+          상승 확률 {upPct}% · 평소 상승률 {basePct}%
+          {" · "}과거 같은 {DIRECTION_LABEL[forecast.signal_direction]} {p.sample_size}회 중 {p.hits}회 상승
           {" · "}95% 구간 {Math.round(p.ci_low * 100)}~{Math.round(p.ci_high * 100)}%
-          {" · "}평소 상승률 {basePct}%
         </span>
         {!p.ready && (
           <span className="px-2 py-0.5 rounded-full border border-amber-200 bg-amber-50 text-amber-700 text-[10px] font-medium">

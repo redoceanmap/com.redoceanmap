@@ -15,3 +15,5 @@ class QuoteView:
     symbol: str
     price: float
     delayed: bool  # 항상 True(yfinance) — 실시간 벤더로 교체 시 False 가능
+    previous_close: float | None = None  # 전일 종가 — 벤더가 못 주면 None
+    change_pct: float | None = None  # 전일 대비 등락률 (0.012 = +1.2%)

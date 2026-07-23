@@ -4,12 +4,12 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { Search } from "lucide-react";
 import {
   ApiError,
   fetchPriceHistory,
   fetchStockAnalysis,
   fetchStockForecast,
+  fetchStockNews,
   fetchStockQuote,
 } from "@/lib/api";
 import { useChatStore } from "@/lib/store";
@@ -18,6 +18,8 @@ import ChatPanel from "@/components/chat/ChatPanel";
 import SymbolHeader from "@/components/stock/SymbolHeader";
 import StockPanel from "@/components/stock/StockPanel";
 import ProbabilityCard from "@/components/stock/ProbabilityCard";
+import SymbolSummary from "@/components/stock/SymbolSummary";
+import MarketBoard from "@/components/stock/MarketBoard";
 
 // lightweight-charts는 SSR 불가 — 클라이언트에서만 로드
 const CandleChart = dynamic(() => import("@/components/stock/CandleChart"), {
@@ -33,11 +35,34 @@ const EMPTY_PROMPTS = [
   "요즘 시장 분위기 어때요?",
 ];
 
+// 표시 구간 프리셋 — 전체 구간(2y)으로 열면 5거래일 예측 밴드가 오른쪽 끝 실오라기가 된다.
+// 5분봉은 60일치만 보유하므로 프리셋도 그 안에서만 의미가 있다.
+const RANGE_PRESETS: Record<Timeframe, { label: string; days: number | null }[]> = {
+  "1d": [
+    { label: "1개월", days: 30 },
+    { label: "3개월", days: 90 },
+    { label: "6개월", days: 180 },
+    { label: "1년", days: 365 },
+    { label: "전체", days: null },
+  ],
+  "5m": [
+    { label: "1주", days: 7 },
+    { label: "1개월", days: 30 },
+    { label: "전체", days: null },
+  ],
+};
+const DEFAULT_RANGE: Record<Timeframe, number | null> = { "1d": 180, "5m": 7 };
+
 function StockWorkspace() {
   const params = useSearchParams();
   const symbol = params.get("symbol") ?? "";
   const c = params.get("c");
-  const [timeframe, setTimeframe] = useState<Timeframe>("1d");
+  // 단일 객체 패턴 — 타임프레임과 표시 구간은 항상 함께 바뀐다(REACT_RULES 패턴 B)
+  const [view, setView] = useState<{ timeframe: Timeframe; rangeDays: number | null }>({
+    timeframe: "1d",
+    rangeDays: DEFAULT_RANGE["1d"],
+  });
+  const { timeframe, rangeDays } = view;
 
   const conversationId = useChatStore((s) => s.conversationId);
   const messages = useChatStore((s) => s.messages);
@@ -114,11 +139,34 @@ function StockWorkspace() {
     retry: false,
     refetchInterval: (query) => (query.state.status === "error" ? 300_000 : 30_000),
   });
+  // 차트 감성 마커용 — NewsPanel과 같은 쿼리 키라 캐시를 공유한다(추가 요청 없음)
+  const newsQ = useQuery({
+    queryKey: ["stock-news", symbol],
+    queryFn: () => fetchStockNews(symbol),
+    enabled: !!symbol,
+    staleTime: 5 * 60_000,
+  });
 
   const pricesNotCollected = pricesQ.error instanceof ApiError && pricesQ.error.status === 404;
 
+  // 전일 대비 등락 — 마지막 봉이 오늘이면 그 직전 봉이 기준이다(지연 시세 우선)
+  const bars = pricesQ.data?.bars;
+  const dailyBars = timeframe === "1d" ? bars : undefined;
+  const lastBar = dailyBars?.[dailyBars.length - 1];
+  const isTodayBar =
+    lastBar !== undefined &&
+    Math.floor(new Date(lastBar.ts).getTime() / 86_400_000) === Math.floor(Date.now() / 86_400_000);
+  const previousClose = isTodayBar
+    ? dailyBars?.[dailyBars.length - 2]?.close
+    : lastBar?.close;
+
+  // 이 종목을 설명한 마지막 챗 답변 — 채팅을 스크롤해도 사라지지 않게 스테이지에 고정한다
+  const pinnedSummary = [...messages]
+    .reverse()
+    .find((m) => m.role === "assistant" && m.stock?.symbol === symbol)?.content;
+
   const stage = !symbol ? (
-    <EmptyStage onSubmit={setSymbol} />
+    <MarketBoard onSelect={setSymbol} />
   ) : (
     <>
       <SymbolHeader
@@ -127,7 +175,9 @@ function StockWorkspace() {
         analyze={analyzeQ.data}
         isLoading={analyzeQ.isLoading}
         quotePrice={quoteQ.data?.price}
+        previousClose={previousClose}
       />
+      {pinnedSummary && <SymbolSummary text={pinnedSummary} />}
       {forecastQ.data && <ProbabilityCard forecast={forecastQ.data} />}
       {pricesQ.isLoading && <div className="flex-1 m-4 skeleton rounded-xl" />}
       {pricesNotCollected && (
@@ -149,14 +199,16 @@ function StockWorkspace() {
           resistance={analyzeQ.data?.resistance}
           forecast={timeframe === "1d" ? forecastQ.data : null}
           quotePrice={timeframe === "1d" ? quoteQ.data?.price : null}
+          rangeDays={rangeDays}
+          news={timeframe === "1d" ? newsQ.data : undefined}
         />
       )}
-      <div className="shrink-0 flex items-center gap-1 px-4 py-2 border-t border-border">
+      <div className="shrink-0 flex flex-wrap items-center gap-1 px-4 py-2 border-t border-border">
         {(["1d", "5m"] as const).map((tf) => (
           <button
             key={tf}
             type="button"
-            onClick={() => setTimeframe(tf)}
+            onClick={() => setView({ timeframe: tf, rangeDays: DEFAULT_RANGE[tf] })}
             aria-pressed={timeframe === tf}
             className={`px-3 h-7 rounded-md text-xs font-medium transition-colors ${
               timeframe === tf
@@ -167,8 +219,27 @@ function StockWorkspace() {
             {tf === "1d" ? "일봉" : "5분봉"}
           </button>
         ))}
+        <span className="mx-1 h-4 w-px bg-border" aria-hidden />
+        {RANGE_PRESETS[timeframe].map((preset) => (
+          <button
+            key={preset.label}
+            type="button"
+            onClick={() => setView((prev) => ({ ...prev, rangeDays: preset.days }))}
+            aria-pressed={rangeDays === preset.days}
+            className={`px-2.5 h-7 rounded-md text-xs font-medium transition-colors ${
+              rangeDays === preset.days
+                ? "border border-brand text-brand"
+                : "text-foreground-muted hover:bg-black/5"
+            }`}
+          >
+            {preset.label}
+          </button>
+        ))}
         {timeframe === "5m" && (
           <span className="ml-2 text-[11px] text-foreground-muted">최근 60일 보유</span>
+        )}
+        {timeframe === "5m" && forecastQ.data?.band && (
+          <span className="text-[11px] text-foreground-muted">· 예측 밴드는 일봉에서만 표시</span>
         )}
         {pricesQ.data?.live && (
           <span className="ml-2 px-2 py-0.5 rounded-full border border-border bg-surface text-[10px] text-foreground-muted">
@@ -193,41 +264,6 @@ function StockWorkspace() {
         />
       }
     />
-  );
-}
-
-function EmptyStage({ onSubmit }: { onSubmit: (symbol: string) => void }) {
-  // FormData 패턴 — 제출 시점에만 값 수집 (REACT_RULES 패턴 A)
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const value = String(new FormData(e.currentTarget).get("symbol") ?? "").trim();
-    if (value) onSubmit(value);
-  };
-
-  return (
-    <div className="flex-1 grid place-items-center px-6">
-      <div className="w-full max-w-sm text-center">
-        <h2 className="text-lg font-semibold">주식 분석 워크스페이스</h2>
-        <p className="mt-1.5 text-sm text-foreground-muted">
-          채팅으로 물어보거나 종목 코드를 직접 입력하세요
-        </p>
-        <form onSubmit={handleSubmit} className="mt-4 flex gap-2">
-          <input
-            name="symbol"
-            aria-label="종목 코드 또는 티커"
-            placeholder="005930, AAPL …"
-            className="flex-1 h-10 px-3.5 rounded-xl border border-border bg-surface outline-none text-sm focus:border-brand/50"
-          />
-          <button
-            type="submit"
-            className="h-10 px-4 rounded-xl bg-brand text-white text-sm font-medium hover:bg-brand-deep transition-colors inline-flex items-center gap-1.5"
-          >
-            <Search size={15} strokeWidth={2} />
-            열기
-          </button>
-        </form>
-      </div>
-    </div>
   );
 }
 

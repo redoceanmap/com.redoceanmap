@@ -26,7 +26,13 @@ class StockQuoteInteractor(StockQuoteUseCase):
         now = time.monotonic()
         if cached is not None and now - cached[0] < _CACHE_TTL_SECONDS:
             return cached[1]
-        price = await self._market_data.quote(Symbol(code=symbol))
-        view = QuoteView(symbol=symbol, price=price.value, delayed=True)
+        quote = await self._market_data.quote(Symbol(code=symbol))
+        view = QuoteView(
+            symbol=symbol,
+            price=quote.price.value,
+            delayed=True,
+            previous_close=quote.previous_close.value if quote.previous_close else None,
+            change_pct=quote.change_pct(),
+        )
         _CACHE[symbol] = (now, view)
         return view

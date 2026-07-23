@@ -127,6 +127,30 @@ export type StockQuote = {
   symbol: string;
   price: number;
   delayed: boolean; // true = 지연 시세(yfinance 무료)
+  previous_close?: number | null;
+  change_pct?: number | null; // 전일 대비 (0.012 = +1.2%)
+};
+
+// ── GET /stock/board ──
+
+export type StockBoardRow = {
+  ticker: string;
+  name: string; // 표시용 한글명 — 모르는 티커는 티커 그대로
+  as_of: string;
+  direction: "UP" | "DOWN" | "NEUTRAL";
+  score: number; // -1 ~ 1
+  price: number; // 최신 수집 종가 — 준실시간 아님
+  change_pct: number | null;
+  up_rate: number | null;
+  baseline_up_rate: number | null;
+  edge_pct: number | null; // up_rate − baseline
+  ready: boolean;
+  sparkline: number[]; // 최근 종가(과거 → 최신)
+};
+
+export type StockBoard = {
+  horizon_days: number;
+  rows: StockBoardRow[];
 };
 
 // ── GET /stock/{symbol}/prices ──

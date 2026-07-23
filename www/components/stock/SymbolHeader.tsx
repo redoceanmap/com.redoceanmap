@@ -16,11 +16,22 @@ type SymbolHeaderProps = {
   analyze?: StockAnalyzeResult;
   isLoading: boolean;
   quotePrice?: number | null; // 30초 폴링 현재가(지연 시세) — 있으면 분석 시점 가격보다 우선
+  previousClose?: number | null; // 전일 종가 — 등락률 기준
 };
 
-export default function SymbolHeader({ symbol, resolvedTicker, analyze, isLoading, quotePrice }: SymbolHeaderProps) {
+export default function SymbolHeader({
+  symbol,
+  resolvedTicker,
+  analyze,
+  isLoading,
+  quotePrice,
+  previousClose,
+}: SymbolHeaderProps) {
   const meta = analyze ? (DIRECTION_META[analyze.direction] ?? DIRECTION_META.NEUTRAL) : null;
   const DirectionIcon = meta?.icon;
+  const price = quotePrice ?? analyze?.price;
+  const changePct =
+    price != null && previousClose ? (price / previousClose - 1) * 100 : null;
 
   return (
     <div className="shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 border-b border-border">
@@ -34,6 +45,17 @@ export default function SymbolHeader({ symbol, resolvedTicker, analyze, isLoadin
           <span className="text-lg font-bold">
             {formatPrice(quotePrice ?? analyze.price, resolvedTicker ?? symbol)}
           </span>
+          {changePct !== null && (
+            <span
+              className={`text-sm font-semibold tabular-nums ${
+                changePct > 0 ? "text-red-600" : changePct < 0 ? "text-blue-600" : "text-foreground-muted"
+              }`}
+            >
+              {changePct > 0 ? "+" : ""}
+              {changePct.toFixed(2)}%
+              <span className="ml-1 text-[10px] font-normal text-foreground-muted">전일 대비</span>
+            </span>
+          )}
           {quotePrice != null && (
             <span className="text-[10px] text-foreground-muted">지연 시세 · 30초 갱신</span>
           )}
