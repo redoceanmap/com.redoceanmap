@@ -570,3 +570,32 @@ def test_주식_컨텍스트의_가격에는_통화가_붙는다():
 
     kr = ChatInteractor._format_stock_context("삼성전자 어때?", _analysis(symbol="005930"))
     assert "90,000.00원" in kr
+
+
+# ── 유동인구 피크시간 구간 폭 보정 ──
+# 구간 폭이 제각각이라(0~6시 6시간, 11~14시 3시간) 총합 최대를 그대로 쓰면 가장 넓은
+# 새벽 구간이 늘 피크로 뽑힌다. LLM 컨텍스트에 그대로 실려 답변까지 틀어진다.
+
+class _FloatingRaw:
+    """미아사거리 2026 4분기 실측값."""
+    time_00_06_floating_pop = 81994
+    time_06_11_floating_pop = 70659
+    time_11_14_floating_pop = 46638
+    time_14_17_floating_pop = 49070
+    time_17_21_floating_pop = 62682
+    time_21_24_floating_pop = 42716
+
+
+def test_피크시간은_시간당_평균으로_고른다():
+    from chat.app.use_cases.chat_interactor import TIME_FIELDS, _top_time_field
+
+    # 총합 1위는 새벽 0~6시(81,994)지만 시간당으로는 최하위(13,665/h)다
+    assert _top_time_field(_FloatingRaw(), TIME_FIELDS) == "오후 2~5시"
+
+
+def test_총합_최대는_넓은_구간에_쏠린다():
+    """보정이 없으면 어떤 값이 나오는지 고정 — 회귀 시 이 대비가 깨진다."""
+    from chat.app.use_cases.chat_interactor import TIME_FIELDS, _top_field
+
+    naive = _top_field(_FloatingRaw(), [(f, label) for f, label, _ in TIME_FIELDS])
+    assert naive == "새벽 0~6시"

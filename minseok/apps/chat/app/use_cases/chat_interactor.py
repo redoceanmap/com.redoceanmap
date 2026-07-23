@@ -42,13 +42,16 @@ AGE_FIELDS = [
     ("age_50_floating_pop", "50대"),
     ("age_60_plus_floating_pop", "60대 이상"),
 ]
+# (필드, 표기, 구간 시간수) — 구간 폭이 제각각이라 총합 최대를 그대로 쓰면 가장 넓은
+# 새벽 0~6시가 늘 "피크"로 뽑힌다. 시간당으로 나눠 비교해야 실제 붐비는 시간이 나온다
+# (미아사거리 실측: 총합 1위는 0~6시지만 시간당으로는 최하위, 실제 1위는 오후 2~5시).
 TIME_FIELDS = [
-    ("time_00_06_floating_pop", "새벽 0~6시"),
-    ("time_06_11_floating_pop", "오전 6~11시"),
-    ("time_11_14_floating_pop", "오전 11시~오후 2시"),
-    ("time_14_17_floating_pop", "오후 2~5시"),
-    ("time_17_21_floating_pop", "오후 5~9시"),
-    ("time_21_24_floating_pop", "밤 9시~자정"),
+    ("time_00_06_floating_pop", "새벽 0~6시", 6),
+    ("time_06_11_floating_pop", "오전 6~11시", 5),
+    ("time_11_14_floating_pop", "오전 11시~오후 2시", 3),
+    ("time_14_17_floating_pop", "오후 2~5시", 3),
+    ("time_17_21_floating_pop", "오후 5~9시", 4),
+    ("time_21_24_floating_pop", "밤 9시~자정", 3),
 ]
 
 # 서울 외 주요 지역명 — 상권 데이터가 서울뿐이라, 이 지명만 언급된 질문은
@@ -151,7 +154,12 @@ PHASE2_PROMPT = """당신은 서울 창업 컨설턴트입니다.
 - 창업자가 실질적으로 도움받을 수 있는 인사이트 포함 (경쟁 강도, 수익성, 안정성 등)
 - 수치를 단순 나열하지 말고 의미를 해석해서 서술
 - '서울 평균 대비' 종합점수가 제공된 상권은 그 근거(성장·건강도·지속성)를 추천 이유에 반영 (50점 = 서울 평균 수준)
-- '관련 지역 기사'가 제공되면 해당 지역 상권의 트렌드 근거로 반영 (기사 제목 인용 가능, 없는 사실 창작 금지)"""
+- '관련 지역 기사'가 제공되면 해당 지역 상권의 트렌드 근거로 반영 (기사 제목 인용 가능, 없는 사실 창작 금지)
+- **위 컨텍스트에 없는 사실을 절대 지어내지 말 것**. 특히 지하철 노선·환승역·행정구·랜드마크·
+  '○○구 관문' 같은 입지 설명은 제공되지 않았으므로 언급 자체를 금지한다
+  (실제 오류 사례: 성북구 미아사거리를 '5,8호선 환승, 강동구 관문'이라고 서술)
+- 기사는 지역 트렌드 배경으로만 쓰고, 기사에 나온 다른 지역·상권의 특성을 이 상권의 특성인 것처럼 옮기지 말 것
+- '유동인구 최다 연령대'는 통행량 기준이다. 이를 '주요 고객층'·'구매층'으로 바꿔 부르지 말 것"""
 
 STREAM_SYSTEM_PROMPT = """당신은 서울 상권 분석 상담사입니다.
 사용자와 자연스럽게 대화하며 상권 선택·창업 관련 조언을 제공합니다.
@@ -163,6 +171,12 @@ STREAM_SYSTEM_PROMPT = """당신은 서울 상권 분석 상담사입니다.
 
 def _top_field(obj, fields: list[tuple[str, str]]) -> str:
     best = max(fields, key=lambda f: getattr(obj, f[0], 0) or 0)
+    return best[1]
+
+
+def _top_time_field(obj, fields: list[tuple[str, str, int]]) -> str:
+    """시간당 평균이 가장 큰 시간대 — 구간 폭 보정(위 TIME_FIELDS 주석 참고)."""
+    best = max(fields, key=lambda f: (getattr(obj, f[0], 0) or 0) / f[2])
     return best[1]
 
 
@@ -298,7 +312,7 @@ class ChatInteractor(ChatUseCase):
                 daily = round(raw.total_floating_pop / 91)
                 foot_text = f"일평균 {daily:,}명 (분기 총 {raw.total_floating_pop:,}명 ÷ 91일)"
                 top_age = _top_field(raw, AGE_FIELDS)
-                peak_time = _top_field(raw, TIME_FIELDS)
+                peak_time = _top_time_field(raw, TIME_FIELDS)
             else:
                 foot_text = "유동인구 데이터 없음"
                 top_age = "데이터 없음"
@@ -435,7 +449,8 @@ class ChatInteractor(ChatUseCase):
                 f"- 매출패턴: {st.get('weekday_text')}\n"
                 f"- 점포: {st.get('store_count_text')} | {st.get('closure_text')} | {st.get('opening_text')} | {st.get('franchise_text')}\n"
                 f"- 유동인구: {st.get('foot_text')}\n"
-                f"- 주요 연령대: {st.get('top_age')} | 피크시간: {st.get('peak_time')}\n"
+                f"- 유동인구 최다 연령대: {st.get('top_age')} (통행량 기준 — 매출 기준 고객층이 아님)"
+                f" | 유동인구 피크시간(시간당): {st.get('peak_time')}\n"
                 f"- 상권변화: {st.get('change_text')} | {st.get('op_months_text')}\n"
                 f"{score_line}"
             )
