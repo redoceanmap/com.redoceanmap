@@ -102,7 +102,7 @@
   응답 `sentiment`는 원시값 유지, `sentiment_baseline`/`sentiment_surprise` 추가(additive —
   허브 계약·chat 무변경). 기준선 조회는 `NewsRepositoryPort.sentiment_baseline`.
 - **예측 스냅샷·사후 채점(`forecast_snapshot` 슬라이스)**: 일일 cron(`scripts/snapshot_forecasts.py`,
-  07:30, horizons 5·20)이 허브 `POST /automation/forecast-snapshots`(+`/score`)로 워치리스트
+  14:00, horizons 5·20)이 허브 `POST /automation/forecast-snapshots`(+`/score`)로 워치리스트
   forecast(방향·확률·밴드)와 신호 분해(breakdown)를 `forecast_snapshots` 테이블에 동결하고
   ((ticker, horizon_days, as_of) 유니크 — 재실행 멱등), horizon 도래분을 price_bars(1d)
   실현 수익률로 채점한다(UP→상승, DOWN→비상승 적중, NEUTRAL은 hit NULL — Backtester 의미론).
@@ -110,6 +110,9 @@
   요약(`summary`)은 방향·호라이즌·신호별(원신호 부호↔실현 수익률 부호 일치율) 적중률을 집계 —
   허브 `ForecastSnapshotPort`를 `ForecastSnapshotGateway`가 구현, admin `/admin/forecasts`가 소비.
   가중치 재적합·캘리브레이션의 원료 데이터 축(백테스트가 못 주는 진짜 out-of-sample 성적).
+  **실행 시각 14:00 KST는 일봉 적재 시각에 맞춘 것**(2026-07-23 변경) — 세션 D의 일봉은
+  D+1 13:05 KST에 들어오는데 기존 07:30은 그보다 6시간 일러, 매일 한 세션 묵은 봉으로
+  as_of가 잡혔다(보드가 "기준 7/21"인데 가격은 7/22인 화면의 원인).
 - **현재가 폴링(`stock_quote` 슬라이스)**: `GET /stock/{symbol}/quote` — `MarketDataPort.quote()`
   (yfinance fast_info, 이력 미조회)로 지연 시세 현재가만 경량 반환(`delayed: true`). 프론트
   30초 폴링용. 진짜 실시간은 KIS 등 벤더 어댑터 교체 경로(계약 동일)로 후속.

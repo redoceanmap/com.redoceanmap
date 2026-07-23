@@ -209,7 +209,7 @@ apps/hub/
 | 뉴스 라벨링 | cron(`scripts/label_news.py`, EXAONE 7.8B Ollama) → `GET /automation/news-labels/pending` → 라벨 → `POST /automation/news-labels` → NewsLabelIngestInteractor → `NewsLabelStoragePort` → stock 저장 |
 | 상권 뉴스 수집 | cron(`scripts/collect_market_news.py`, 매일 01:30, Google News RSS "지역 어간 × 상권") → `POST /automation/market-news` → MarketNewsIngestInteractor → `MarketNewsStoragePort` → market 저장(+bge-m3 임베딩) |
 | 펀더멘털 수집 | cron(`scripts/collect_fundamentals.py`, 주 1회, yfinance+DART) → `POST /automation/fundamentals` → FundamentalIngestInteractor → `FundamentalStoragePort` → stock 저장 |
-| 예측 스냅샷 | cron(`scripts/snapshot_forecasts.py`, 매일 07:30) → `POST /automation/forecast-snapshots`(캡처) + `POST /automation/forecast-snapshots/score`(채점) → ForecastSnapshotInteractor → `ForecastSnapshotPort` → stock 저장·채점 |
+| 예측 스냅샷 | cron(`scripts/snapshot_forecasts.py`, 매일 14:00) → `POST /automation/forecast-snapshots`(캡처) + `POST /automation/forecast-snapshots/score`(채점) → ForecastSnapshotInteractor → `ForecastSnapshotPort` → stock 저장·채점 |
 
 - n8n 워크플로: [[minseok/apps/hub/_docs/n8n_news_collector_workflow.json]] ·
   [[minseok/apps/hub/_docs/n8n_stock_signal_alert_workflow.json]] — n8n UI에서 임포트,
@@ -277,7 +277,7 @@ stock(구현·영속: `price_bars` 테이블, (ticker, timeframe, ts) 유니크)
 
 ## 소유 계약 — ForecastSnapshotPort
 
-예측 스냅샷 협력. 캡처 배치(`scripts/snapshot_forecasts.py`, 매일 07:30)·admin(소비)과
+예측 스냅샷 협력. 캡처 배치(`scripts/snapshot_forecasts.py`, 매일 14:00)·admin(소비)과
 stock(구현·영속: `forecast_snapshots` 테이블, (ticker, horizon_days, as_of) 유니크)을 잇는다.
 `capture(tickers, horizons)`(forecast+신호 분해 동결) · `score()`(horizon 도래분을 price_bars
 실현 수익률로 채점 — UP→상승, DOWN→비상승, NEUTRAL은 NULL) · `accuracy_report(horizon,
