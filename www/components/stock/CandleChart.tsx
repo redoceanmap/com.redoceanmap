@@ -32,6 +32,7 @@ type CandleChartProps = {
   quotePrice?: number | null; // 준실시간(지연) 현재가 — 마지막 봉 갱신용
   rangeDays?: number | null; // 초기 표시 구간(달력일). null = 전체
   news?: StockNewsItem[]; // 감성 마커용 — 강한 기사만 캔들 위에 찍는다
+  intraday?: boolean; // 5분봉 등 분 단위 — 시간축에 시각을 표시할지
 };
 
 // 감성 마커로 찍을 최소 강도·최대 개수 — 약한 기사까지 찍으면 캔들이 가려진다
@@ -155,6 +156,7 @@ export default function CandleChart({
   quotePrice,
   rangeDays,
   news,
+  intraday = false,
 }: CandleChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<SVGSVGElement>(null);
@@ -293,7 +295,8 @@ export default function CandleChart({
         horzLines: { color: "rgba(235, 232, 223, 0.6)" },
       },
       rightPriceScale: { borderColor: "#EBE8DF" },
-      timeScale: { borderColor: "#EBE8DF", timeVisible: true },
+      // 일봉에 시간을 켜면 축·크로스헤어에 "04:00:00"이 붙어 읽기만 나빠진다
+      timeScale: { borderColor: "#EBE8DF", timeVisible: intraday },
       crosshair: { horzLine: { labelBackgroundColor: "#991B1B" }, vertLine: { labelBackgroundColor: "#991B1B" } },
     });
 
@@ -448,6 +451,11 @@ export default function CandleChart({
     if (r) r.markers.setMarkers(toNewsMarkers(bars, news ?? []));
   }, [bars, news]);
 
+  // 타임프레임 전환 — 차트는 재생성하지 않으므로 시간축 옵션만 갈아끼운다
+  useEffect(() => {
+    refs.current?.chart.applyOptions({ timeScale: { timeVisible: intraday } });
+  }, [intraday]);
+
   // 기간 프리셋 전환 — 데이터는 그대로 두고 표시 구간만 옮긴다
   useEffect(() => {
     const r = refs.current;
@@ -489,16 +497,14 @@ export default function CandleChart({
         <span className="flex items-center gap-1">
           <span className="inline-block w-3 h-0.5" style={{ background: RSI_COLOR }} /> RSI(14)
         </span>
+        {/* 범위 숫자는 차트 위 알약이 이미 말한다 — 여기는 산출 방식만 (중복 표기 방지) */}
         {forecast?.band && (
           <span className="flex items-center gap-1">
             <span className="inline-block w-3 border-t border-dashed border-foreground-muted" />
-            {forecast.horizon_days}일 예측 범위{" "}
-            <b className="font-semibold" style={{ color: DOWN }}>{pct(forecast.band.q25_pct)}</b>
-            {" ~ "}
-            <b className="font-semibold" style={{ color: UP }}>{pct(forecast.band.q75_pct)}</b>
+            예측 산출:{" "}
             {forecast.band.source === "quantile"
-              ? ` · 중앙 ${pct(forecast.band.median_pct)} (과거 실적 분위수)`
-              : " (변동성 ATR 기반)"}
+              ? `과거 실적 분위수 · 중앙 ${pct(forecast.band.median_pct)}`
+              : "변동성(ATR) 기반"}
           </span>
         )}
         {news && news.length > 0 && <span>▲▼ 감성 강한 뉴스</span>}

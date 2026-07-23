@@ -149,16 +149,19 @@ function StockWorkspace() {
 
   const pricesNotCollected = pricesQ.error instanceof ApiError && pricesQ.error.status === 404;
 
-  // 전일 대비 등락 — 마지막 봉이 오늘이면 그 직전 봉이 기준이다(지연 시세 우선)
+  // 전일 대비 등락 — 백엔드 quote가 단일 소스다. 봉 계산은 quote가 전일 종가를 못 줄 때의
+  // 폴백. 기준 봉은 "표시 중인 가격이 어느 세션인가"로 가른다: 현재가가 마지막 봉과 같으면
+  // (장 마감) 그 직전 봉이, 다르면(장중 틱) 마지막 봉이 전일 종가다.
+  // 마지막 봉을 무조건 기준으로 삼으면 장 마감 중 등락률이 항상 0.00%가 된다.
   const bars = pricesQ.data?.bars;
   const dailyBars = timeframe === "1d" ? bars : undefined;
-  const lastBar = dailyBars?.[dailyBars.length - 1];
-  const isTodayBar =
-    lastBar !== undefined &&
-    Math.floor(new Date(lastBar.ts).getTime() / 86_400_000) === Math.floor(Date.now() / 86_400_000);
-  const previousClose = isTodayBar
-    ? dailyBars?.[dailyBars.length - 2]?.close
-    : lastBar?.close;
+  const lastClose = dailyBars?.[dailyBars.length - 1]?.close;
+  const price = quoteQ.data?.price ?? lastClose;
+  const sameSession =
+    price !== undefined && lastClose !== undefined && Math.abs(price - lastClose) <= Math.abs(lastClose) * 1e-6;
+  const previousClose =
+    quoteQ.data?.previous_close ??
+    (sameSession ? dailyBars?.[dailyBars.length - 2]?.close : lastClose);
 
   // 이 종목을 설명한 마지막 챗 답변 — 채팅을 스크롤해도 사라지지 않게 스테이지에 고정한다
   const pinnedSummary = [...messages]
@@ -201,6 +204,7 @@ function StockWorkspace() {
           quotePrice={timeframe === "1d" ? quoteQ.data?.price : null}
           rangeDays={rangeDays}
           news={timeframe === "1d" ? newsQ.data : undefined}
+          intraday={timeframe === "5m"}
         />
       )}
       <div className="shrink-0 flex flex-wrap items-center gap-1 px-4 py-2 border-t border-border">

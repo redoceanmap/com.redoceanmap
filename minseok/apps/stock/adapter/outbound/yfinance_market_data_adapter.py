@@ -55,31 +55,46 @@ class YFinanceMarketDataAdapter(MarketDataPort):
         )
 
     @staticmethod
-    def _fetch_quote(code: str) -> tuple[float, float | None]:
+    def _pick_previous_close(price: float, closes: list[float]) -> float | None:
+        """현재가가 속한 세션의 '직전' 종가를 고른다.
+
+        fast_info["previous_close"]는 쓰지 않는다 — 실측(2026-07-23, SNDK·AAPL·NVDA·
+        MSFT·TSLA 5종목)에서 실제 직전 일봉 종가와 전부 어긋났다. 일봉은 자기정합적이라
+        이쪽을 신뢰한다. 현재가가 마지막 일봉과 같은 값이면 그 봉이 곧 현재 세션이므로
+        직전 봉이 기준이고, 다르면(장중 실시간 틱) 마지막 일봉이 곧 전일 종가다.
+        """
+        if not closes:
+            return None
+        last_bar = closes[-1]
+        same_session = abs(price - last_bar) <= abs(last_bar) * 1e-6
+        if same_session:
+            return closes[-2] if len(closes) >= 2 else None
+        return last_bar
+
+    @classmethod
+    def _fetch_quote(cls, code: str) -> tuple[float, float | None]:
         """(현재가, 전일 종가). 전일 종가는 얻지 못하면 None."""
         # 30초 폴링 용도 — 간헐 네트워크 오류가 500으로 새지 않게 후보·폴백을 끝까지 시도한다
         for ticker in yahoo_candidates(code):
             t = yf.Ticker(ticker)
+            last: float | None = None
             try:
-                info = t.fast_info  # 메타 조회 — 이력 다운로드 없음
-                last = info["last_price"]
-                if last:
-                    try:
-                        previous = info["previous_close"]
-                    except Exception:
-                        previous = None
-                    return float(last), float(previous) if previous else None
+                value = t.fast_info["last_price"]  # 장중이면 일봉 종가보다 신선하다
+                if value:
+                    last = float(value)
             except Exception:
                 pass
             try:
-                # 폴백은 2일치를 받아 마지막 두 종가로 전일 대비까지 채운다
+                # 전일 종가는 일봉에서만 얻는다(위 docstring 참고) — 5일치면 연휴도 넘긴다
                 history = t.history(period="5d", auto_adjust=True).dropna(subset=["Close"])
                 if not history.empty:
-                    closes = history["Close"]
-                    previous = float(closes.iloc[-2]) if len(closes) >= 2 else None
-                    return float(closes.iloc[-1]), previous
+                    closes = [float(c) for c in history["Close"]]
+                    price = last if last is not None else closes[-1]
+                    return price, cls._pick_previous_close(price, closes)
             except Exception:
-                logger.warning("[yfinance] quote 폴백 실패: %s", ticker, exc_info=True)
+                logger.warning("[yfinance] quote 이력 조회 실패: %s", ticker, exc_info=True)
+            if last is not None:
+                return last, None  # 이력이 없어도 현재가는 살린다(등락률만 미표시)
         raise MarketDataUnavailableError(f"시세 데이터를 찾지 못했습니다: {code}")
 
     async def indicators(self, symbol: Symbol) -> Indicators:

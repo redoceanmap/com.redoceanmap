@@ -91,6 +91,9 @@ export type StockAnalyzeResult = {
   neutral_reason?: "atr_veto" | "volume_confirm" | null;
   signals?: SignalContribution[];
   insights?: Insight[];
+  // 최근 30일 뉴스 라벨 평균. null이면 기준선 표본 부족 → 감성이 절대값으로 신호에 들어간다
+  sentiment_baseline?: number | null;
+  sentiment_surprise?: number | null; // 당일 − 기준선 (실제 신호에 투입된 값)
 };
 
 // ── GET /stock/{symbol}/forecast ──

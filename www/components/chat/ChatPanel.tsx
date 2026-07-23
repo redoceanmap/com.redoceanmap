@@ -206,10 +206,15 @@ function StockSummaryCard({ stock, onClick }: { stock: StockAnalysis; onClick: (
             {formatPrice(stock.price, stock.symbol)}
           </div>
         </div>
-        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border text-[11px] font-medium ${meta.className}`}>
-          <DirectionIcon size={12} strokeWidth={2} />
-          {meta.label} {Math.round(stock.confidence * 100)}%
-        </span>
+        {/* 이 카드는 질문 시점에 얼어붙은 값이다. 스테이지 헤더는 방금 재분석한 값이라
+            둘이 어긋날 수 있어(상승 36% vs 중립 16% 실사례) 시점을 명시한다. */}
+        <div className="shrink-0 text-right">
+          <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border text-[11px] font-medium ${meta.className}`}>
+            <DirectionIcon size={12} strokeWidth={2} />
+            {meta.label} {Math.round(stock.confidence * 100)}%
+          </span>
+          <div className="mt-1 text-[10px] text-foreground-muted">질문 시점 기준</div>
+        </div>
       </div>
       {indicators && (
         <div className="mt-2.5 grid grid-cols-3 gap-1.5">

@@ -17,6 +17,8 @@ const VOLUME_SURGE = 1.5;
 const VOLUME_QUIET = 0.7;
 const MOMENTUM_MIN = 0.15;
 const ATR_HIGH = 4.0;
+// 이 이상은 "추세"가 아니라 상장 초기 구간이 기준에 잡힌 것 — 숫자를 그대로 믿게 두지 않는다
+const MOMENTUM_ABSURD = 5.0;
 
 type Tone = "up" | "down" | "flat";
 
@@ -87,14 +89,27 @@ function buildStats(a: StockAnalyzeResult, symbol: string): Stat[] {
     },
     {
       label: "12-1 모멘텀",
-      value: `${fmt(a.momentum_12_1 * 100, 1)}%`,
+      // 상장·분할 1년 이내 종목은 기준 시점이 상장 초기라 수백~수천 %가 찍힌다(SNDK +5,364%).
+      // 계산은 맞지만 "중장기 추세"로 읽을 수 없는 값이라 그대로 두지 않는다.
+      value: Math.abs(a.momentum_12_1) >= MOMENTUM_ABSURD
+        ? `${a.momentum_12_1 > 0 ? ">+" : "<-"}${MOMENTUM_ABSURD * 100}%`
+        : `${fmt(a.momentum_12_1 * 100, 1)}%`,
       hint:
-        a.momentum_12_1 >= MOMENTUM_MIN
-          ? "중장기 상승 추세"
-          : a.momentum_12_1 <= -MOMENTUM_MIN
-            ? "중장기 하락 추세"
-            : "중장기 방향성 약함",
-      tone: a.momentum_12_1 >= MOMENTUM_MIN ? "up" : a.momentum_12_1 <= -MOMENTUM_MIN ? "down" : "flat",
+        Math.abs(a.momentum_12_1) >= MOMENTUM_ABSURD
+          ? "상장 1년 내 종목일 수 있어 해석 불가"
+          : a.momentum_12_1 >= MOMENTUM_MIN
+            ? "중장기 상승 추세"
+            : a.momentum_12_1 <= -MOMENTUM_MIN
+              ? "중장기 하락 추세"
+              : "중장기 방향성 약함",
+      tone:
+        Math.abs(a.momentum_12_1) >= MOMENTUM_ABSURD
+          ? "flat"
+          : a.momentum_12_1 >= MOMENTUM_MIN
+            ? "up"
+            : a.momentum_12_1 <= -MOMENTUM_MIN
+              ? "down"
+              : "flat",
     },
     {
       label: "ATR (변동성)",
@@ -195,6 +210,13 @@ export default function IndicatorPanel({
           <span className="text-xs font-normal text-foreground-muted">
             ({analyze.sentiment > 0 ? "+" : ""}{fmt(analyze.sentiment)})
           </span>
+        </div>
+        {/* 기준선(최근 30일 라벨 평균)이 없으면 절대값이 그대로 신호에 들어간다 —
+            상시 낙관 편향을 걸러내는 장치가 꺼진 상태라 이를 숨기지 않는다. */}
+        <div className="mt-1 text-[10px] leading-tight text-amber-700">
+          {analyze.sentiment_baseline == null
+            ? "30일 기준선 없음 — 편향 보정 없이 반영됨(수집 대상 종목이 아닙니다)"
+            : `30일 평균 ${analyze.sentiment_baseline > 0 ? "+" : ""}${fmt(analyze.sentiment_baseline)} 대비 편차로 반영됨`}
         </div>
       </div>
 
