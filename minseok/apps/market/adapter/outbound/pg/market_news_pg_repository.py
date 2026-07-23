@@ -7,6 +7,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.db_errors import is_infra_failure
 from market.adapter.outbound.orm.market_news_article_orm import MarketNewsArticleOrm
 from market.app.dtos.market_news_search_dto import MarketNewsSearchRow
 from market.app.ports.output.market_news_repository import MarketNewsRepositoryPort
@@ -27,8 +28,8 @@ class MarketNewsPgRepository(MarketNewsRepositoryPort):
         try:
             return await self._insert(articles)
         except DBAPIError as e:
-            if e.connection_invalidated:
-                raise  # 연결 유실은 행 문제가 아니다 — 되짚어봐야 전부 실패한다
+            if is_infra_failure(e):
+                raise  # 행 문제가 아니다 — 되짚으면 전 행이 조용히 유실된다(배치가 재시도하게)
             await self._session.rollback()
             return await self._insert_row_by_row(articles)
 
@@ -58,8 +59,8 @@ class MarketNewsPgRepository(MarketNewsRepositoryPort):
             try:
                 saved += await self._insert([a])
             except DBAPIError as e:
-                if e.connection_invalidated:
-                    raise
+                if is_infra_failure(e):
+                    raise  # 인프라 장애 — 남은 행도 전부 같은 이유로 실패한다
                 await self._session.rollback()
                 logger.warning(
                     "[market-news] 행 거부 — 건너뜀 (area_tag=%s, url %d자): %s",

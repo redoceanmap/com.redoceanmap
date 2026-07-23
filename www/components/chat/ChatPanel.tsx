@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowUpRight, TrendingDown, TrendingUp, Minus } from "lucide-react";
 import { useChatStore } from "@/lib/store";
 import type { Area, NewsCardItem, StockAnalysis } from "@/lib/types";
+import { formatPrice } from "@/lib/currency";
 import ChatInput from "@/components/seoul/ChatInput";
 
 const DIRECTION_META = {
@@ -202,7 +203,7 @@ function StockSummaryCard({ stock, onClick }: { stock: StockAnalysis; onClick: (
         <div>
           <div className="text-sm font-semibold">{stock.symbol}</div>
           <div className="text-base font-bold mt-0.5">
-            {stock.price.toLocaleString("ko-KR", { maximumFractionDigits: 2 })}
+            {formatPrice(stock.price, stock.symbol)}
           </div>
         </div>
         <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border text-[11px] font-medium ${meta.className}`}>

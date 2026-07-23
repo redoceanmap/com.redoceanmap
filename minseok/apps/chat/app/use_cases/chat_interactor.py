@@ -701,19 +701,30 @@ class ChatInteractor(ChatUseCase):
             return f"12-1 모멘텀 {pct:+.1f}% — 완만한 중장기 상승"
         return f"12-1 모멘텀 {pct:+.1f}% — 중장기 하락 추세"
 
+    @staticmethod
+    def _currency_unit(symbol: str) -> str:
+        """티커로 통화를 정한다 — 한국 6자리(거래소 접미 포함)는 원, 그 외는 달러.
+
+        컨텍스트에 단위를 안 주면 모델이 추측해 미국 종목을 '원'으로 서술하는 오답이 났다.
+        """
+        base = symbol.split(".")[0]
+        return "원" if len(base) == 6 and base.isdigit() else "달러"
+
     @classmethod
     def _format_stock_context(
         cls, prompt: str, r: StockAnalysisResult, hits: list[NewsHit] | None = None,
     ) -> str:
         headlines = "\n".join(f"- {h}" for h in r.headlines) if r.headlines else "- (없음)"
+        unit = cls._currency_unit(r.symbol)
         lines = (
             f"사용자 질문: {prompt}\n\n"
-            f"[{r.symbol} 분석 데이터]\n"
-            f"- 현재가: {r.price:,.2f}\n"
+            f"[{r.symbol} 분석 데이터] (가격 단위는 모두 {unit} — 다른 통화로 바꿔 쓰지 말 것)\n"
+            f"- 현재가: {r.price:,.2f}{unit}\n"
             f"- 방향 신호: {r.direction} (확신도 {r.confidence:.2f})\n"
             f"- RSI(14): {r.rsi:.1f} (30↓ 과매도 / 70↑ 과매수)\n"
-            f"- 20일 이동평균: {r.ma20:,.2f} / 50일 이동평균: {r.ma50:,.2f}\n"
-            f"- 지지선: {r.support:,.2f} / 저항선: {r.resistance:,.2f} (최근 60거래일 저/고점)\n"
+            f"- 20일 이동평균: {r.ma20:,.2f}{unit} / 50일 이동평균: {r.ma50:,.2f}{unit}\n"
+            f"- 지지선: {r.support:,.2f}{unit} / 저항선: {r.resistance:,.2f}{unit}"
+            f" (최근 60거래일 저/고점)\n"
             f"- 변동성: {cls._volatility_text(r.atr_pct)}\n"
             f"- 볼린저 밴드: {cls._bollinger_text(r.bb_percent_b)}\n"
             f"- 거래량·수급: {cls._volume_text(r.volume_ratio, r.obv_slope)}\n"

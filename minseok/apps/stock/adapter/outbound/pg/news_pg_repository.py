@@ -8,6 +8,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.db_errors import is_infra_failure
 from stock.adapter.outbound.orm.news_article_orm import NewsArticleOrm
 from stock.adapter.outbound.orm.news_label_orm import NewsLabelOrm
 from stock.app.dtos.news_search_dto import NewsSearchRow
@@ -31,8 +32,8 @@ class NewsPgRepository(NewsRepositoryPort):
         try:
             return await self._insert(articles)
         except DBAPIError as e:
-            if e.connection_invalidated:
-                raise  # 연결 유실은 행 문제가 아니다 — 되짚어봐야 전부 실패한다
+            if is_infra_failure(e):
+                raise  # 행 문제가 아니다 — 되짚으면 전 행이 조용히 유실된다(n8n이 재시도하게)
             await self._session.rollback()
             return await self._insert_row_by_row(articles)
 
@@ -62,8 +63,8 @@ class NewsPgRepository(NewsRepositoryPort):
             try:
                 saved += await self._insert([a])
             except DBAPIError as e:
-                if e.connection_invalidated:
-                    raise
+                if is_infra_failure(e):
+                    raise  # 인프라 장애 — 남은 행도 전부 같은 이유로 실패한다
                 await self._session.rollback()
                 logger.warning(
                     "[stock-news] 행 거부 — 건너뜀 (ticker=%s, url %d자): %s",

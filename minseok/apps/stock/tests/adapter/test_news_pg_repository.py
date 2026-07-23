@@ -20,13 +20,23 @@ class _FakeResult:
         return list(range(self._count))
 
 
+def _server_error(exc_type, message: str, sqlstate: str):
+    """서버가 거부한 오류 대역 — 실제 psycopg 오류처럼 SQLSTATE를 갖는다.
+
+    접속 실패(SQLSTATE 없음)와 구분하는 기준이므로 대역도 실물과 같아야 한다.
+    """
+    orig = Exception(message)
+    orig.sqlstate = sqlstate
+    return exc_type("INSERT ...", {}, orig)
+
+
 class _FakeSession:
     """지정한 url이 INSERT에 섞이면 DataError를 던지는 세션 대역."""
 
     def __init__(self, reject_url: str = "", error=None) -> None:
         self._reject_url = reject_url
-        self._error = error or DataError(
-            "INSERT ...", {}, Exception("value too long for type character varying")
+        self._error = error or _server_error(
+            DataError, "value too long for type character varying", "22001"
         )
         self.batch_sizes: list[int] = []
         self.commits = 0
@@ -88,9 +98,26 @@ async def test_btree_인덱스_초과도_행_단위로_되짚는다():
 
     session = _FakeSession(
         reject_url=bad_url,
-        error=OperationalError("INSERT ...", {}, Exception("index row size 3064 exceeds btree")),
+        error=_server_error(OperationalError, "index row size 3064 exceeds btree", "54000"),
     )
     assert await NewsPgRepository(session).save_many(articles) == 1
+
+
+async def test_접속_실패는_되짚지_않고_그대로_터뜨린다():
+    """실측 회귀(2026-07-22 재배포): DB 재시작 중 접속 실패는 SQLSTATE가 없다.
+
+    행 문제로 오인해 되짚으면 전 행이 같은 이유로 "거부"돼 42건이 조용히 유실됐다.
+    배치 실패로 올려야 호출자(n8n)가 재시도한다.
+    """
+    bad_url = "https://news.google.com/dead"
+    err = OperationalError(
+        "INSERT ...", {}, Exception("connection failed: ... Connection refused"),
+    )  # 접속 실패 — orig에 sqlstate 없음, connection_invalidated도 False
+
+    session = _FakeSession(reject_url=bad_url, error=err)
+    with pytest.raises(OperationalError):
+        await NewsPgRepository(session).save_many([_article(bad_url), _article("https://ok")])
+    assert session.batch_sizes == [2]  # 폴백 진입 없음 — 행 단위로 되짚지 않는다
 
 
 async def test_연결_유실은_되짚지_않고_그대로_터뜨린다():

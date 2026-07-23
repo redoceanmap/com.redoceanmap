@@ -547,3 +547,26 @@ async def test_general_분기에서_Gemini_실패면_안내로_열화한다(monk
     interactor, _, _ = _build(monkeypatch, [INTENT_GENERAL], gemini=_StubGemini(fail=True))
     result = await interactor.ask("카파시가 누구야?")
     assert "일시적인 문제" in result.text
+
+
+# --- 통화 단위 (미국 종목을 '원'으로 서술하던 오답 고정) ---
+
+@pytest.mark.parametrize(
+    "symbol, expected",
+    [("005930", "원"), ("005930.KS", "원"), ("000660.KQ", "원"),
+     ("TSLA", "달러"), ("BRK-B", "달러"), ("SNDK", "달러")],
+)
+def test_티커로_통화를_정한다(symbol, expected):
+    assert ChatInteractor._currency_unit(symbol) == expected
+
+
+def test_주식_컨텍스트의_가격에는_통화가_붙는다():
+    """단위를 안 주면 모델이 추측해 미국 종목을 '원'으로 서술했다(실측 회귀)."""
+    context = ChatInteractor._format_stock_context("샌디스크 어때?", _analysis(symbol="SNDK"))
+    assert "90,000.00달러" in context  # 현재가
+    assert "88,000.00달러" in context and "85,000.00달러" in context  # 이동평균
+    assert "80,000.00달러" in context and "95,000.00달러" in context  # 지지·저항
+    assert "원" not in context.split("[SNDK 분석 데이터]")[1].split("- 방향 신호")[0]
+
+    kr = ChatInteractor._format_stock_context("삼성전자 어때?", _analysis(symbol="005930"))
+    assert "90,000.00원" in kr

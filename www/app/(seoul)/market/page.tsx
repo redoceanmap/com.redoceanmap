@@ -26,6 +26,7 @@ function MarketWorkspace() {
   const recommendations = useChatStore((s) => s.recommendations);
   const conversationId = useChatStore((s) => s.conversationId);
   const messages = useChatStore((s) => s.messages);
+  const loadConversation = useChatStore((s) => s.loadConversation);
 
   // 같은 라우트에서 쿼리만 바꾸는 이동 — 초기 URL에 쿼리가 있으면 router.replace/push가
   // 프로덕션 빌드에서 무시된다(Next 16.2.6). 공식 shallow 라우팅인 history.replaceState는
@@ -43,6 +44,22 @@ function MarketWorkspace() {
 
   // 채팅 응답에 추천 상권이 오면 첫 곳을 URL(?trdar)에 반영 — 마운트 시 기존 메시지는 건너뛴다
   const handledRef = useRef<string | null>(messages[messages.length - 1]?.id ?? null);
+
+  // 새로고침 복원 — URL의 c를 실제 대화로 되살린다. 복원하지 않으면 채팅이 빈 채로 남아
+  // 다음 질문이 새 대화가 되고 멀티턴 맥락이 끊긴다. 복원된 메시지는 이미 URL에 반영된
+  // 상태이므로 handledRef를 최신 메시지로 맞춰 위 이펙트가 재이동하지 않게 한다.
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (restoredRef.current || !c || conversationId !== null) return;
+    restoredRef.current = true;
+    void loadConversation(Number(c))
+      .then(() => {
+        const restored = useChatStore.getState().messages;
+        handledRef.current = restored[restored.length - 1]?.id ?? null;
+      })
+      .catch(() => {}); // 남의 대화·미로그인은 404/401 — 빈 채팅으로 열화
+  }, [c, conversationId, loadConversation]);
+
   useEffect(() => {
     const last = messages[messages.length - 1];
     if (!last || last.role !== "assistant" || handledRef.current === last.id) return;

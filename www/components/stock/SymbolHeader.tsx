@@ -2,6 +2,7 @@
 
 import { Minus, ShieldCheck, TrendingDown, TrendingUp } from "lucide-react";
 import type { StockAnalyzeResult } from "@/lib/types";
+import { formatPrice } from "@/lib/currency";
 
 const DIRECTION_META = {
   UP: { label: "상승 신호", icon: TrendingUp, className: "text-red-600 bg-red-50 border-red-200" },
@@ -31,7 +32,7 @@ export default function SymbolHeader({ symbol, resolvedTicker, analyze, isLoadin
       {analyze && meta && DirectionIcon && (
         <>
           <span className="text-lg font-bold">
-            {(quotePrice ?? analyze.price).toLocaleString("ko-KR", { maximumFractionDigits: 2 })}
+            {formatPrice(quotePrice ?? analyze.price, resolvedTicker ?? symbol)}
           </span>
           {quotePrice != null && (
             <span className="text-[10px] text-foreground-muted">지연 시세 · 30초 갱신</span>

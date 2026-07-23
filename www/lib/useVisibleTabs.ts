@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { apiTabs } from "./authApi";
 import { useUIStore } from "./uiStore";
 
@@ -16,6 +16,9 @@ export function useVisibleTabs(): Set<TabKey> | null {
   const { data, isError } = useQuery({
     queryKey: ["visible-tabs", user?.id ?? "anon"],
     queryFn: () => apiTabs(),
+    // 로그인/로그아웃으로 키가 바뀌는 동안 이전 값을 유지한다 — data가 잠깐 undefined가 되면
+    // TabGuard가 null을 반환해 워크스페이스 전체가 언마운트→리마운트된다(차트 재생성·상태 초기화).
+    placeholderData: keepPreviousData,
   });
   if (isError) return new Set<TabKey>();
   if (!data) return null;
