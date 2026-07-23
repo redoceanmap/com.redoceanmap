@@ -23,7 +23,8 @@ class AreaRecommendation(BaseModel):
     name: str
     lat: float
     lng: float
-    category: str
+    category: str        # 업종명 (표시용)
+    serviceCode: str     # 업종 코드 — 지도 페이지가 같은 업종으로 상세/통계를 조회해야 한다
     reason: str
     stats: AreaStats
 

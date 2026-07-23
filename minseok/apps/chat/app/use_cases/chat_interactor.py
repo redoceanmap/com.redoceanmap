@@ -465,6 +465,7 @@ class ChatInteractor(ChatUseCase):
                 lat=area.lat,
                 lng=area.lng,
                 category=service_name,
+                serviceCode=service_code,
                 reason=reason_map.get(code, ""),
                 stats=AreaStats(
                     monthlyRevenueText=st.get("revenue_text", ""),

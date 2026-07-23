@@ -32,14 +32,16 @@ function Section({
 // 지도 위 반투명 분석 오버레이 — 열림/닫힘은 URL(?trdar / &ov=0)이 단일 진실
 export default function AreaDetailOverlay({
   trdarCode,
+  serviceCode,
   onClose,
 }: {
   trdarCode: string;
+  serviceCode?: string;
   onClose: () => void;
 }) {
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["area-detail", trdarCode],
-    queryFn: () => fetchAreaDetail(trdarCode),
+    queryKey: ["area-detail", trdarCode, serviceCode],
+    queryFn: () => fetchAreaDetail(trdarCode, serviceCode),
     enabled: !!trdarCode,
     retry: false, // 404(미존재 상권)를 재시도 없이 바로 에러 문구로
   });

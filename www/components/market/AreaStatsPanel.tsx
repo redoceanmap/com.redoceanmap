@@ -30,10 +30,16 @@ function Section({
 }
 
 // 상권 자료 패널 — ?trdar 를 키로 원시 수치 API를 조회해 차트를 그린다
-export default function AreaStatsPanel({ trdarCode }: { trdarCode: string }) {
+export default function AreaStatsPanel({
+  trdarCode,
+  serviceCode,
+}: {
+  trdarCode: string;
+  serviceCode?: string;
+}) {
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["area-stats", trdarCode],
-    queryFn: () => fetchAreaStats(trdarCode),
+    queryKey: ["area-stats", trdarCode, serviceCode],
+    queryFn: () => fetchAreaStats(trdarCode, serviceCode),
     enabled: !!trdarCode,
   });
 
@@ -103,7 +109,9 @@ function FloatingTrend({ series }: { series: QuarterStat[] }) {
   return (
     <div className="flex items-end gap-2 h-20">
       {points.map((q) => (
-        <div key={q.yearQuarter} className="flex-1 flex flex-col items-center gap-1">
+        // h-full 필수 — 부모가 items-end라 컬럼 높이가 content 기준이 되고,
+        // 그러면 막대의 height:%가 0으로 무너져 차트가 통째로 빈 화면이 된다.
+        <div key={q.yearQuarter} className="flex-1 h-full flex flex-col justify-end items-center gap-1">
           <div
             className="w-full max-w-10 bg-brand/70 rounded-t"
             style={{ height: `${Math.max(8, ((q.totalFloatingPop as number) / max) * 100)}%` }}

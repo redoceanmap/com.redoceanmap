@@ -67,8 +67,16 @@ export const fetchStockQuote = (symbol: string): Promise<StockQuote> =>
 export const fetchStockBoard = (horizon = 5, limit = 40): Promise<StockBoard> =>
   getJson(`/stock/board?horizon=${horizon}&limit=${limit}`);
 
-export const fetchAreaStats = (trdarCode: string | number): Promise<AreaStatsDetail> =>
-  getJson(`/market/trdar/${trdarCode}/stats`);
+// 업종을 넘기지 않으면 백엔드가 "매출 최대 업종"으로 폴백한다 — 사용자가 물은 업종과
+// 다른 업종의 수치가 화면 전체에 깔리므로 채팅이 고른 업종 코드를 반드시 함께 보낸다.
+const withService = (path: string, serviceCode?: string) =>
+  serviceCode ? `${path}${path.includes("?") ? "&" : "?"}service_code=${encodeURIComponent(serviceCode)}` : path;
+
+export const fetchAreaStats = (
+  trdarCode: string | number,
+  serviceCode?: string,
+): Promise<AreaStatsDetail> =>
+  getJson(withService(`/market/trdar/${trdarCode}/stats`, serviceCode));
 
 export const fetchAreaScore = (trdarCode: string | number): Promise<AreaScoreDetail> =>
   getJson(`/market/trdar/${trdarCode}/score`);
@@ -76,8 +84,11 @@ export const fetchAreaScore = (trdarCode: string | number): Promise<AreaScoreDet
 export const fetchAreaInfo = (trdarCode: string | number): Promise<MarketArea> =>
   getJson(`/market/trdar/${trdarCode}/area`);
 
-export const fetchAreaDetail = (trdarCode: string | number): Promise<AreaDetail> =>
-  getJson(`/market/trdar/${trdarCode}/detail`);
+export const fetchAreaDetail = (
+  trdarCode: string | number,
+  serviceCode?: string,
+): Promise<AreaDetail> =>
+  getJson(withService(`/market/trdar/${trdarCode}/detail`, serviceCode));
 
 export const fetchConversations = (limit = 30): Promise<ConversationSummary[]> =>
   getJson(`/chat/conversations?limit=${limit}`);

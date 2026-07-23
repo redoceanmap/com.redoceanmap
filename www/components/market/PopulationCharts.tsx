@@ -72,15 +72,20 @@ export default function PopulationCharts({ latest }: { latest: AreaStatsDetail["
       )}
       {time && (
         <div>
-          <p className="text-xs text-foreground-muted mb-1.5">시간대별</p>
+          <p className="text-xs text-foreground-muted mb-1.5">
+            시간대별 <span className="text-[10px]">(시간당 평균)</span>
+          </p>
+          {/* 구간 폭이 제각각이라(0-6시 6시간, 11-14시 3시간) 원값을 그대로 그리면 막대가
+              정반대를 말한다. 미아사거리 실측: 총합은 0-6시가 최고지만 시간당으로는 최하위
+              (13,665명/h)이고 실제 최고는 14-17시(16,356명/h)다. 시간당으로 나눠 그린다. */}
           <PopBarChart
             data={[
-              { label: "0-6시", value: time.t00_06 },
-              { label: "6-11시", value: time.t06_11 },
-              { label: "11-14시", value: time.t11_14 },
-              { label: "14-17시", value: time.t14_17 },
-              { label: "17-21시", value: time.t17_21 },
-              { label: "21-24시", value: time.t21_24 },
+              { label: "0-6시", value: Math.round(time.t00_06 / 6) },
+              { label: "6-11시", value: Math.round(time.t06_11 / 5) },
+              { label: "11-14시", value: Math.round(time.t11_14 / 3) },
+              { label: "14-17시", value: Math.round(time.t14_17 / 3) },
+              { label: "17-21시", value: Math.round(time.t17_21 / 4) },
+              { label: "21-24시", value: Math.round(time.t21_24 / 3) },
             ]}
           />
         </div>

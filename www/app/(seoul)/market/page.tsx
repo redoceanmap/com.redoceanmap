@@ -24,6 +24,10 @@ function MarketWorkspace() {
   const overlayOpen = !!trdar && params.get("ov") !== "0";
 
   const recommendations = useChatStore((s) => s.recommendations);
+  // 채팅이 고른 업종 — 넘기지 않으면 백엔드가 "매출 최대 업종"으로 폴백해, 답변과 지도 패널이
+  // 서로 다른 업종을 말한다(실사례: 채팅 커피-음료 vs 패널 의약품). 추천 목록의 업종을 따른다.
+  const serviceCode = recommendations.find((r) => r.id === trdar)?.serviceCode
+    ?? recommendations[0]?.serviceCode;
   const conversationId = useChatStore((s) => s.conversationId);
   const messages = useChatStore((s) => s.messages);
   const loadConversation = useChatStore((s) => s.loadConversation);
@@ -93,10 +97,12 @@ function MarketWorkspace() {
       stage={
         <div className="relative flex-1 min-h-0 p-3">
           <MapView areas={pins} selectedId={trdar || null} onSelect={setTrdar} />
-          {overlayOpen && <AreaDetailOverlay trdarCode={trdar} onClose={closeOverlay} />}
+          {overlayOpen && (
+            <AreaDetailOverlay trdarCode={trdar} serviceCode={serviceCode} onClose={closeOverlay} />
+          )}
         </div>
       }
-      panel={<AreaStatsPanel trdarCode={trdar} />}
+      panel={<AreaStatsPanel trdarCode={trdar} serviceCode={serviceCode} />}
       chat={
         <ChatPanel
           workspace="market"

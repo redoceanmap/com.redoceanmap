@@ -29,7 +29,8 @@ export type Area = {
   name: string;
   lat: number;
   lng: number;
-  category: string;
+  category: string;   // 업종명(표시용)
+  serviceCode?: string; // 업종 코드 — 지도 상세/통계를 같은 업종으로 조회하기 위한 키
   reason: string;
   stats: AreaStats;
 };
