@@ -50,4 +50,5 @@ class StockBoardInteractor(StockBoardUseCase):
             edge_pct=edge,
             ready=row.ready,
             sparkline=row.closes,
+            price_as_of=row.price_as_of,
         )

@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Minus, Search, TrendingDown, TrendingUp } from "lucide-react";
+import { Minus, TrendingDown, TrendingUp } from "lucide-react";
 import { fetchStockBoard, fetchStockQuote } from "@/lib/api";
 import { formatPrice } from "@/lib/currency";
 import type { StockBoardRow } from "@/lib/types";
@@ -108,7 +108,7 @@ function BoardRow({ row, onSelect }: { row: StockBoardRow; onSelect: (symbol: st
           className={`w-24 shrink-0 inline-flex items-center justify-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-medium ${meta.className}`}
         >
           <DirectionIcon size={11} strokeWidth={2} />
-          {meta.label} {Math.abs(row.score).toFixed(2)}
+          {meta.label} {row.score >= 0 ? "+" : ""}{row.score.toFixed(2)}
         </span>
         <span className="w-20 shrink-0 text-right text-[11px] tabular-nums text-foreground-muted">
           {row.edge_pct != null ? (
@@ -132,14 +132,13 @@ export default function MarketBoard({ onSelect }: { onSelect: (symbol: string) =
     staleTime: 10 * 60_000, // 스냅샷은 일 1회 갱신 — 재방문마다 다시 받을 이유가 없다
   });
 
-  // FormData 패턴 — 제출 시점에만 값 수집 (REACT_RULES 패턴 A)
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const value = String(new FormData(e.currentTarget).get("symbol") ?? "").trim();
-    if (value) onSelect(value);
-  };
-
+  // 신호는 스냅샷(일 1회)에서, 가격은 그 뒤 더 쌓인 최신 봉에서 온다 — 한 날짜로 뭉뚱그리면
+  // "기준 7/21"인데 가격은 7/22인 화면이 된다. 두 날짜가 다르면 둘 다 적는다.
   const asOf = boardQ.data?.rows[0]?.as_of;
+  const priceAsOf = boardQ.data?.rows[0]?.price_as_of;
+  const day = (iso: string) =>
+    new Date(iso).toLocaleDateString("ko-KR", { month: "short", day: "numeric" });
+  const sameDay = asOf && priceAsOf && day(asOf) === day(priceAsOf);
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto">
@@ -152,23 +151,8 @@ export default function MarketBoard({ onSelect }: { onSelect: (symbol: string) =
       <div className="px-6 pt-6 pb-4 text-center">
         <h2 className="text-lg font-semibold">주식 분석 워크스페이스</h2>
         <p className="mt-1.5 text-sm text-foreground-muted">
-          채팅으로 물어보거나 종목 코드를 직접 입력하세요
+          아래 보드에서 고르거나, 오른쪽 채팅에 종목명·티커를 물어보세요
         </p>
-        <form onSubmit={handleSubmit} className="mt-4 mx-auto flex max-w-sm gap-2">
-          <input
-            name="symbol"
-            aria-label="종목 코드 또는 티커"
-            placeholder="005930, AAPL …"
-            className="flex-1 h-10 px-3.5 rounded-xl border border-border bg-surface outline-none text-sm focus:border-brand/50"
-          />
-          <button
-            type="submit"
-            className="h-10 px-4 rounded-xl bg-brand text-white text-sm font-medium hover:bg-brand-deep transition-colors inline-flex items-center gap-1.5"
-          >
-            <Search size={15} strokeWidth={2} />
-            열기
-          </button>
-        </form>
       </div>
 
       <div className="px-4 pb-6">
@@ -177,7 +161,8 @@ export default function MarketBoard({ onSelect }: { onSelect: (symbol: string) =
           <span className="text-[11px] text-foreground-muted">
             워치리스트 · 신호가 뚜렷한 순
             {boardQ.data && ` · ${boardQ.data.horizon_days}일 예측`}
-            {asOf && ` · 기준 ${new Date(asOf).toLocaleDateString("ko-KR", { month: "short", day: "numeric" })}`}
+            {asOf && ` · 신호 ${day(asOf)} 기준`}
+            {priceAsOf && !sameDay && ` · 가격 ${day(priceAsOf)} 종가`}
           </span>
         </div>
 

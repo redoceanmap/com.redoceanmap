@@ -41,7 +41,9 @@ class StockBoardPgRepository(StockBoardRepositoryPort):
         if not snapshots:
             return []
 
-        closes = await self._recent_closes([s.ticker for s in snapshots], sparkline_bars)
+        closes, price_dates = await self._recent_closes(
+            [s.ticker for s in snapshots], sparkline_bars
+        )
         return [
             BoardSignalRow(
                 ticker=s.ticker,
@@ -53,12 +55,20 @@ class StockBoardPgRepository(StockBoardRepositoryPort):
                 baseline_up_rate=s.baseline_up_rate,
                 ready=s.ready,
                 closes=tuple(closes.get(s.ticker, ())),
+                price_as_of=price_dates.get(s.ticker),
             )
             for s in snapshots
         ]
 
-    async def _recent_closes(self, tickers: list[str], limit: int) -> dict[str, list[float]]:
-        """티커별 최근 일봉 종가(과거 → 최신). 티커마다 조회하지 않도록 윈도우 함수로 한 번에 받는다."""
+    async def _recent_closes(
+        self, tickers: list[str], limit: int
+    ) -> tuple[dict[str, list[float]], dict[str, datetime]]:
+        """티커별 (최근 일봉 종가 과거→최신, 마지막 봉의 세션일).
+
+        마지막 봉 세션일을 함께 돌려주는 이유: 스냅샷 as_of는 그날 스냅샷이 쓴 봉 기준이고
+        여기 종가는 그 뒤에 더 쌓인 봉일 수 있어, 화면이 한 날짜로 뭉뚱그리면 안 된다.
+        티커마다 조회하지 않도록 윈도우 함수로 한 번에 받는다.
+        """
         ranked = (
             select(
                 PriceBarOrm.ticker,
@@ -72,12 +82,14 @@ class StockBoardPgRepository(StockBoardRepositoryPort):
             .subquery()
         )
         rows = (await self._session.execute(
-            select(ranked.c.ticker, ranked.c.close)
+            select(ranked.c.ticker, ranked.c.ts, ranked.c.close)
             .where(ranked.c.rn <= limit)
             .order_by(ranked.c.ticker, ranked.c.ts.asc())
         )).all()
 
         out: dict[str, list[float]] = defaultdict(list)
-        for ticker, close in rows:
+        last_ts: dict[str, datetime] = {}
+        for ticker, ts, close in rows:
             out[ticker].append(float(close))
-        return out
+            last_ts[ticker] = ts  # ts 오름차순이라 마지막 대입이 최신 봉
+        return out, last_ts

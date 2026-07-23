@@ -23,6 +23,7 @@ class BoardSignalRow:
     baseline_up_rate: float | None
     ready: bool
     closes: tuple[float, ...]  # 스파크라인용 최근 종가(과거 → 최신)
+    price_as_of: datetime | None  # closes[-1]이 속한 세션일 — as_of(신호 기준일)와 다를 수 있다
 
 
 @dataclass(frozen=True)
@@ -39,6 +40,7 @@ class BoardRowView:
     edge_pct: float | None  # up_rate − baseline (0.02 = +2%p). 둘 중 하나라도 없으면 None
     ready: bool
     sparkline: tuple[float, ...]
+    price_as_of: datetime | None  # 가격 기준일. 신호 기준일(as_of)보다 최신일 수 있다
 
 
 @dataclass(frozen=True)

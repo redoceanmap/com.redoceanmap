@@ -18,6 +18,7 @@ class BoardRowSchema(BaseModel):
     edge_pct: float | None          # up_rate − baseline
     ready: bool                     # n≥100 + Wilson 하한 > 기준선
     sparkline: list[float]          # 최근 종가(과거 → 최신)
+    price_as_of: datetime | None    # 가격 기준일 — 신호 기준일(as_of)과 다를 수 있다
 
 
 class StockBoardResponse(BaseModel):

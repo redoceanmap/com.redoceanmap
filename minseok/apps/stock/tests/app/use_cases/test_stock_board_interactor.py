@@ -18,6 +18,7 @@ def _row(ticker: str, direction: str, score: float, **kwargs) -> BoardSignalRow:
         baseline_up_rate=None,
         ready=False,
         closes=(98.0, 100.0),
+        price_as_of=AS_OF,
     )
     defaults.update(kwargs)
     return BoardSignalRow(ticker=ticker, direction=direction, score=score, **defaults)
@@ -99,6 +100,15 @@ async def test_확률과_기준선이_모두_있을_때만_edge를_낸다():
     rows = {r.ticker: r for r in (await interactor.board(BoardQuery(horizon=5, limit=10))).rows}
     assert rows["AAA"].edge_pct == pytest.approx(0.03)
     assert rows["BBB"].edge_pct is None
+
+
+async def test_가격_기준일을_그대로_전달한다():
+    # 신호 기준일(as_of)보다 가격이 최신일 수 있어 화면이 둘을 구분해 적어야 한다
+    later = datetime(2026, 7, 23, tzinfo=UTC)
+    interactor, _ = _interactor([_row("AAA", "UP", 0.5, price_as_of=later)])
+    row = (await interactor.board(BoardQuery(horizon=5, limit=10))).rows[0]
+    assert row.as_of == AS_OF
+    assert row.price_as_of == later
 
 
 async def test_horizon을_리포지토리에_그대로_넘긴다():

@@ -149,6 +149,7 @@ export type StockBoardRow = {
   edge_pct: number | null; // up_rate − baseline
   ready: boolean;
   sparkline: number[]; // 최근 종가(과거 → 최신)
+  price_as_of: string | null; // 가격 기준일 — 신호 기준일(as_of)과 다를 수 있다
 };
 
 export type StockBoard = {
