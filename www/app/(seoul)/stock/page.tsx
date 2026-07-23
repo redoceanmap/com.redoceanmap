@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
 import {
@@ -34,7 +34,6 @@ const EMPTY_PROMPTS = [
 ];
 
 function StockWorkspace() {
-  const router = useRouter();
   const params = useSearchParams();
   const symbol = params.get("symbol") ?? "";
   const c = params.get("c");
@@ -43,11 +42,15 @@ function StockWorkspace() {
   const conversationId = useChatStore((s) => s.conversationId);
   const messages = useChatStore((s) => s.messages);
 
+  // 같은 라우트에서 쿼리만 바꾸는 이동 — 초기 URL에 쿼리가 있으면 router.replace/push가
+  // 프로덕션 빌드에서 무시된다(Next 16.2.6). 공식 shallow 라우팅인 history.replaceState는
+  // useSearchParams와 동기화되므로 이쪽을 쓴다.
   const setSymbol = (next: string) => {
     const cid = conversationId ?? c;
-    router.replace(
+    window.history.replaceState(
+      null,
+      "",
       `/stock?symbol=${encodeURIComponent(next)}${cid ? `&c=${cid}` : ""}`,
-      { scroll: false },
     );
   };
 

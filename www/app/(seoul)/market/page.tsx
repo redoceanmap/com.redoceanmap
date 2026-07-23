@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useRef } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { fetchAreaInfo } from "@/lib/api";
 import { useChatStore } from "@/lib/store";
@@ -18,7 +18,6 @@ const EMPTY_PROMPTS = [
 ];
 
 function MarketWorkspace() {
-  const router = useRouter();
   const params = useSearchParams();
   const trdar = params.get("trdar") ?? "";
   const c = params.get("c");
@@ -28,15 +27,18 @@ function MarketWorkspace() {
   const conversationId = useChatStore((s) => s.conversationId);
   const messages = useChatStore((s) => s.messages);
 
+  // 같은 라우트에서 쿼리만 바꾸는 이동 — 초기 URL에 쿼리가 있으면 router.replace/push가
+  // 프로덕션 빌드에서 무시된다(Next 16.2.6). 공식 shallow 라우팅인 history.replaceState는
+  // useSearchParams와 동기화되므로 이쪽을 쓴다.
   // 새 상권 선택은 ov 파라미터를 버려 오버레이를 자동 재오픈한다
   const setTrdar = (next: string) => {
     const cid = conversationId ?? c;
-    router.replace(`/market?trdar=${next}${cid ? `&c=${cid}` : ""}`, { scroll: false });
+    window.history.replaceState(null, "", `/market?trdar=${next}${cid ? `&c=${cid}` : ""}`);
   };
 
   const closeOverlay = () => {
     const cid = conversationId ?? c;
-    router.replace(`/market?trdar=${trdar}&ov=0${cid ? `&c=${cid}` : ""}`, { scroll: false });
+    window.history.replaceState(null, "", `/market?trdar=${trdar}&ov=0${cid ? `&c=${cid}` : ""}`);
   };
 
   // 채팅 응답에 추천 상권이 오면 첫 곳을 URL(?trdar)에 반영 — 마운트 시 기존 메시지는 건너뛴다
