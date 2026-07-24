@@ -5,14 +5,14 @@
 import os
 import sys
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "apps"))
 
-from dotenv import load_dotenv
+from core.key.secret_manager import get_secret_manager
 
 # 발급용 개인키 — 로컬 실행용. 컨테이너는 env_file(.env.auth) 주입이라 파일이 없어도 된다.
-load_dotenv(Path(__file__).parents[1] / ".env.auth")
+# `.env.auth`를 로드하는 유일한 엔트리포인트다(백엔드 프로세스는 개인키를 갖지 않는다).
+get_secret_manager().load_auth_env()
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

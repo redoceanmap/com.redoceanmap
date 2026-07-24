@@ -3,17 +3,17 @@
 RBAC 부트스트랩(admin을 만들 admin이 없음)을 해결하는 createsuperuser 격 스크립트.
 멱등 — 이미 admin이면 안내만 하고 종료한다. 이후 부여/회수는 어드민 UI 몫.
 """
-import os
 import sys
 from pathlib import Path
 
-from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
 ROOT = Path(__file__).resolve().parents[1]  # minseok
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "apps"))
-load_dotenv(ROOT.parent / ".env")
+from core.key.secret_manager import get_secret_manager  # noqa: E402
+
+_secrets = get_secret_manager()
 
 
 def main() -> int:
@@ -22,7 +22,7 @@ def main() -> int:
         return 1
     email = sys.argv[1]
 
-    url = os.environ["DATABASE_URL"].replace("postgresql://", "postgresql+psycopg://")
+    url = _secrets.require("DATABASE_URL").replace("postgresql://", "postgresql+psycopg://")
     engine = create_engine(url)
     with engine.begin() as conn:
         user_id = conn.execute(

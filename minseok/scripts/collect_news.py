@@ -19,7 +19,6 @@ yfinance 429 위험이라 RSS만 고빈도로 돈다). flock으로 네트워크 
     10 7 * * *   flock -n /tmp/collect_news.lock -c 'cd /path/to/minseok && ../venv/bin/python scripts/collect_news.py --analyst' >> ~/collect_news.log 2>&1
 """
 
-import os
 import sys
 import time
 import urllib.parse
@@ -33,15 +32,18 @@ import logging
 
 import requests
 import yfinance as yf
-from dotenv import load_dotenv
 
 logging.getLogger("yfinance").setLevel(logging.CRITICAL)  # .KS 등 미지원 종목 404 소음 억제
 
 ROOT = Path(__file__).resolve().parents[1]  # minseok
-load_dotenv(ROOT.parent / ".env")
+sys.path.insert(0, str(ROOT))
 
-HUB_URL = os.getenv("HUB_URL", "http://localhost:8000")
-TOKEN = os.getenv("N8N_INBOUND_TOKEN", "")
+from core.key.secret_manager import get_secret_manager  # noqa: E402
+
+_secrets = get_secret_manager()
+
+HUB_URL = _secrets.get("HUB_URL", "http://localhost:8000")
+TOKEN = _secrets.get("N8N_INBOUND_TOKEN")
 WATCHLIST = ROOT / "scripts" / "news_watchlist.txt"
 RSS_KR = "https://news.google.com/rss/search?q={q}&hl=ko&gl=KR&ceid=KR:ko"
 RSS_EN = "https://news.google.com/rss/search?q={q}&hl=en-US&gl=US&ceid=US:en"

@@ -1,26 +1,24 @@
-import os
 import sys
 from logging.config import fileConfig
 from pathlib import Path
 
-from dotenv import load_dotenv
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
-
-# market 전용 .env (apps/market/.env) — core.config가 임포트 시점에 DATABASE_URL을 요구하므로 선로드
-load_dotenv(Path(__file__).parents[1] / ".env")
 
 # minseok/ 와 minseok/apps 를 경로에 올려 core.* 및 market ORM을 import 가능하게 한다.
 _MINSEOK = Path(__file__).parents[3]
 sys.path.insert(0, str(_MINSEOK / "apps"))
 sys.path.insert(0, str(_MINSEOK))
 
+# core.config가 임포트 시점에 DATABASE_URL을 요구하므로 선로드 (루트 .env — 전역 관리자 경유)
+from core.key.secret_manager import get_secret_manager  # noqa: E402
+
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
-config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
+config.set_main_option("sqlalchemy.url", get_secret_manager().require("DATABASE_URL"))
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

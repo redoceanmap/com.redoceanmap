@@ -19,7 +19,6 @@
     5 * * * * cd /path/to/minseok && ../venv/bin/python scripts/collect_prices.py >> ~/collect_prices.log 2>&1
 """
 
-import os
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -28,17 +27,20 @@ import logging
 
 import requests
 import yfinance as yf
-from dotenv import load_dotenv
 
 from collect_news import load_watchlist
 
 logging.getLogger("yfinance").setLevel(logging.CRITICAL)
 
 ROOT = Path(__file__).resolve().parents[1]  # minseok
-load_dotenv(ROOT.parent / ".env")
+sys.path.insert(0, str(ROOT))
 
-HUB_URL = os.getenv("HUB_URL", "http://localhost:8000")
-TOKEN = os.getenv("N8N_INBOUND_TOKEN", "")
+from core.key.secret_manager import get_secret_manager  # noqa: E402
+
+_secrets = get_secret_manager()
+
+HUB_URL = _secrets.get("HUB_URL", "http://localhost:8000")
+TOKEN = _secrets.get("N8N_INBOUND_TOKEN")
 HEADERS = {"X-Webhook-Token": TOKEN}
 
 # (timeframe, 봉 길이, 겹침 재수집 기간, 신규 티커 백필 기간)

@@ -22,7 +22,6 @@
 import io
 import json
 import logging
-import os
 import sys
 import time
 import xml.etree.ElementTree as ET
@@ -32,18 +31,21 @@ from pathlib import Path
 
 import requests
 import yfinance as yf
-from dotenv import load_dotenv
 
 from collect_news import load_watchlist
 
 logging.getLogger("yfinance").setLevel(logging.CRITICAL)
 
 ROOT = Path(__file__).resolve().parents[1]  # minseok
-load_dotenv(ROOT.parent / ".env")
+sys.path.insert(0, str(ROOT))
 
-HUB_URL = os.getenv("HUB_URL", "http://localhost:8000")
-TOKEN = os.getenv("N8N_INBOUND_TOKEN", "")
-DART_API_KEY = os.getenv("DART_API_KEY", "")
+from core.key.secret_manager import get_secret_manager  # noqa: E402
+
+_secrets = get_secret_manager()
+
+HUB_URL = _secrets.get("HUB_URL", "http://localhost:8000")
+TOKEN = _secrets.get("N8N_INBOUND_TOKEN")
+DART_API_KEY = _secrets.get("DART_API_KEY")
 DART_URL = "https://opendart.fss.or.kr/api"
 CORP_CODE_CACHE = ROOT / "scripts" / "dart_corp_codes.json"
 CORP_CODE_TTL_DAYS = 30

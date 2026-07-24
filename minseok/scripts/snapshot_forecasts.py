@@ -16,21 +16,23 @@ DB에 동결하고, horizon(5·20거래일)이 도래한 과거 스냅샷을 실
     30 7 * * * cd /path/to/minseok && ../venv/bin/python scripts/snapshot_forecasts.py >> ~/snapshot_forecasts.log 2>&1
 """
 
-import os
 import sys
 from datetime import datetime
 from pathlib import Path
 
 import requests
-from dotenv import load_dotenv
 
 from collect_news import load_watchlist
 
 ROOT = Path(__file__).resolve().parents[1]  # minseok
-load_dotenv(ROOT.parent / ".env")
+sys.path.insert(0, str(ROOT))
 
-HUB_URL = os.getenv("HUB_URL", "http://localhost:8000")
-TOKEN = os.getenv("N8N_INBOUND_TOKEN", "")
+from core.key.secret_manager import get_secret_manager  # noqa: E402
+
+_secrets = get_secret_manager()
+
+HUB_URL = _secrets.get("HUB_URL", "http://localhost:8000")
+TOKEN = _secrets.get("N8N_INBOUND_TOKEN")
 HEADERS = {"X-Webhook-Token": TOKEN}
 
 HORIZONS = [5, 20]   # 단기(1주) + 스윙(1개월) — 두 지평 모두 채점 데이터 축적

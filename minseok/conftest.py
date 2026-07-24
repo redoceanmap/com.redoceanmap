@@ -3,8 +3,6 @@
 배포에서 개인키는 auth 컨테이너(env_file)에만 있지만, 로컬 테스트는
 발급→검증 왕복을 검증해야 하므로 auth 엔트리포인트와 같은 파일을 읽는다.
 """
-from pathlib import Path
+from core.key.secret_manager import get_secret_manager
 
-from dotenv import load_dotenv
-
-load_dotenv(Path(__file__).parents[1] / ".env.auth")
+get_secret_manager().load_auth_env()

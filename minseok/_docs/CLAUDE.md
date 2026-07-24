@@ -96,6 +96,24 @@ Python / FastAPI 백엔드. 앱 **내부**는 헥사고날/클린 아키텍처(`
 - 세션·베이스: `from core.database import get_db, Base`.
 - LLM 추론은 단일 LLM 오케스트레이터 `core/llm/llm_orchestrator.py`로 수렴한다 —
   오케스트레이터가 EXAONE 7.8B 하나만 보유한다(단일 모델 정책, 2026-07-15).
+- **비밀값·환경 변수는 `core/key/secret_manager.py`로 수렴한다** — 아래 참고.
+
+## 비밀값 규칙 — `.env` 로드는 한 곳에서만 (필수)
+
+`load_dotenv`를 직접 부르는 곳은 `core/key/secret_manager.py` **하나뿐이다**. 새 스크립트·
+엔트리포인트·마이그레이션을 추가할 때 `load_dotenv`나 `os.getenv`를 다시 쓰지 않는다.
+
+| 쓰는 쪽 | 방법 |
+|---|---|
+| 앱 런타임(어댑터·프로바이더·유스케이스) | `from core.config import ...` — 상수만 소비, 관리자를 직접 부르지 않는다 |
+| 스크립트 · 마이그레이션 · 엔트리포인트 | `get_secret_manager().get(name, default)` / `.require(name)` |
+| 새 설정값 추가 | `.env.example`에 키 등록 → `core/config.py`에 상수 한 줄 |
+
+- `core/config.py`는 `DATABASE_URL`·`JWT_PUBLIC_KEY_B64`를 필수로 요구한다. 이 둘 없이
+  돌아야 하는 스크립트는 `core.config` 대신 관리자를 직접 쓴다(`core/key/s3_manager.py`가 사례).
+- **개인키 경계:** `.env.auth`(`JWT_PRIVATE_KEY_B64`)는 자동 로드되지 않는다.
+  `load_auth_env()`를 명시 호출한 프로세스(`auth_main.py` · `conftest.py`)만 본다 —
+  백엔드 프로세스는 토큰을 발급할 수 없어야 한다. 회귀 방지: `tests/test_secret_manager.py`.
 
 ## LLM 모델 계층 바인딩
 

@@ -47,14 +47,18 @@ echo "JWT_PUBLIC_KEY_B64=$(base64 < jwt_public.pem | tr -d '\n')"     # → .env
 ### 2.2 `core/config.py` — 키 로딩 전환
 
 ```python
+# env 조회는 전역 비밀값 관리자를 경유한다(core/key/secret_manager.py — 로드 지점은 그곳 하나뿐).
+_secrets = get_secret_manager()
+
 # 검증용 공개키 — 전 컨테이너 공용. 로드 시점 필수(없으면 기동 실패가 맞다).
-JWT_PUBLIC_KEY = base64.b64decode(os.environ["JWT_PUBLIC_KEY_B64"]).decode()
+JWT_PUBLIC_KEY = base64.b64decode(_secrets.require("JWT_PUBLIC_KEY_B64")).decode()
 
 # 발급용 개인키 — auth 컨테이너 전용. 반드시 "호출 시점"에 읽는다:
 # backend 컨테이너는 이 env가 없어도 모듈 import·기동이 되어야 한다.
+# 값은 `.env.auth`를 load_auth_env()로 명시 로드한 프로세스에서만 잡힌다.
 def jwt_private_key() -> str:
-    raw = os.environ.get("JWT_PRIVATE_KEY_B64")
-    if raw is None:
+    raw = _secrets.get("JWT_PRIVATE_KEY_B64")
+    if not raw:
         raise RuntimeError("JWT_PRIVATE_KEY_B64 미설정 — 토큰 발급은 auth 컨테이너에서만 가능합니다.")
     return base64.b64decode(raw).decode()
 ```

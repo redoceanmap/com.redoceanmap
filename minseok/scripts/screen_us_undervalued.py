@@ -22,13 +22,16 @@ from pathlib import Path
 
 import requests
 import yfinance as yf
-from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[1]  # minseok
-load_dotenv(ROOT.parent / ".env")
+sys.path.insert(0, str(ROOT))
 
-HUB_URL = os.getenv("HUB_URL", "http://localhost:8000")
-TOKEN = os.getenv("N8N_INBOUND_TOKEN", "")
+from core.key.secret_manager import get_secret_manager  # noqa: E402
+
+_secrets = get_secret_manager()
+
+HUB_URL = _secrets.get("HUB_URL", "http://localhost:8000")
+TOKEN = _secrets.get("N8N_INBOUND_TOKEN")
 WATCHLIST = ROOT / "scripts" / "news_watchlist.txt"
 
 SCREEN_QUERIES = ("undervalued_large_caps", "undervalued_growth_stocks")

@@ -1,9 +1,7 @@
-import os
 import sys
 from pathlib import Path
 from logging.config import fileConfig
 
-from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool
 from alembic import context
 
@@ -13,12 +11,14 @@ _ROOT = Path(__file__).parents[1]
 sys.path.insert(0, str(_ROOT / "apps"))
 sys.path.insert(0, str(_ROOT))
 
-load_dotenv(Path(__file__).parents[2] / ".env")
+from core.key.secret_manager import get_secret_manager  # noqa: E402
 
 config = context.config
 config.set_main_option(
     "sqlalchemy.url",
-    os.environ["DATABASE_URL"].replace("postgresql://", "postgresql+psycopg://"),
+    get_secret_manager().require("DATABASE_URL").replace(
+        "postgresql://", "postgresql+psycopg://"
+    ),
 )
 
 if config.config_file_name is not None:

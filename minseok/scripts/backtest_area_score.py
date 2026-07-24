@@ -16,18 +16,18 @@
 수동 실행 전용(분기 데이터 갱신 후) — cron 불요.
 """
 
-import os
 import sys
 from pathlib import Path
 
 import pandas as pd
-from dotenv import load_dotenv
 from sqlalchemy import create_engine, insert, text
 
 ROOT = Path(__file__).resolve().parents[1]  # minseok
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "apps"))
-load_dotenv(ROOT.parent / ".env")
+from core.key.secret_manager import get_secret_manager  # noqa: E402
+
+_secrets = get_secret_manager()
 
 SIDO_SEOUL = "11"
 
@@ -41,7 +41,7 @@ from market.domain.value_objects.area_score_vo import MetricComparison  # noqa: 
 
 # market 전용 DB(:5434) 우선 — 미설정 환경은 메인 DB 폴백(런타임 전환과 동일 규칙)
 engine = create_engine(
-    os.environ.get("MARKET_DATABASE_URL", os.environ["DATABASE_URL"])
+    _secrets.get("MARKET_DATABASE_URL") or _secrets.require("DATABASE_URL")
     .replace("postgresql://", "postgresql+psycopg://")
 )
 
