@@ -19,8 +19,10 @@ from chat.app.dtos.area_stat_dto import AreaStatDto
 from chat.app.ports.input.chat_use_case import ChatUseCase
 from chat.app.ports.output.conversation_repository import ConversationRepository
 from chat.domain.entities.conversation_entity import ConversationSummary, Message
+from chat.domain.services.verdict import strength as verdict_strength
+from chat.domain.services.verdict import verdict as verdict_headline
 from core.llm.llm_orchestrator import llm_orchestrator
-from hub.app.dtos.commercial_data_dto import AreaRawStat, AreaScoreInfo, AreaSummary
+from hub.app.dtos.commercial_data_dto import AreaInfo, AreaRawStat, AreaScoreInfo, AreaSummary
 from hub.app.dtos.market_news_dto import MarketNewsHit
 from hub.app.dtos.news_dto import NewsHit
 from hub.app.dtos.recommendation_record_dto import RecommendedArea
@@ -30,7 +32,9 @@ from hub.app.ports.output.gemini_answer_port import GeminiAnswerError, GeminiAns
 from hub.app.ports.output.market_news_search_port import MarketNewsSearchPort
 from hub.app.ports.output.news_search_port import NewsSearchPort
 from hub.app.ports.output.recommendation_record_port import RecommendationRecordPort
+from hub.app.ports.output.fundamental_read_port import FundamentalReadPort
 from hub.app.ports.output.stock_analysis_port import StockAnalysisPort, StockAnalysisUnavailable
+from hub.app.ports.output.stock_forecast_port import StockForecastPort
 
 logger = logging.getLogger(__name__)
 
@@ -204,6 +208,8 @@ class ChatInteractor(ChatUseCase):
         news: NewsSearchPort,
         market_news: MarketNewsSearchPort,
         gemini: GeminiAnswerPort,
+        forecaster: StockForecastPort | None = None,
+        fundamentals: FundamentalReadPort | None = None,
     ) -> None:
         self._market = market
         self._recorder = recorder
@@ -212,6 +218,8 @@ class ChatInteractor(ChatUseCase):
         self._news = news
         self._market_news = market_news
         self._gemini = gemini
+        self._forecaster = forecaster
+        self._fundamentals = fundamentals
 
     def _history_block(self, history: list[Message]) -> str:
         if not history:
@@ -238,6 +246,25 @@ class ChatInteractor(ChatUseCase):
                     codes.add(a.trdar_code)
                     break
         return codes
+
+    @staticmethod
+    def _previous_area_codes(
+        history: list[Message], area_map: dict[int, AreaInfo]
+    ) -> list[int]:
+        """직전 상권 추천 카드(payload)에서 상권 코드를 복원한다.
+
+        지역명 없는 후속 질문("카페 창업을 한다면?")의 맥락 승계용 — phase1 LLM이
+        이전 대화에서 상권을 이어받지 못해 후보가 비는 경우를 결정론적으로 보정한다.
+        """
+        for m in reversed(history):
+            recs = (m.payload or {}).get("recommendations")
+            if not recs:
+                continue
+            codes = [int(r["id"]) for r in recs if str(r.get("id", "")).isdigit()]
+            valid = [c for c in codes if c in area_map]
+            if valid:
+                return valid
+        return []
 
     def _build_area_context(
         self, summary: AreaSummary, prompt: str = "", limit: int = 80
@@ -426,6 +453,10 @@ class ChatInteractor(ChatUseCase):
                     mentioned_codes,
                     key=lambda c: summary.sales_by_code.get(c) or 0, reverse=True,
                 )[:3]
+        elif not valid_codes:
+            # 지역 미언급 후속 질문 — 직전 추천 상권을 이어받아 맥락을 유지한다.
+            # (phase1 LLM이 이전 대화에서 상권을 못 이어받아 후보가 빈 경우만 보정)
+            valid_codes = self._previous_area_codes(history, area_map)
         if not valid_codes:
             raise NoValidAreaError("유효한 상권을 찾지 못했습니다.")
 
@@ -620,6 +651,25 @@ class ChatInteractor(ChatUseCase):
         context = self._format_stock_context(prompt, analysis, hits)
         # 최종 서술(최종 사용자 답변) → 오케스트레이터 기본 모델(7.8B)
         text = await llm_orchestrator.orchestrate(f"{STOCK_ANSWER_PROMPT}\n\n{context}")
+
+        # 결론 한 줄 — 페이지 히어로와 같은 verdict 로직으로 서버가 계산해 카드에 싣는다.
+        # forecast(확률 요약)는 표본이 있어야 강한 결론이 되고, 조회 실패는 표본 없음으로 열화.
+        forecast = None
+        if self._forecaster is not None:
+            try:
+                forecast = await self._forecaster.forecast(analysis.symbol)
+            except Exception:  # 예측 실패가 종목 답변 자체를 깨지 않게 열화
+                logger.warning("[chat] forecast 조회 실패: %s", analysis.symbol, exc_info=True)
+        headline, _detail = verdict_headline(analysis.direction, forecast)
+
+        # 가치·체력 한 줄 — "이 회사 싼가/튼튼한가"(펀더멘털). 미수집·실패면 빈 리스트로 열화.
+        value_notes: list[str] = []
+        if self._fundamentals is not None:
+            try:
+                insights = await self._fundamentals.latest_insights(analysis.symbol)
+                value_notes = [i.text for i in insights[:2]]
+            except Exception:
+                logger.warning("[chat] 펀더멘털 조회 실패: %s", analysis.symbol, exc_info=True)
         card = StockCard(
             symbol=analysis.symbol,
             price=analysis.price,
@@ -638,6 +688,13 @@ class ChatInteractor(ChatUseCase):
             obvSlope=analysis.obv_slope,
             momentum12To1=analysis.momentum_12_1,
             referenceUpSignal=analysis.reference_up_signal,
+            headline=headline,
+            watch=self._watch_point(
+                analysis.price, analysis.support, analysis.resistance,
+                self._currency_unit(analysis.symbol),
+            ),
+            strength=verdict_strength(analysis.score, analysis.up_threshold),
+            value=value_notes,
         )
         # 구조화 카드를 payload로 동반 저장 — 히스토리 재진입 시 카드 복원용
         await self._conversations.add_message(
@@ -718,6 +775,37 @@ class ChatInteractor(ChatUseCase):
         return f"12-1 모멘텀 {pct:+.1f}% — 중장기 하락 추세"
 
     @staticmethod
+    def _price_position_text(price: float, support: float, resistance: float) -> str:
+        """현재가가 60일 저/고점 구간의 어디쯤인지 — 위치 해석을 안 주면 모델이 '지지선 근처
+        안정·저항선 돌파 난항' 같은 근거 없는 템플릿을 지어낸다(중간권인데도)."""
+        if resistance <= support:
+            return "구간 산출 불가"
+        ratio = max(0.0, min(1.0, (price - support) / (resistance - support)))
+        pct = round(ratio * 100)
+        if ratio <= 0.25:
+            zone = "저점권 — 지지선(저점)에 가까움"
+        elif ratio >= 0.75:
+            zone = "고점권 — 저항선(고점)에 가까움"
+        else:
+            zone = "중간권 — 지지선·저항선 어디에도 가깝지 않음(근처 안정·돌파 난항 표현 금지)"
+        return f"60일 저점~고점 구간의 {pct}% 지점 ({zone})"
+
+    @staticmethod
+    def _watch_point(price: float, support: float, resistance: float, unit: str) -> str | None:
+        """지켜볼 포인트 — 현재가가 60일 저/고점 구간 어디쯤인지에 따라 관측 지시(조언 아님).
+        페이지 히어로 watchPoint와 같은 결. 구간 산출 불가면 None."""
+        if not (resistance > support):
+            return None
+        ratio = max(0.0, min(1.0, (price - support) / (resistance - support)))
+        lo = f"{support:,.2f}{unit}"
+        hi = f"{resistance:,.2f}{unit}"
+        if ratio <= 0.25:
+            return f"저점권입니다. {lo}(60일 저점) 이탈 여부를 지켜보세요."
+        if ratio >= 0.75:
+            return f"고점권입니다. {hi}(60일 고점) 돌파·유지 여부를 지켜보세요."
+        return f"관심 있으면 {lo}(60일 저점) 이탈이나 {hi}(60일 고점) 돌파를 지켜보세요."
+
+    @staticmethod
     def _currency_unit(symbol: str) -> str:
         """티커로 통화를 정한다 — 한국 6자리(거래소 접미 포함)는 원, 그 외는 달러.
 
@@ -741,6 +829,7 @@ class ChatInteractor(ChatUseCase):
             f"- 20일 이동평균: {r.ma20:,.2f}{unit} / 50일 이동평균: {r.ma50:,.2f}{unit}\n"
             f"- 지지선: {r.support:,.2f}{unit} / 저항선: {r.resistance:,.2f}{unit}"
             f" (최근 60거래일 저/고점)\n"
+            f"- 현재가 위치: {cls._price_position_text(r.price, r.support, r.resistance)}\n"
             f"- 변동성: {cls._volatility_text(r.atr_pct)}\n"
             f"- 볼린저 밴드: {cls._bollinger_text(r.bb_percent_b)}\n"
             f"- 거래량·수급: {cls._volume_text(r.volume_ratio, r.obv_slope)}\n"

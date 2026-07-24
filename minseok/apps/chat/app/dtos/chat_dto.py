@@ -49,6 +49,11 @@ class StockCard(BaseModel):
     obvSlope: float = 0.0           # OBV 20일 정규화 기울기 (수급 방향)
     momentum12To1: float = 0.0      # 12-1 모멘텀 (이력 부족 시 0.0)
     referenceUpSignal: bool = False # 백테스트 검증 통과 참고 신호 — 확률 아님
+    # 결론 한 줄 — 서버가 verdict 로직으로 계산(페이지 히어로와 동일). 구버전 payload는 기본값.
+    headline: str = ""              # 방향 결론 문장
+    watch: str | None = None        # 지켜볼 포인트(관측 지시 — 조언 아님)
+    strength: str = ""              # 신호 세기(약/보통/강) — 확신도% 오독 방지
+    value: list[str] = []           # 가치·체력 해석(펀더멘털) 대표 1~2줄 — 미수집이면 빈 리스트
 
 
 class NewsCardItem(BaseModel):

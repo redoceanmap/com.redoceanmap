@@ -1,12 +1,10 @@
 "use client";
 
-import { ChevronDown, Eye, Minus, TrendingDown, TrendingUp } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import type { StockAnalyzeResult, StockForecast } from "@/lib/types";
 import { formatPrice } from "@/lib/currency";
 import InsightList from "@/components/common/InsightList";
 
-// 확률이 기준선을 이 정도는 넘어야 "평소와 다르다"고 말한다
-const EDGE_MIN_PP = 3;
 // 초보자가 체감할 기준 투자금 — ATR%를 금액으로 옮길 때 쓴다
 const RISK_BASE_KRW = 1_000_000;
 
@@ -16,51 +14,7 @@ type Props = {
   analyze?: StockAnalyzeResult;
   forecast?: StockForecast;
   expert: boolean;
-  onToggleExpert: () => void;
 };
-
-const DIRECTION = {
-  UP: { word: "상승", icon: TrendingUp, className: "text-red-600 bg-red-50 border-red-200" },
-  DOWN: { word: "하락", icon: TrendingDown, className: "text-blue-600 bg-blue-50 border-blue-200" },
-  NEUTRAL: { word: "중립", icon: Minus, className: "text-foreground-muted bg-surface border-border" },
-} as const;
-
-/** 결론 한 줄 — 방향 신호와 과거 통계를 합쳐 하나로 말한다.
- *  판정·확률·확신도를 따로 띄우면 "상승 36%" vs "평소와 다르지 않음"처럼 서로 반박한다. */
-function verdict(analyze: StockAnalyzeResult, forecast?: StockForecast) {
-  const p = forecast?.probability;
-  const edgePp = p ? Math.round(p.up_rate * 100) - Math.round(p.baseline_up_rate * 100) : null;
-  const word = DIRECTION[analyze.direction].word;
-
-  if (analyze.direction === "NEUTRAL") {
-    return {
-      headline: "지금은 방향을 말하기 어렵습니다",
-      detail: "지표들이 서로 상쇄돼 한쪽으로 기울지 않았습니다.",
-    };
-  }
-  if (edgePp === null || !p?.ready || Math.abs(edgePp) < EDGE_MIN_PP) {
-    return {
-      headline: `${word} 쪽 신호가 있지만, 근거는 약합니다`,
-      detail:
-        edgePp === null
-          ? "과거 통계로 검증할 표본이 아직 없습니다."
-          : `과거 같은 신호일 때 상승 비율이 평소와 사실상 같았습니다(차이 ${edgePp >= 0 ? "+" : ""}${edgePp}%p).`,
-    };
-  }
-  return {
-    headline: `${word} 쪽 신호이고, 과거 통계도 평소보다 ${edgePp >= 0 ? "+" : ""}${edgePp}%p 높았습니다`,
-    detail: `표본 ${p.sample_size}회 · 95% 구간 ${Math.round(p.ci_low * 100)}~${Math.round(p.ci_high * 100)}%.`,
-  };
-}
-
-/** 신호 세기 — "확신도 36%"는 초보자가 확률로 오독한다. 확률이 아니라는 게 드러나는 표기로 바꾼다. */
-function strength(analyze: StockAnalyzeResult) {
-  const score = Math.abs(analyze.score ?? 0);
-  const threshold = analyze.up_threshold ?? 0.3;
-  if (score < threshold) return "약";
-  if (score < threshold * 2) return "보통";
-  return "강";
-}
 
 /** 최근 60거래일 최저~최고 안에서 현재가 위치.
  *  "지지/저항"으로 부르지 않는다 — 실제로는 60일 롤링 최저·최고 한 봉일 뿐이고,
@@ -122,55 +76,21 @@ function RiskSummary({
           <b className="font-semibold" style={{ color: "#DC2626" }}>
             {formatPrice(price * (1 + band.q75_pct), symbol)}
           </b>
-          <span className="text-foreground-muted"> (과거 통계이며 보장이 아닙니다)</span>
         </p>
       )}
     </div>
   );
 }
 
-export default function StageSummary({
-  symbol,
-  price,
-  analyze,
-  forecast,
-  expert,
-  onToggleExpert,
-}: Props) {
+/** 결론(히어로) 아래 근거 계층 — 현재가 위치·변동성/예상범위, 그리고 자세히 보기의 상세·근거. */
+export default function StageSummary({ symbol, price, analyze, forecast, expert }: Props) {
   if (!analyze) return null;
   const current = price ?? analyze.price;
-  const { headline, detail } = verdict(analyze, forecast);
-  const meta = DIRECTION[analyze.direction] ?? DIRECTION.NEUTRAL;
-  const DirectionIcon = meta.icon;
-  // 판정에 실제로 들어간 신호 수 — 가중치 0인 참고 지표는 세지 않는다
-  const usedSignals = (analyze.signals ?? []).filter((s) => s.weight !== 0 && s.contribution !== 0).length;
   const p = forecast?.probability;
 
   return (
     <div className="shrink-0 px-4 py-2.5 border-b border-border">
-      <div className="flex items-start gap-2">
-        <span className={`shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full border text-[11px] font-medium ${meta.className}`}>
-          <DirectionIcon size={12} strokeWidth={2} />
-          신호 {strength(analyze)}
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold leading-snug">{headline}</p>
-          <p className="text-[11px] text-foreground-muted leading-snug">
-            {detail} 판정에 쓰인 신호 {usedSignals}개.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onToggleExpert}
-          className="shrink-0 inline-flex items-center gap-1 px-2 h-6 rounded-md border border-border text-[10px] text-foreground-muted hover:bg-black/5 transition-colors"
-          aria-pressed={expert}
-        >
-          <Eye size={11} strokeWidth={2} />
-          {expert ? "간단히" : "자세히"}
-        </button>
-      </div>
-
-      <div className="mt-2 grid gap-x-6 gap-y-2 sm:grid-cols-2">
+      <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
         <PricePosition analyze={analyze} price={current} symbol={symbol} />
         <RiskSummary analyze={analyze} forecast={forecast} price={current} symbol={symbol} />
       </div>
@@ -194,7 +114,7 @@ export default function StageSummary({
         <details className="mt-1.5 group">
           <summary className="flex items-center gap-1 text-[11px] text-foreground-muted cursor-pointer list-none select-none">
             <ChevronDown size={12} className="transition-transform group-open:rotate-180" />
-            근거 보기 — 과거 통계이며 미래를 보장하지 않습니다
+            근거 보기
           </summary>
           <div className="mt-1.5 pl-1">
             <InsightList insights={forecast.insights} />

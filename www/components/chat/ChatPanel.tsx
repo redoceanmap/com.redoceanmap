@@ -178,6 +178,14 @@ export default function ChatPanel({
 const fmtNum = (v: number, digits = 2) =>
   v.toLocaleString("ko-KR", { maximumFractionDigits: digits });
 
+// 확신도 %를 그대로 띄우면(예: "중립 9%") 초보자가 상승 확률로 오독한다 — 페이지 StageSummary와
+// 같은 결로 신호 세기(약/보통/강)로 바꾼다. 기준은 방향 임계값(±0.3)의 1·2배.
+function signalStrength(confidence: number): string {
+  if (confidence < 0.3) return "약";
+  if (confidence < 0.6) return "보통";
+  return "강";
+}
+
 function StockSummaryCard({ stock, onClick }: { stock: StockAnalysis; onClick: () => void }) {
   const meta = DIRECTION_META[stock.direction] ?? DIRECTION_META.NEUTRAL;
   const DirectionIcon = meta.icon;
@@ -186,11 +194,11 @@ function StockSummaryCard({ stock, onClick }: { stock: StockAnalysis; onClick: (
     stock.atrPct !== undefined
       ? [
           ["RSI", fmtNum(stock.rsi, 1)],
-          ["볼린저 %B", fmtNum(stock.bbPercentB ?? 0.5)],
+          ["밴드 위치", fmtNum(stock.bbPercentB ?? 0.5)],
           ["거래량비", `${fmtNum(stock.volumeRatio ?? 1)}x`],
-          ["12-1 모멘텀", `${fmtNum((stock.momentum12To1 ?? 0) * 100, 1)}%`],
+          ["1년 추세", `${fmtNum((stock.momentum12To1 ?? 0) * 100, 1)}%`],
           ["ATR (변동성)", `${fmtNum(stock.atrPct * 100, 1)}%`],
-          ["OBV 기울기", fmtNum(stock.obvSlope ?? 0, 3)],
+          ["자금 흐름", fmtNum(stock.obvSlope ?? 0, 3)],
         ]
       : null;
   return (
@@ -211,11 +219,23 @@ function StockSummaryCard({ stock, onClick }: { stock: StockAnalysis; onClick: (
         <div className="shrink-0 text-right">
           <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border text-[11px] font-medium ${meta.className}`}>
             <DirectionIcon size={12} strokeWidth={2} />
-            {meta.label} {Math.round(stock.confidence * 100)}%
+            {meta.label} · 신호 {stock.strength || signalStrength(stock.confidence)}
           </span>
           <div className="mt-1 text-[10px] text-foreground-muted">질문 시점 기준</div>
         </div>
       </div>
+      {/* 결론 한 줄 — 서버가 페이지와 같은 verdict로 계산(구버전 payload엔 없어 생략) */}
+      {stock.headline && (
+        <p className="mt-2 text-sm font-semibold leading-snug">{stock.headline}</p>
+      )}
+      {stock.watch && (
+        <p className="mt-1 text-[11px] text-foreground-muted leading-snug">지켜볼 점 {stock.watch}</p>
+      )}
+      {stock.value && stock.value.length > 0 && (
+        <p className="mt-1 text-[11px] text-foreground-muted leading-snug">
+          가치·체력 {stock.value.join(" · ")}
+        </p>
+      )}
       {indicators && (
         <div className="mt-2.5 grid grid-cols-3 gap-1.5">
           {indicators.map(([label, value]) => (

@@ -20,10 +20,10 @@ MOMENTUM_MIN = 0.15   # |12-1 모멘텀| 언급 기준
 _SIGNAL_LABELS = {
     "sentiment": "뉴스 감성",
     "rsi": "RSI",
-    "trend": "이동평균 추세",
-    "bollinger": "볼린저 %B",
-    "obv": "OBV 수급",
-    "momentum": "12-1 모멘텀",
+    "trend": "단기 추세",
+    "bollinger": "밴드 위치(볼린저)",
+    "obv": "자금 흐름(OBV)",
+    "momentum": "1년 추세(모멘텀)",
 }
 
 
@@ -64,33 +64,33 @@ def narrate(
         if gap >= TREND_MIN:
             insights.append(Insight(
                 key="trend", tone="positive",
-                text=f"20일 평균이 50일 평균보다 {gap * 100:.1f}% 위(정배열) — 단기 추세가 상승 쪽입니다.",
+                text=f"20일 평균이 50일 평균보다 {gap * 100:.1f}% 위(상승 배열) — 단기 추세가 상승 쪽입니다.",
             ))
         elif gap <= -TREND_MIN:
             insights.append(Insight(
                 key="trend", tone="warning",
-                text=f"20일 평균이 50일 평균보다 {-gap * 100:.1f}% 아래(역배열) — 단기 추세가 하락 쪽입니다.",
+                text=f"20일 평균이 50일 평균보다 {-gap * 100:.1f}% 아래(하락 배열) — 단기 추세가 하락 쪽입니다.",
             ))
 
     if indicators.bb_percent_b <= BB_LOW:
         insights.append(Insight(
             key="bollinger", tone="neutral",
-            text=f"볼린저 %B {indicators.bb_percent_b:.2f} — 밴드 하단 부근(단기 과매도권)입니다.",
+            text=f"밴드 위치(볼린저 %B) {indicators.bb_percent_b:.2f} — 밴드 하단 부근(단기 과매도권)입니다.",
         ))
     elif indicators.bb_percent_b >= BB_HIGH:
         insights.append(Insight(
             key="bollinger", tone="warning",
-            text=f"볼린저 %B {indicators.bb_percent_b:.2f} — 밴드 상단 부근(단기 과열권)입니다.",
+            text=f"밴드 위치(볼린저 %B) {indicators.bb_percent_b:.2f} — 밴드 상단 부근(단기 과열권)입니다.",
         ))
 
     if indicators.volume_ratio >= VOLUME_SURGE or indicators.volume_ratio <= VOLUME_QUIET:
         state = "급증" if indicators.volume_ratio >= VOLUME_SURGE else "한산"
         if indicators.obv_slope > 0:
-            flow = "수급은 유입 우위(OBV 상승)"
+            flow = "자금 유입 우위(OBV 상승)"
         elif indicators.obv_slope < 0:
-            flow = "수급은 유출 우위(OBV 하락)"
+            flow = "자금 유출 우위(OBV 하락)"
         else:
-            flow = "수급 방향성은 중립"
+            flow = "자금 흐름 중립"
         insights.append(Insight(
             key="volume", tone="neutral",
             text=f"최근 5일 거래량이 20일 평균의 {indicators.volume_ratio:.1f}배로 {state}, {flow}입니다.",
@@ -99,10 +99,10 @@ def narrate(
     if abs(indicators.momentum_12_1) >= MOMENTUM_MIN:
         pct = indicators.momentum_12_1 * 100
         if indicators.momentum_12_1 > 0:
-            text = f"12-1 모멘텀 {pct:+.1f}% — 중장기 상승 추세가 뚜렷합니다."
+            text = f"1년 추세(12-1 모멘텀) {pct:+.1f}% — 중장기 상승 추세가 뚜렷합니다."
             tone = "positive"
         else:
-            text = f"12-1 모멘텀 {pct:+.1f}% — 중장기 하락 추세입니다."
+            text = f"1년 추세(12-1 모멘텀) {pct:+.1f}% — 중장기 하락 추세입니다."
             tone = "warning"
         insights.append(Insight(key="momentum", tone=tone, text=text))
 

@@ -44,4 +44,7 @@ class StockAnalysisGateway(StockAnalysisPort):
             obv_slope=analysis.obv_slope,
             momentum_12_1=analysis.momentum_12_1,
             reference_up_signal=analysis.reference_up_signal,
+            score=analysis.score,
+            up_threshold=analysis.up_threshold,
+            down_threshold=analysis.down_threshold,
         )

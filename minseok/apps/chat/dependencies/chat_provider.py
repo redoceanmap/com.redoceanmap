@@ -10,13 +10,17 @@ from hub.app.ports.output.gemini_answer_port import GeminiAnswerPort
 from hub.app.ports.output.market_news_search_port import MarketNewsSearchPort
 from hub.app.ports.output.news_search_port import NewsSearchPort
 from hub.app.ports.output.recommendation_record_port import RecommendationRecordPort
+from hub.app.ports.output.fundamental_read_port import FundamentalReadPort
 from hub.app.ports.output.stock_analysis_port import StockAnalysisPort
+from hub.app.ports.output.stock_forecast_port import StockForecastPort
 from hub.dependencies.commercial_data_provider import get_commercial_data_port
+from hub.dependencies.fundamental_read_provider import get_fundamental_read_port
 from hub.dependencies.gemini_provider import get_gemini_answer_port
 from hub.dependencies.market_news_search_provider import get_market_news_search_port
 from hub.dependencies.news_search_provider import get_news_search_port
 from hub.dependencies.recommendation_record_provider import get_recommendation_record_port
 from hub.dependencies.stock_analysis_provider import get_stock_analysis_port
+from hub.dependencies.stock_forecast_provider import get_stock_forecast_port
 
 
 def get_chat_use_case(
@@ -26,6 +30,8 @@ def get_chat_use_case(
     news: NewsSearchPort = Depends(get_news_search_port),
     market_news: MarketNewsSearchPort = Depends(get_market_news_search_port),
     gemini: GeminiAnswerPort = Depends(get_gemini_answer_port),
+    forecaster: StockForecastPort = Depends(get_stock_forecast_port),
+    fundamentals: FundamentalReadPort = Depends(get_fundamental_read_port),
     db: AsyncSession = Depends(get_db),
 ) -> ChatUseCase:
     return ChatInteractor(
@@ -36,4 +42,6 @@ def get_chat_use_case(
         news=news,
         market_news=market_news,
         gemini=gemini,
+        forecaster=forecaster,
+        fundamentals=fundamentals,
     )

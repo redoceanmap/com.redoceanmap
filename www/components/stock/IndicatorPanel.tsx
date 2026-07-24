@@ -61,7 +61,7 @@ function buildStats(a: StockAnalyzeResult, symbol: string): Stat[] {
       gauge: { position: clamp01(a.rsi / 100), marks: [0.3, 0.7] },
     },
     {
-      label: "볼린저 %B",
+      label: "밴드 위치 (볼린저)",
       signal: "bollinger",
       value: fmt(a.bb_percent_b),
       hint:
@@ -87,14 +87,14 @@ function buildStats(a: StockAnalyzeResult, symbol: string): Stat[] {
       gauge: { position: clamp01(a.volume_ratio / 2), marks: [VOLUME_QUIET / 2, VOLUME_SURGE / 2] },
     },
     {
-      label: "OBV 기울기",
+      label: "자금 흐름 (OBV)",
       signal: "obv",
       value: fmt(a.obv_slope, 3),
       hint: a.obv_slope > 0 ? "자금 유입 우위" : a.obv_slope < 0 ? "자금 유출 우위" : "수급 중립",
       tone: a.obv_slope > 0 ? "up" : a.obv_slope < 0 ? "down" : "flat",
     },
     {
-      label: "12-1 모멘텀",
+      label: "1년 추세 (모멘텀)",
       signal: "momentum",
       // 상장·분할 1년 이내 종목은 기준 시점이 상장 초기라 수백~수천 %가 찍힌다(SNDK +5,364%).
       // 계산은 맞지만 "중장기 추세"로 읽을 수 없는 값이라 그대로 두지 않는다.
@@ -125,19 +125,19 @@ function buildStats(a: StockAnalyzeResult, symbol: string): Stat[] {
       tone: a.atr_pct * 100 >= ATR_HIGH ? "up" : "flat",
     },
     {
-      label: "20일 이평",
+      label: "20일 평균가",
       signal: "trend",
       value: price(a.ma20),
       hint:
         trendGap >= 0.02
-          ? `50일선 위 +${fmt(trendGap * 100, 1)}% (정배열)`
+          ? `50일선 위 +${fmt(trendGap * 100, 1)}% (상승 배열)`
           : trendGap <= -0.02
-            ? `50일선 아래 ${fmt(trendGap * 100, 1)}% (역배열)`
+            ? `50일선 아래 ${fmt(trendGap * 100, 1)}% (하락 배열)`
             : "50일선과 근접",
       tone: trendGap >= 0.02 ? "up" : trendGap <= -0.02 ? "down" : "flat",
     },
     {
-      label: "50일 이평",
+      label: "50일 평균가",
       value: price(a.ma50),
       hint: "중기 추세 기준선",
       tone: "flat",
@@ -263,10 +263,6 @@ export default function IndicatorPanel({
             : `30일 평균 ${analyze.sentiment_baseline > 0 ? "+" : ""}${fmt(analyze.sentiment_baseline)} 대비 편차로 반영됨`}
         </div>
       </div>
-
-      <p className="text-[11px] text-foreground-muted leading-relaxed">
-        지연 시세 기반 참고 지표입니다. 매매 지시가 아니며 투자 판단과 책임은 본인에게 있습니다.
-      </p>
     </div>
   );
 }

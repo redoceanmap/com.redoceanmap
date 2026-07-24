@@ -23,3 +23,13 @@ class FundamentalSnapshotItem:
     market_cap: float | None = None
     eps: float | None = None
     bps: float | None = None
+
+
+@dataclass(frozen=True)
+class FundamentalInsightItem:
+    """규칙 기반 가치·체력 해석 문장 1건 — chat이 종목 답변에 "싼가/튼튼한가" 한 줄로 소비한다.
+    stock의 fundamental_narrator 산출물을 허브 계약으로 옮긴 형태(문장화는 stock 소유)."""
+
+    key: str
+    tone: str  # positive | neutral | warning
+    text: str

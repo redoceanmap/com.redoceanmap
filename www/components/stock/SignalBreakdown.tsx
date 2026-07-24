@@ -4,13 +4,14 @@ import type { StockAnalyzeResult } from "@/lib/types";
 const UP = "#DC2626";
 const DOWN = "#2563EB";
 
+// 좁은 바 라벨이라 쉬운 말 짧은 형태만(괄호 병기는 넓은 지표 타일 쪽에서)
 const SIGNAL_LABELS: Record<string, string> = {
   sentiment: "뉴스 감성",
   rsi: "RSI",
-  trend: "이평 추세",
-  bollinger: "볼린저 %B",
-  obv: "OBV 수급",
-  momentum: "모멘텀",
+  trend: "단기 추세",
+  bollinger: "밴드 위치",
+  obv: "자금 흐름",
+  momentum: "1년 추세",
 };
 
 // 신호별 기여도 분해 — "왜 이 방향인지"를 중앙 0 기준 diverging 바로 보여준다

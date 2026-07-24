@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   ApiError,
+  fetchFundamentals,
   fetchPriceHistory,
   fetchStockAnalysis,
   fetchStockForecast,
@@ -19,6 +20,7 @@ import ChatPanel from "@/components/chat/ChatPanel";
 import SymbolHeader from "@/components/stock/SymbolHeader";
 import StockPanel from "@/components/stock/StockPanel";
 import StageSummary from "@/components/stock/StageSummary";
+import StockVerdictHero from "@/components/stock/StockVerdictHero";
 import SymbolSummary from "@/components/stock/SymbolSummary";
 import MarketBoard from "@/components/stock/MarketBoard";
 
@@ -150,6 +152,15 @@ function StockWorkspace() {
     enabled: !!symbol,
     staleTime: 5 * 60_000,
   });
+  // 가치·체력 한 줄용 — FundamentalsPanel과 같은 쿼리 키라 캐시 공유(추가 요청 없음).
+  // 미수집 종목은 빈 배열/404 → 히어로가 가치 줄을 생략(열화).
+  const fundamentalsQ = useQuery({
+    queryKey: ["fundamentals", symbol],
+    queryFn: () => fetchFundamentals(symbol),
+    enabled: !!symbol,
+    retry: false,
+    staleTime: 30 * 60_000,
+  });
 
   const pricesNotCollected = pricesQ.error instanceof ApiError && pricesQ.error.status === 404;
 
@@ -184,6 +195,15 @@ function StockWorkspace() {
         quotePrice={quoteQ.data?.price}
         previousClose={previousClose}
       />
+      <StockVerdictHero
+        symbol={pricesQ.data?.resolvedTicker ?? symbol}
+        price={quoteQ.data?.price}
+        analyze={analyzeQ.data}
+        forecast={forecastQ.data}
+        fundamentals={fundamentalsQ.data}
+        expert={expert}
+        onToggleExpert={toggleExpert}
+      />
       {pinnedSummary && <SymbolSummary text={pinnedSummary} />}
       <StageSummary
         symbol={pricesQ.data?.resolvedTicker ?? symbol}
@@ -191,7 +211,6 @@ function StockWorkspace() {
         analyze={analyzeQ.data}
         forecast={forecastQ.data}
         expert={expert}
-        onToggleExpert={toggleExpert}
       />
       {pricesQ.isLoading && <div className="flex-1 m-4 skeleton rounded-xl" />}
       {pricesNotCollected && (

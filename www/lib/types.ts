@@ -55,6 +55,11 @@ export type StockAnalysis = {
   obvSlope?: number;
   momentum12To1?: number;
   referenceUpSignal?: boolean;
+  // 서버가 verdict 로직으로 계산한 결론 — 페이지 히어로와 동일(구버전 payload엔 없음)
+  headline?: string;
+  watch?: string | null;
+  strength?: string; // 신호 세기(약/보통/강)
+  value?: string[]; // 가치·체력 해석(펀더멘털) 대표 1~2줄 — 미수집이면 빈 배열
 };
 
 // ── POST /stock/analyze (직접 호출 — snake_case DTO) ──

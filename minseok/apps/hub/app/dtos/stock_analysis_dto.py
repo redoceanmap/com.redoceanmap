@@ -29,3 +29,6 @@ class StockAnalysisResult:
     obv_slope: float = 0.0             # OBV 20일 정규화 기울기 (수급 방향)
     momentum_12_1: float = 0.0         # 12-1 모멘텀 (이력 부족 시 0.0)
     reference_up_signal: bool = False  # 백테스트 검증 통과 RSI+BB ±0.35 UP 참고 신호 — 확률 아님
+    score: float = 0.0                 # 가중 합산 종합 점수 (-1~1) — 신호 세기(약/보통/강) 판정용
+    up_threshold: float = 0.3          # 방향 판정 기준 (프론트 strength()와 동일 공식)
+    down_threshold: float = -0.3
