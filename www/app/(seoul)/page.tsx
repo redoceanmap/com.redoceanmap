@@ -116,7 +116,7 @@ export default function HomePage() {
         <h1 className="text-4xl md:text-[42px] font-semibold tracking-tight leading-snug mb-8">
           상권과 주식,
           <br />
-          <span className="text-brand">숨겨진 기회</span>를 찾아드릴게요
+          <span className="text-brand">지금 상황</span>을 빠르게 읽어드릴게요
         </h1>
 
         <ChatInput onSubmit={handleSend} disabled={isLoading} />
