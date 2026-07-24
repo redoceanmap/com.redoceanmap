@@ -126,11 +126,12 @@ def label_one(ticker: str, title: str) -> dict:
         ],
         "stream": False,
         "format": "json",
-        "options": {"temperature": 0, "num_predict": 64},
+        "options": {"temperature": 0, "num_predict": 64, "num_ctx": 2048},
     }
     for attempt in (1, 2):  # 일시 장애(모델 재로드·Ollama 재시작)는 1회 재시도
         try:
-            res = requests.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=120)
+            # 600초 — 뉴스 수집(bge-m3)과 겹치면 Ollama가 EXAONE을 내렸다 다시 올린다(RAM 7.7GB)
+            res = requests.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=600)
             break
         except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
             if attempt == 2:
